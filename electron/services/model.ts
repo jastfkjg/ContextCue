@@ -1,5 +1,6 @@
 import type {
   AppData,
+  ApiProtocol,
   CandidateReply,
   GenerateRequest,
   GenerationResult,
@@ -94,9 +95,14 @@ Long-term memory:
 ${buildMemoryContext(data, request)}`;
 }
 
+function activeModel(data: AppData): AppData["settings"]["models"][number] {
+  return data.settings.models.find((model) => model.id === data.settings.activeModelId) ?? data.settings.models[0];
+}
+
 function responsesBody(data: AppData, request: GenerateRequest, screenshot: string) {
+  const configuration = activeModel(data);
   return {
-    model: data.settings.model,
+    model: configuration.model,
     input: [
       {
         role: "system",
@@ -123,8 +129,9 @@ function responsesBody(data: AppData, request: GenerateRequest, screenshot: stri
 }
 
 function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot: string) {
+  const configuration = activeModel(data);
   return {
-    model: data.settings.model,
+    model: configuration.model,
     messages: [
       { role: "system", content: buildSystemPrompt(data.settings.candidateCount) },
       {
@@ -143,7 +150,7 @@ function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot
   };
 }
 
-function responseText(payload: unknown, protocol: AppData["settings"]["apiProtocol"]): string {
+function responseText(payload: unknown, protocol: ApiProtocol): string {
   const root = payload as Record<string, unknown>;
   if (protocol === "chat-completions") {
     const choices = root.choices as Array<{ message?: { content?: string } }> | undefined;
@@ -198,8 +205,10 @@ export async function generateWithModel(
   if (!apiKey) throw new Error("Add an API key in Settings before generating replies.");
   if (!screenshot.startsWith("data:image/")) throw new Error("A valid screenshot is required.");
 
-  const baseUrl = data.settings.apiBaseUrl.replace(/\/$/, "");
-  const protocol = data.settings.apiProtocol;
+  const configuration = activeModel(data);
+  if (!configuration) throw new Error("Choose a model in Settings before generating replies.");
+  const baseUrl = configuration.apiBaseUrl.replace(/\/$/, "");
+  const protocol = configuration.apiProtocol;
   const endpoint = protocol === "responses" ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
   const body = protocol === "responses"
     ? responsesBody(data, request, screenshot)

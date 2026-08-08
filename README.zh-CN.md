@@ -38,7 +38,7 @@ Hiply 是一个参考 [OKEight](https://hiply.pages.dev/) 实现的、本地优�
 
 要求：
 
-- Node.js 20+
+- Node.js 22.12+
 - npm 10+
 - macOS、Windows 或 Linux
 - 支持图片输入的大模型 API Key

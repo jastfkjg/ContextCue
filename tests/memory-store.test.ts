@@ -39,4 +39,31 @@ describe("MemoryStore", () => {
     await store.addFact({ category: "preference", content: "no emoji", source: "manual" });
     expect(store.snapshot().facts).toHaveLength(1);
   });
+
+  it("migrates the legacy single-model settings without losing its encrypted key", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "hiply-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(path, JSON.stringify({
+      version: 1,
+      settings: {
+        apiBaseUrl: "https://legacy.example/v1",
+        model: "legacy-vision",
+        apiProtocol: "chat-completions",
+        candidateCount: 4
+      },
+      encryptedApiKey: "encrypted-value"
+    })));
+
+    const store = new MemoryStore(path);
+    const loaded = await store.load();
+
+    expect(loaded.settings.models[0]).toMatchObject({
+      apiBaseUrl: "https://legacy.example/v1",
+      model: "legacy-vision",
+      apiProtocol: "chat-completions"
+    });
+    expect(loaded.settings.activeModelId).toBe(loaded.settings.models[0].id);
+    expect(loaded.encryptedApiKeys?.[loaded.settings.activeModelId]).toBe("encrypted-value");
+  });
 });

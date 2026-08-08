@@ -75,4 +75,40 @@ describe("model memory and parsing", () => {
     expect(JSON.stringify(body)).toContain("data:image/png;base64,abc");
     expect(JSON.stringify(body)).toContain("Lead with the conclusion");
   });
+
+  it("uses the selected model configuration", async () => {
+    const configured = data();
+    configured.settings.models.push({
+      id: "local-vision",
+      name: "Local vision",
+      apiBaseUrl: "http://localhost:11434/v1",
+      model: "qwen3-vl",
+      apiProtocol: "chat-completions"
+    });
+    configured.settings.activeModelId = "local-vision";
+    const payload = {
+      choices: [{ message: { content: JSON.stringify({
+        candidates: [
+          { text: "One", tone: "Direct", strategy: "Confirm" },
+          { text: "Two", tone: "Warm", strategy: "Alternative" }
+        ],
+        conversation_summary: "Summary",
+        detected_contact: "Lin Yue",
+        detected_language: "English",
+        memory_suggestions: []
+      }) } }]
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+
+    await generateWithModel(configured, "secret", request, "data:image/png;base64,abc", fetcher as typeof fetch);
+
+    const [url, options] = fetcher.mock.calls[0]!;
+    expect(url).toBe("http://localhost:11434/v1/chat/completions");
+    expect(JSON.parse(String(options?.body)).model).toBe("qwen3-vl");
+  });
 });

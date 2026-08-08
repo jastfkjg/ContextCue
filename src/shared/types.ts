@@ -79,16 +79,31 @@ export interface AcceptedReply {
   createdAt: string;
 }
 
-export interface AppSettings {
+export interface LlmConfig {
+  id: string;
+  name: string;
   apiBaseUrl: string;
   model: string;
   apiProtocol: ApiProtocol;
+  apiKeyConfigured: boolean;
+}
+
+export interface AppSettings {
+  models: LlmConfig[];
+  activeModelId: string;
   candidateCount: number;
   locale: "auto" | "en" | "zh-CN";
   globalShortcut: string;
   autoShowOverlay: boolean;
-  apiKeyConfigured: boolean;
 }
+
+export type StoredAppSettings = Omit<AppSettings, "models"> & {
+  models: Array<Omit<LlmConfig, "apiKeyConfigured">>;
+};
+
+export type SaveSettingsRequest = AppSettings & {
+  apiKeys?: Record<string, string>;
+};
 
 export interface AppData {
   version: 1;
@@ -96,8 +111,8 @@ export interface AppData {
   contacts: ContactMemory[];
   facts: MemoryFact[];
   acceptedReplies: AcceptedReply[];
-  settings: Omit<AppSettings, "apiKeyConfigured">;
-  encryptedApiKey?: string;
+  settings: StoredAppSettings;
+  encryptedApiKeys?: Record<string, string>;
 }
 
 export interface MemorySnapshot {
@@ -130,7 +145,7 @@ export interface HiplyApi {
   addFact: (fact: Pick<MemoryFact, "category" | "content" | "contactId" | "source">) => Promise<MemorySnapshot>;
   deleteFact: (id: string) => Promise<MemorySnapshot>;
   getSettings: () => Promise<AppSettings>;
-  saveSettings: (settings: Omit<AppSettings, "apiKeyConfigured"> & { apiKey?: string }) => Promise<AppSettings>;
+  saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
   useReply: (request: UseReplyRequest) => Promise<{ copied: boolean; pasted: boolean }>;
   openScreenSettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;

@@ -2,7 +2,7 @@
 
 Hiply is a local-first desktop reply assistant inspired by [OKEight](https://hiply.pages.dev/). It captures a conversation window that you explicitly select, sends that screenshot together with relevant long-term memory to a vision-capable language model, and returns multiple send-ready replies that you can swipe through, copy, or insert.
 
-English is the default documentation. [中文说明](./README.zh-CN.md)
+[中文说明](./README.zh-CN.md)
 
 ## What works today
 
@@ -38,7 +38,7 @@ Global shortcut
 
 Requirements:
 
-- Node.js 20+
+- Node.js 22.12+
 - npm 10+
 - macOS, Windows, or Linux
 - A vision-capable model API key

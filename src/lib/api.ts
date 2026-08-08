@@ -61,14 +61,29 @@ let demoMemory: MemorySnapshot = {
 };
 
 let demoSettings: AppSettings = {
-  apiBaseUrl: "https://api.openai.com/v1",
-  model: "gpt-5.6-luna",
-  apiProtocol: "responses",
+  models: [
+    {
+      id: "openai-default",
+      name: "OpenAI",
+      apiBaseUrl: "https://api.openai.com/v1",
+      model: "gpt-5.6-luna",
+      apiProtocol: "responses",
+      apiKeyConfigured: false
+    },
+    {
+      id: "local-demo",
+      name: "Local vision",
+      apiBaseUrl: "http://localhost:11434/v1",
+      model: "qwen3-vl",
+      apiProtocol: "chat-completions",
+      apiKeyConfigured: true
+    }
+  ],
+  activeModelId: "openai-default",
   candidateCount: 3,
   locale: "auto",
   globalShortcut: "CommandOrControl+Shift+Space",
-  autoShowOverlay: true,
-  apiKeyConfigured: false
+  autoShowOverlay: true
 };
 
 const demoResult: GenerationResult = {
@@ -129,8 +144,14 @@ const browserDemoApi: HiplyApi = {
   },
   getSettings: async () => demoSettings,
   saveSettings: async (settings) => {
-    const { apiKey, ...rest } = settings;
-    demoSettings = { ...rest, apiKeyConfigured: Boolean(apiKey) || demoSettings.apiKeyConfigured };
+    const { apiKeys = {}, ...rest } = settings;
+    demoSettings = {
+      ...rest,
+      models: rest.models.map((model) => ({
+        ...model,
+        apiKeyConfigured: Boolean(apiKeys[model.id]) || model.apiKeyConfigured
+      }))
+    };
     return demoSettings;
   },
   useReply: async () => ({ copied: true, pasted: false }),

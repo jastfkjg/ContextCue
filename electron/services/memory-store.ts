@@ -28,9 +28,14 @@ export const DEFAULT_DATA: AppData = {
   facts: [],
   acceptedReplies: [],
   settings: {
-    apiBaseUrl: process.env.HIPLY_API_BASE_URL || "https://api.openai.com/v1",
-    model: process.env.HIPLY_MODEL || "gpt-5.6-luna",
-    apiProtocol: "responses",
+    models: [{
+      id: "openai-default",
+      name: "OpenAI",
+      apiBaseUrl: process.env.HIPLY_API_BASE_URL || "https://api.openai.com/v1",
+      model: process.env.HIPLY_MODEL || "gpt-5.6-luna",
+      apiProtocol: "responses"
+    }],
+    activeModelId: "openai-default",
     candidateCount: 3,
     locale: "auto",
     globalShortcut: "CommandOrControl+Shift+Space",
@@ -42,14 +47,40 @@ function cloneDefaults(): AppData {
   return JSON.parse(JSON.stringify(DEFAULT_DATA)) as AppData;
 }
 
-function migrate(input: Partial<AppData>): AppData {
+type LegacyAppData = Partial<AppData> & {
+  encryptedApiKey?: string;
+  settings?: Partial<AppData["settings"]> & {
+    apiBaseUrl?: string;
+    model?: string;
+    apiProtocol?: AppData["settings"]["models"][number]["apiProtocol"];
+  };
+};
+
+function migrate(input: LegacyAppData): AppData {
   const defaults = cloneDefaults();
+  const legacySettings = input.settings;
+  const configuredModels = Array.isArray(legacySettings?.models) && legacySettings.models.length
+    ? legacySettings.models
+    : [{
+        id: "openai-default",
+        name: "OpenAI",
+        apiBaseUrl: legacySettings?.apiBaseUrl || defaults.settings.models[0].apiBaseUrl,
+        model: legacySettings?.model || defaults.settings.models[0].model,
+        apiProtocol: legacySettings?.apiProtocol || defaults.settings.models[0].apiProtocol
+      }];
+  const activeModelId = configuredModels.some((model) => model.id === legacySettings?.activeModelId)
+    ? legacySettings!.activeModelId!
+    : configuredModels[0].id;
   return {
-    ...defaults,
-    ...input,
     version: 1,
     profile: { ...defaults.profile, ...(input.profile ?? {}) },
-    settings: { ...defaults.settings, ...(input.settings ?? {}) },
+    settings: {
+      ...defaults.settings,
+      ...(legacySettings ?? {}),
+      models: configuredModels,
+      activeModelId
+    },
+    encryptedApiKeys: input.encryptedApiKeys ?? (input.encryptedApiKey ? { [activeModelId]: input.encryptedApiKey } : undefined),
     contacts: Array.isArray(input.contacts) ? input.contacts : [],
     facts: Array.isArray(input.facts) ? input.facts : [],
     acceptedReplies: Array.isArray(input.acceptedReplies) ? input.acceptedReplies.slice(-100) : []
@@ -88,8 +119,14 @@ export class MemoryStore {
     };
   }
 
-  settings(apiKeyConfigured: boolean): AppSettings {
-    return { ...structuredClone(this.data.settings), apiKeyConfigured };
+  settings(configuredModelIds: Set<string>): AppSettings {
+    return {
+      ...structuredClone(this.data.settings),
+      models: this.data.settings.models.map((model) => ({
+        ...structuredClone(model),
+        apiKeyConfigured: configuredModelIds.has(model.id)
+      }))
+    };
   }
 
   async saveProfile(profile: UserProfile): Promise<MemorySnapshot> {
@@ -144,9 +181,9 @@ export class MemoryStore {
     await this.persist();
   }
 
-  async saveSettings(settings: AppData["settings"], encryptedApiKey?: string): Promise<void> {
+  async saveSettings(settings: AppData["settings"], encryptedApiKeys?: Record<string, string>): Promise<void> {
     this.data.settings = structuredClone(settings);
-    if (encryptedApiKey !== undefined) this.data.encryptedApiKey = encryptedApiKey;
+    if (encryptedApiKeys !== undefined) this.data.encryptedApiKeys = structuredClone(encryptedApiKeys);
     await this.persist();
   }
 

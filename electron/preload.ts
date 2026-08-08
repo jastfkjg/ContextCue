@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-  AppSettings,
   ContactMemory,
   GenerateRequest,
   GenerationResult,
   HiplyApi,
   MemoryFact,
+  SaveSettingsRequest,
   UseReplyRequest,
   UserProfile
 } from "../src/shared/types";
@@ -22,7 +22,7 @@ const api: HiplyApi = {
     ipcRenderer.invoke("memory:fact-add", fact),
   deleteFact: (id: string) => ipcRenderer.invoke("memory:fact-delete", id),
   getSettings: () => ipcRenderer.invoke("settings:get"),
-  saveSettings: (settings: Omit<AppSettings, "apiKeyConfigured"> & { apiKey?: string }) =>
+  saveSettings: (settings: SaveSettingsRequest) =>
     ipcRenderer.invoke("settings:save", settings),
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
   openScreenSettings: () => ipcRenderer.invoke("permissions:open-screen"),

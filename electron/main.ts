@@ -12,10 +12,10 @@ import {
   systemPreferences
 } from "electron";
 import type {
-  AppSettings,
   ContactMemory,
   GenerateRequest,
   MemoryFact,
+  SaveSettingsRequest,
   UseReplyRequest,
   UserProfile
 } from "../src/shared/types";
@@ -108,15 +108,19 @@ function registerShortcut(accelerator: string): boolean {
   return globalShortcut.register(accelerator, showMainCapture);
 }
 
-function readApiKey(): string {
-  if (process.env.HIPLY_API_KEY) return process.env.HIPLY_API_KEY;
-  const encrypted = store.getData().encryptedApiKey;
+function readApiKey(modelId = store.getData().settings.activeModelId): string {
+  if (process.env.HIPLY_API_KEY && modelId === store.getData().settings.activeModelId) return process.env.HIPLY_API_KEY;
+  const encrypted = store.getData().encryptedApiKeys?.[modelId];
   if (!encrypted || !safeStorage.isEncryptionAvailable()) return "";
   try {
     return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
   } catch {
     return "";
   }
+}
+
+function configuredModelIds(): Set<string> {
+  return new Set(store.getData().settings.models.filter((model) => Boolean(readApiKey(model.id))).map((model) => model.id));
 }
 
 function encryptApiKey(apiKey: string): string | undefined {
@@ -205,17 +209,35 @@ function registerIpc(): void {
   );
   ipcMain.handle("memory:fact-delete", (_event, id: string) => store.deleteFact(id));
 
-  ipcMain.handle("settings:get", () => store.settings(Boolean(readApiKey())));
+  ipcMain.handle("settings:get", () => store.settings(configuredModelIds()));
   ipcMain.handle(
     "settings:save",
-    async (_event, incoming: Omit<AppSettings, "apiKeyConfigured"> & { apiKey?: string }) => {
-      const { apiKey, ...settings } = incoming;
-      const encrypted = apiKey?.trim() ? encryptApiKey(apiKey) : store.getData().encryptedApiKey;
-      await store.saveSettings(settings, encrypted);
+    async (_event, incoming: SaveSettingsRequest) => {
+      const { apiKeys = {}, models, ...preferences } = incoming;
+      if (!models.length) throw new Error("Add at least one model configuration.");
+      if (!models.some((model) => model.id === incoming.activeModelId)) throw new Error("Choose a valid current model.");
+      const storedModels = models.map(({ apiKeyConfigured: _configured, ...model }) => ({
+        ...model,
+        name: model.name.trim(),
+        apiBaseUrl: model.apiBaseUrl.trim(),
+        model: model.model.trim()
+      }));
+      if (storedModels.some((model) => !model.name || !model.apiBaseUrl || !model.model)) {
+        throw new Error("Each model needs a name, API base URL, and model ID.");
+      }
+      const modelIds = new Set(storedModels.map((model) => model.id));
+      const encryptedApiKeys = Object.fromEntries(
+        Object.entries(store.getData().encryptedApiKeys ?? {}).filter(([id]) => modelIds.has(id))
+      );
+      for (const [id, apiKey] of Object.entries(apiKeys)) {
+        if (modelIds.has(id) && apiKey.trim()) encryptedApiKeys[id] = encryptApiKey(apiKey)!;
+      }
+      const settings = { ...preferences, models: storedModels };
+      await store.saveSettings(settings, encryptedApiKeys);
       if (!registerShortcut(settings.globalShortcut)) {
         throw new Error(`The shortcut ${settings.globalShortcut} is already used by another application.`);
       }
-      return store.settings(Boolean(readApiKey()));
+      return store.settings(configuredModelIds());
     }
   );
 }
