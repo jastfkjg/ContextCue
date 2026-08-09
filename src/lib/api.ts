@@ -157,8 +157,12 @@ const browserDemoApi: HiplyApi = {
   useReply: async () => ({ copied: true, pasted: false }),
   openScreenSettings: async () => undefined,
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
-  onCaptureRequested: () => () => undefined,
-  onOverlayResult: () => () => undefined,
+  onOverlayResult: (callback) => {
+    if (new URLSearchParams(window.location.search).get("mode") !== "overlay") return () => undefined;
+    const timeout = window.setTimeout(() => callback({ ...demoResult, channel: "wechat", contact: demoResult.detectedContact }), 650);
+    return () => window.clearTimeout(timeout);
+  },
+  onOverlayStatus: () => () => undefined,
   hideOverlay: async () => undefined
 };
 

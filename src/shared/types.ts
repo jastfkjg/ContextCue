@@ -37,6 +37,7 @@ export interface GenerateRequest {
   contact?: string;
   intent?: string;
   locale: "auto" | "en" | "zh-CN";
+  quick?: boolean;
 }
 
 export interface UserProfile {
@@ -134,6 +135,12 @@ export interface PermissionStatus {
   accessibility: boolean;
 }
 
+export interface OverlayStatus {
+  state: "loading" | "error";
+  message: string;
+  channel?: ChannelId;
+}
+
 export interface HiplyApi {
   getCaptureSources: () => Promise<CaptureSource[]>;
   captureSource: (sourceId: string) => Promise<string>;
@@ -149,7 +156,7 @@ export interface HiplyApi {
   useReply: (request: UseReplyRequest) => Promise<{ copied: boolean; pasted: boolean }>;
   openScreenSettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;
-  onCaptureRequested: (callback: () => void) => () => void;
   onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string }) => void) => () => void;
+  onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   hideOverlay: () => Promise<void>;
 }

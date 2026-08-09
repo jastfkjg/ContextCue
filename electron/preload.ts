@@ -5,6 +5,7 @@ import type {
   GenerationResult,
   HiplyApi,
   MemoryFact,
+  OverlayStatus,
   SaveSettingsRequest,
   UseReplyRequest,
   UserProfile
@@ -27,15 +28,15 @@ const api: HiplyApi = {
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
   openScreenSettings: () => ipcRenderer.invoke("permissions:open-screen"),
   getPermissions: () => ipcRenderer.invoke("permissions:get"),
-  onCaptureRequested: (callback: () => void) => {
-    const listener = () => callback();
-    ipcRenderer.on("capture:requested", listener);
-    return () => ipcRenderer.removeListener("capture:requested", listener);
-  },
   onOverlayResult: (callback: (result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string }) => callback(result);
     ipcRenderer.on("overlay:result", listener);
     return () => ipcRenderer.removeListener("overlay:result", listener);
+  },
+  onOverlayStatus: (callback: (status: OverlayStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: OverlayStatus) => callback(status);
+    ipcRenderer.on("overlay:status", listener);
+    return () => ipcRenderer.removeListener("overlay:status", listener);
   },
   hideOverlay: () => ipcRenderer.invoke("overlay:hide")
 };

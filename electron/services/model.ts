@@ -46,6 +46,21 @@ const OUTPUT_SCHEMA = {
   required: ["candidates", "conversation_summary", "detected_contact", "detected_language", "memory_suggestions"]
 } as const;
 
+const QUICK_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    candidates: {
+      ...OUTPUT_SCHEMA.properties.candidates,
+      minItems: 1,
+      maxItems: 2
+    },
+    detected_contact: { type: "string" },
+    detected_language: { type: "string" }
+  },
+  required: ["candidates", "detected_contact", "detected_language"]
+} as const;
+
 export function buildMemoryContext(data: AppData, request: GenerateRequest): string {
   const contactName = request.contact?.trim().toLowerCase();
   const contact = contactName
@@ -53,10 +68,10 @@ export function buildMemoryContext(data: AppData, request: GenerateRequest): str
     : undefined;
   const relevantFacts = data.facts
     .filter((fact) => !fact.contactId || fact.contactId === contact?.id)
-    .slice(0, 20);
+    .slice(0, request.quick ? 8 : 20);
   const accepted = data.acceptedReplies
     .filter((item) => item.channel === request.channel && (!contactName || item.contact.toLowerCase() === contactName))
-    .slice(-6);
+    .slice(request.quick ? -3 : -6);
 
   return JSON.stringify(
     {
@@ -70,7 +85,7 @@ export function buildMemoryContext(data: AppData, request: GenerateRequest): str
   );
 }
 
-export function buildSystemPrompt(candidateCount: number): string {
+export function buildSystemPrompt(candidateCount: number, quick = false): string {
   return `You are Hiply, a private reply drafting assistant. Read the visible conversation screenshot and draft exactly ${candidateCount} useful replies that the user could send now.
 
 Rules:
@@ -82,17 +97,26 @@ Rules:
 - Follow explicit user intent and long-term memory, but never invent personal facts.
 - Keep replies natural and ready to send. Do not add quotation marks or commentary around reply text.
 - Memory suggestions must be durable and useful. Do not suggest saving sensitive secrets or transient conversation details.
-- Return only data matching the requested JSON schema.`;
+- Return only data matching the requested JSON schema.${quick ? "\n- Optimize for speed: keep metadata minimal and return immediately once the candidates are ready." : ""}`;
 }
 
-function userPrompt(data: AppData, request: GenerateRequest): string {
+function quickCandidateCount(data: AppData, request: GenerateRequest): number {
+  return request.quick ? Math.min(2, data.settings.candidateCount) : data.settings.candidateCount;
+}
+
+function isQwenModel(modelName: string): boolean {
+  return /qwen/i.test(modelName);
+}
+
+function userPrompt(data: AppData, request: GenerateRequest, modelName = ""): string {
+  const qwenFastMode = request.quick && isQwenModel(modelName) ? "\n/no_think" : "";
   return `Channel: ${request.channel}
 Known contact: ${request.contact?.trim() || "unknown — infer if clearly visible"}
 User intent: ${request.intent?.trim() || "Reply appropriately to the latest actionable message"}
 Output locale preference: ${request.locale}
 
 Long-term memory:
-${buildMemoryContext(data, request)}`;
+${buildMemoryContext(data, request)}${qwenFastMode}`;
 }
 
 function activeModel(data: AppData): AppData["settings"]["models"][number] {
@@ -101,18 +125,20 @@ function activeModel(data: AppData): AppData["settings"]["models"][number] {
 
 function responsesBody(data: AppData, request: GenerateRequest, screenshot: string) {
   const configuration = activeModel(data);
+  const schema = request.quick ? QUICK_OUTPUT_SCHEMA : OUTPUT_SCHEMA;
+  const candidateCount = quickCandidateCount(data, request);
   return {
     model: configuration.model,
     input: [
       {
         role: "system",
-        content: [{ type: "input_text", text: buildSystemPrompt(data.settings.candidateCount) }]
+        content: [{ type: "input_text", text: buildSystemPrompt(candidateCount, request.quick) }]
       },
       {
         role: "user",
         content: [
-          { type: "input_text", text: userPrompt(data, request) },
-          { type: "input_image", image_url: screenshot, detail: "high" }
+          { type: "input_text", text: userPrompt(data, request, configuration.model) },
+          { type: "input_image", image_url: screenshot, detail: request.quick ? "auto" : "high" }
         ]
       }
     ],
@@ -121,62 +147,175 @@ function responsesBody(data: AppData, request: GenerateRequest, screenshot: stri
         type: "json_schema",
         name: "reply_candidates",
         strict: true,
-        schema: OUTPUT_SCHEMA
+        schema
       }
     },
-    max_output_tokens: 1800
+    max_output_tokens: request.quick ? 900 : 1400,
+    ...(request.quick && isQwenModel(configuration.model) ? { reasoning: { effort: "none" } } : {})
   };
 }
 
 function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot: string) {
   const configuration = activeModel(data);
+  const schema = request.quick ? QUICK_OUTPUT_SCHEMA : OUTPUT_SCHEMA;
+  const candidateCount = quickCandidateCount(data, request);
   return {
     model: configuration.model,
     messages: [
-      { role: "system", content: buildSystemPrompt(data.settings.candidateCount) },
+      { role: "system", content: buildSystemPrompt(candidateCount, request.quick) },
       {
         role: "user",
         content: [
-          { type: "text", text: userPrompt(data, request) },
-          { type: "image_url", image_url: { url: screenshot, detail: "high" } }
+          { type: "text", text: userPrompt(data, request, configuration.model) },
+          { type: "image_url", image_url: { url: screenshot, detail: request.quick ? "auto" : "high" } }
         ]
       }
     ],
     response_format: {
       type: "json_schema",
-      json_schema: { name: "reply_candidates", strict: true, schema: OUTPUT_SCHEMA }
+      json_schema: { name: "reply_candidates", strict: true, schema }
     },
-    max_tokens: 1800
+    max_tokens: request.quick ? 900 : 1400,
+    ...(request.quick && isQwenModel(configuration.model) ? { enable_thinking: false } : {})
   };
+}
+
+function messageContentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((item) => {
+    if (typeof item === "string") return item;
+    if (!item || typeof item !== "object") return "";
+    const part = item as { text?: unknown; content?: unknown };
+    if (typeof part.text === "string") return part.text;
+    return typeof part.content === "string" ? part.content : "";
+  }).join("");
 }
 
 function responseText(payload: unknown, protocol: ApiProtocol): string {
   const root = payload as Record<string, unknown>;
-  if (protocol === "chat-completions") {
-    const choices = root.choices as Array<{ message?: { content?: string } }> | undefined;
-    return choices?.[0]?.message?.content ?? "";
-  }
+  const choices = root.choices as Array<{ message?: { content?: unknown } }> | undefined;
+  const chatText = messageContentText(choices?.[0]?.message?.content);
+  if (protocol === "chat-completions" || chatText) return chatText;
   if (typeof root.output_text === "string") return root.output_text;
-  const output = root.output as Array<{ content?: Array<{ type?: string; text?: string }> }> | undefined;
-  return output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text ?? "";
+  const output = root.output;
+  if (Array.isArray(output)) {
+    return output.map((item) => {
+      if (!item || typeof item !== "object") return "";
+      return messageContentText((item as { content?: unknown }).content);
+    }).join("");
+  }
+  if (output && typeof output === "object") {
+    const outputChoices = (output as { choices?: Array<{ message?: { content?: unknown } }> }).choices;
+    return messageContentText(outputChoices?.[0]?.message?.content);
+  }
+  return "";
+}
+
+function normalizeReplyObject(value: unknown): Record<string, unknown> | undefined {
+  if (Array.isArray(value)) return { candidates: value };
+  if (!value || typeof value !== "object") return undefined;
+  const object = value as Record<string, unknown>;
+  const candidates = object.candidates ?? object.replies ?? object.reply_candidates;
+  return Array.isArray(candidates) ? { ...object, candidates } : undefined;
+}
+
+function completeReplyObjects(text: string): Array<Record<string, unknown>> {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const replies: Array<Record<string, unknown>> = [];
+  try {
+    const complete = normalizeReplyObject(JSON.parse(cleaned));
+    if (complete) replies.push(complete);
+  } catch {
+    // Continue with the tolerant scanner for commentary or multiple JSON objects.
+  }
+  for (let start = cleaned.indexOf("{"); start >= 0; start = cleaned.indexOf("{", start + 1)) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < cleaned.length; index += 1) {
+      const character = cleaned[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') inString = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            const parsed = normalizeReplyObject(JSON.parse(cleaned.slice(start, index + 1)));
+            if (parsed) replies.push(parsed);
+            break;
+          } catch {
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (!replies.length) {
+    const recovered = [...cleaned.matchAll(/"(?:text|reply)"\s*:\s*"((?:\\.|[^"\\])*)"/g)]
+      .map((match) => {
+        try {
+          return JSON.parse(`"${match[1]}"`) as string;
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean)
+      .map((candidate) => ({ text: candidate, tone: "Natural", strategy: "Direct reply" }));
+    if (recovered.length) replies.push({ candidates: recovered });
+  }
+  return replies;
+}
+
+function mergedReplyObject(text: string): Record<string, unknown> {
+  const replies = completeReplyObjects(text);
+  if (!replies.length) throw new Error("The model returned malformed reply data. Try again or choose another model.");
+
+  const best = replies.reduce((current, reply) => {
+    const currentCount = Array.isArray(current.candidates) ? current.candidates.length : 0;
+    const replyCount = Array.isArray(reply.candidates) ? reply.candidates.length : 0;
+    return replyCount > currentCount ? reply : current;
+  });
+  const candidates = replies.flatMap((reply) => Array.isArray(reply.candidates) ? reply.candidates : []);
+  const firstString = (key: string) => replies.find((reply) => typeof reply[key] === "string")?.[key] ?? "";
+  const suggestions = replies.flatMap((reply) =>
+    Array.isArray(reply.memory_suggestions) ? reply.memory_suggestions : []
+  );
+  return {
+    ...best,
+    candidates,
+    conversation_summary: firstString("conversation_summary"),
+    detected_contact: firstString("detected_contact"),
+    detected_language: firstString("detected_language"),
+    memory_suggestions: suggestions
+  };
 }
 
 export function parseModelJson(text: string, candidateLimit = 3): GenerationResult {
-  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("The model returned no structured reply data.");
-  const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  const parsed = mergedReplyObject(text);
+  const seenCandidates = new Set<string>();
   const candidates = (Array.isArray(parsed.candidates) ? parsed.candidates : [])
-    .map((item) => item as Partial<CandidateReply>)
+    .map((item) => typeof item === "string" ? { text: item } : item as Partial<CandidateReply>)
     .filter((item) => typeof item.text === "string" && item.text.trim())
+    .filter((item) => {
+      const normalized = item.text!.trim().replace(/\s+/g, " ").toLowerCase();
+      if (seenCandidates.has(normalized)) return false;
+      seenCandidates.add(normalized);
+      return true;
+    })
     .slice(0, candidateLimit)
     .map((item) => ({
       text: item.text!.trim(),
       tone: typeof item.tone === "string" ? item.tone : "Natural",
       strategy: typeof item.strategy === "string" ? item.strategy : "Direct reply"
     }));
-  if (candidates.length < 2) throw new Error("The model returned fewer than two usable replies.");
+  if (!candidates.length) throw new Error("The model returned no usable reply. Try again or choose another model.");
 
   const suggestions = (Array.isArray(parsed.memory_suggestions) ? parsed.memory_suggestions : [])
     .filter((item): item is MemorySuggestion => {
@@ -227,5 +366,17 @@ export async function generateWithModel(
     const message = (payload as { error?: { message?: string } }).error?.message;
     throw new Error(message || `The model request failed with HTTP ${response.status}.`);
   }
-  return parseModelJson(responseText(payload, protocol), data.settings.candidateCount);
+  const text = responseText(payload, protocol);
+  if (!text.trim()) {
+    const root = payload as Record<string, unknown>;
+    console.warn("[model-response] empty final answer", {
+      model: configuration.model,
+      protocol,
+      status: root.status,
+      incompleteDetails: root.incomplete_details,
+      usage: root.usage
+    });
+    throw new Error("The model returned no final answer. For a thinking model, disable thinking or increase its output budget.");
+  }
+  return parseModelJson(text, quickCandidateCount(data, request));
 }

@@ -54,7 +54,8 @@ Then:
 2. Enter an API base URL, model name, protocol, and API key.
 3. On macOS, allow Screen Recording when prompted, then restart Hiply.
 4. Open a conversation in WeChat, Slack, Lark, or another app.
-5. Press `CommandOrControl+Shift+Space`, select the window, optionally describe your intent, and choose **Generate replies**.
+5. From the active chat, press `CommandOrControl+Shift+Space`. Hiply reads that conversation and shows candidates beside the input area without opening the main window.
+6. Swipe, use the arrow keys, or click the arrows to switch candidates. Choose **Insert into WeChat** or press Enter to put the selected reply in the chat input without sending it.
 
 The default endpoint is `https://api.openai.com/v1`, using the Responses API and `gpt-5.6-luna`. The model can be changed in Settings. OpenAI's current model catalog states that the latest model family accepts image input through the Responses API: [OpenAI models](https://developers.openai.com/api/docs/models).
 
@@ -103,7 +104,7 @@ Model-generated memory suggestions are deliberately opt-in. The UI explains that
 
 ## Security and privacy boundaries
 
-- Hiply captures only after the user selects a source and presses Generate.
+- Hiply captures only after the user presses the global shortcut, or explicitly selects a source and presses Generate in the main window.
 - Screenshots are sent to the configured model provider; they do not remain in the local memory file.
 - Text inside screenshots is treated as untrusted data. The system prompt explicitly rejects instructions found inside the screenshot.
 - Long-term memory stays on the device, except for the small relevant subset included in a generation request.

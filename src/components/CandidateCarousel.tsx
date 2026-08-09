@@ -31,15 +31,19 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") move(index - 1);
-      if (event.key === "ArrowRight") move(index + 1);
-      if (event.key === "Enter") void useReply(true);
+      if (event.key === "ArrowLeft") { event.preventDefault(); move(index - 1); }
+      if (event.key === "ArrowRight") { event.preventDefault(); move(index + 1); }
+      if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
+        event.preventDefault();
+        void useReply(true);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
   const candidate = candidates[index];
+  const insertLabel = channel === "wechat" ? "Insert into WeChat" : "Insert";
   return (
     <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
       <div className="candidate-meta">
@@ -90,7 +94,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
           {status === "copied" ? <Check size={16} /> : <Copy size={16} />} {status === "copied" ? "Copied" : "Copy"}
         </button>
         <button className="button button--primary" onClick={() => void useReply(true)}>
-          {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />} {status === "pasted" ? "Inserted" : "Insert"}
+          {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />} {status === "pasted" ? "Inserted" : insertLabel}
         </button>
       </div>
     </section>

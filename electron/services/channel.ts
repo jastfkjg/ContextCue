@@ -1,4 +1,4 @@
-import type { ChannelId } from "../../src/shared/types";
+import type { CaptureSource, ChannelId } from "../../src/shared/types";
 
 const CHANNEL_PATTERNS: Array<[ChannelId, RegExp]> = [
   ["wechat", /(wechat|微信)/i],
@@ -22,4 +22,16 @@ export function targetApplicationName(channel: ChannelId): string | undefined {
     whatsapp: "WhatsApp"
   };
   return names[channel];
+}
+
+export function selectQuickReplySource<T extends Pick<CaptureSource, "id" | "name" | "channel">>(sources: T[], applicationName: string): T | undefined {
+  const channel = detectChannel(applicationName);
+  if (channel !== "other") return sources.find((source) => source.channel === channel);
+  const normalizedName = applicationName.trim().toLowerCase();
+  if (normalizedName) {
+    const nameMatch = sources.find((source) => source.name.toLowerCase().includes(normalizedName));
+    if (nameMatch) return nameMatch;
+    return undefined;
+  }
+  return sources.find((source) => source.channel === "wechat");
 }

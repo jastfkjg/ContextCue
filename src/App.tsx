@@ -524,7 +524,6 @@ export function App() {
       hiplyApi.getSettings().then(setSettings),
       hiplyApi.getPermissions().then(setPermissions)
     ]);
-    return hiplyApi.onCaptureRequested(() => { setView("reply"); void refreshSources(); });
   }, [refreshSources]);
 
   useEffect(() => {

@@ -262,12 +262,19 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .workspace-loading { min-height: 70vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 11px; }.workspace-loading .spinner { border-color: #d0d1c9; border-top-color: #44463f; }
 
 /* Floating overlay */
-.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(70 72 65 / 35%); border-radius: 17px; background: #efeee8; box-shadow: 0 25px 70px rgb(0 0 0 / 30%); }
-.overlay-header { height: 46px; display: flex; align-items: center; padding: 0 12px 0 16px; border-bottom: 1px solid #d7d7d0; -webkit-app-region: drag; }
-.overlay-brand { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; }.overlay-brand i { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); box-shadow: inset 0 0 0 3px #1c1d19; }.drag-handle { margin: auto; color: #a5a69e; }.overlay-close { width: 27px; height: 27px; border: 0; background: #e4e3dd; border-radius: 50%; -webkit-app-region: no-drag; }
-.overlay-context { height: 33px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; color: #777970; font-size: 9px; }.overlay-context span:first-child { color: #3f413a; font-weight: 650; }
-.overlay-root .candidate-shell { margin: 0 10px 10px; }.candidate-shell--compact .candidate-stage { min-height: 170px; }.candidate-shell--compact .candidate-copy { padding: 21px 23px 15px; }.candidate-shell--compact .candidate-copy p { font-size: 16px; }.candidate-shell--compact .candidate-actions { padding: 8px; }
-.overlay-empty { height: calc(100% - 46px); display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 11px; }.overlay-empty .spinner { border-color: #d0d1c9; border-top-color: #44463f; }
+.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(70 72 65 / 38%); border-radius: 18px; background: #efeee8; box-shadow: 0 25px 75px rgb(0 0 0 / 32%); }
+.overlay-header { height: 48px; display: flex; align-items: center; padding: 0 12px 0 16px; border-bottom: 1px solid #d7d7d0; -webkit-app-region: drag; }
+.overlay-brand { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 720; }.overlay-brand i { width: 11px; height: 11px; border-radius: 3px; background: var(--accent); box-shadow: inset 0 0 0 3px #1c1d19; }.drag-handle { margin: auto; color: #a5a69e; }.overlay-close { width: 32px; height: 32px; border: 0; background: #e4e3dd; border-radius: 50%; -webkit-app-region: no-drag; }
+.overlay-context { height: 36px; padding: 0 17px; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: #777970; font-size: 10px; }.overlay-context span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.overlay-context span:first-child { color: #3f413a; font-weight: 670; }.overlay-context span:last-child { font-size: 9px; }
+.overlay-root .candidate-shell { margin: 0 10px 10px; }.candidate-shell--compact .candidate-stage { min-height: 170px; }.candidate-shell--compact .candidate-copy { padding: 22px 24px 15px; }.candidate-shell--compact .candidate-copy p { font-size: 17px; }.candidate-shell--compact .candidate-actions { padding: 8px; }.candidate-shell--compact .button, .candidate-shell--compact .icon-button { min-height: 38px; }
+.overlay-empty { height: calc(100% - 48px); padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #64665e; }
+.overlay-state-icon { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 15px; color: #688b11; background: #e9f6c7; }
+.overlay-empty--loading .overlay-state-icon svg { animation: scan-pulse 1.25s ease-in-out infinite; }
+.overlay-empty--error .overlay-state-icon { color: #a94b44; background: #f8dfdc; }
+.overlay-empty strong { color: var(--ink); font-size: 16px; letter-spacing: -.02em; }
+.overlay-empty p { max-width: 390px; margin: 8px 0 0; font-size: 12px; line-height: 1.55; }
+.overlay-empty button { min-width: 88px; min-height: 38px; margin-top: 18px; border: 1px solid #d3d4cc; border-radius: 8px; background: #fbfbf8; font-size: 11px; font-weight: 650; }
+@keyframes scan-pulse { 50% { transform: translateY(3px); opacity: .55; } }
 
 @media (max-width: 1050px) {
   .workspace { padding: 42px 30px; }

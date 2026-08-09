@@ -54,7 +54,8 @@ npm run dev
 2. 填写 API Base URL、模型、协议和 API Key。
 3. macOS 用户需要允许“屏幕录制”权限，然后重启 Hiply。
 4. 打开微信、Slack、Lark 或其他应用中的对话。
-5. 按 `CommandOrControl+Shift+Space`，选择窗口，可以补充回复意图，然后点击 **Generate replies**。
+5. 在聊天窗口按 `CommandOrControl+Shift+Space`。Hiply 会直接读取当前会话，并在输入区附近显示候选回复，不会打开主窗口。
+6. 左右滑动、使用方向键或点击箭头切换候选；点击 **Insert into WeChat** 或按 Enter 后，所选内容会写入聊天输入框，但不会自动发送。
 
 默认使用 `https://api.openai.com/v1`、Responses API 和 `gpt-5.6-luna`。这些都可以在设置中修改。OpenAI 当前模型说明显示，最新模型系列可以通过 Responses API 接收图片输入：[OpenAI 模型文档](https://developers.openai.com/api/docs/models)。
 
@@ -99,7 +100,7 @@ Hiply 将长期记忆保存在 Electron 对应平台的 `userData/hiply-data.jso
 
 ## 隐私边界
 
-- 只有用户选择窗口并点击 Generate 后才会截图。
+- 只有用户按下全局快捷键，或在主窗口明确选择来源并点击 Generate 后才会截图。
 - 截图会发送给用户配置的大模型服务商，但不会写入长期记忆文件。
 - 截图中的所有文字都被视为不可信对话数据，系统提示会拒绝执行截图内的指令。
 - 长期记忆保存在本机；每次只发送当前生成所需的小部分相关记忆。
