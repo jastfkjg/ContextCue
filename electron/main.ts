@@ -41,6 +41,7 @@ let quickReplyInFlight = false;
 let quickSourceRefs: CaptureSourceRef[] = [];
 let quickReplyAnchor: { x: number; y: number } | null = null;
 let quickReplyTargetApplication = "";
+let quickOverlayActive = false;
 
 function rendererUrl(mode?: "overlay"): string {
   const url = process.env.ELECTRON_RENDERER_URL;
@@ -83,9 +84,9 @@ function createMainWindow(): BrowserWindow {
 function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 440,
-    height: 250,
-    minWidth: 400,
-    minHeight: 230,
+    height: 230,
+    minWidth: 380,
+    minHeight: 160,
     frame: false,
     transparent: true,
     resizable: false,
@@ -135,6 +136,7 @@ function positionOverlayNearInput(): void {
 
 function showOverlayStatus(status: OverlayStatus): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
+  overlayWindow.setSize(440, 230, false);
   positionOverlayNearInput();
   sendToOverlay("overlay:status", status);
   overlayWindow.showInactive();
@@ -171,7 +173,10 @@ async function showQuickReply(): Promise<void> {
   let discoveryFinishedAt = startedAt;
   let captureFinishedAt = startedAt;
   try {
+    quickOverlayActive = true;
+    quickReplyTargetApplication = "";
     quickReplyAnchor = screen.getCursorScreenPoint();
+    mainWindow?.hide();
     showOverlayStatus({ state: "loading", message: "Reading the current conversation…" });
     const [applicationName, availableSources] = await Promise.all([
       frontmostApplicationName(),
@@ -207,6 +212,8 @@ async function showQuickReply(): Promise<void> {
     };
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
     const contact = result.detectedContact;
+    overlayWindow?.setSize(420, 180, false);
+    positionOverlayNearInput();
     sendToOverlay("overlay:result", { ...result, channel: source.channel, contact });
     overlayWindow?.showInactive();
     const finishedAt = performance.now();
@@ -259,6 +266,37 @@ function appleScriptString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+async function activateApplication(applicationName: string): Promise<void> {
+  if (!applicationName) return;
+  if (process.platform === "darwin") {
+    await execFileAsync("/usr/bin/open", ["-a", applicationName]);
+    return;
+  }
+  if (process.platform === "win32") {
+    const escapedName = applicationName.replace(/'/g, "''");
+    await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-Command",
+      `(New-Object -ComObject WScript.Shell).AppActivate('${escapedName}') | Out-Null`
+    ]);
+    return;
+  }
+  await execFileAsync("xdotool", ["search", "--name", applicationName, "windowactivate"]);
+}
+
+async function hideQuickOverlay(): Promise<void> {
+  overlayWindow?.hide();
+  if (!quickOverlayActive) return;
+  quickOverlayActive = false;
+  const target = quickReplyTargetApplication;
+  quickReplyTargetApplication = "";
+  try {
+    await activateApplication(target);
+  } catch (error) {
+    console.warn("[quick-reply] could not restore the originating application", error);
+  }
+}
+
 async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ pasted: boolean; error?: string }> {
   try {
     if (process.platform === "darwin") {
@@ -277,6 +315,8 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
         ? `tell application "System Events"\nif not (exists process "${escapedTarget}") then error "Target application is not running"\nset frontmost of process "${escapedTarget}" to true\ndelay 0.15\nkeystroke "v" using command down\nend tell`
         : "tell application \"System Events\"\ndelay 0.15\nkeystroke \"v\" using command down\nend tell";
       await execFileAsync("osascript", ["-e", script]);
+      quickOverlayActive = false;
+      quickReplyTargetApplication = "";
       return { pasted: true };
     }
     if (process.platform === "win32") {
@@ -287,9 +327,13 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
         "-Command",
         "Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('^v')"
       ]);
+      quickOverlayActive = false;
+      quickReplyTargetApplication = "";
       return { pasted: true };
     }
     await execFileAsync("xdotool", ["key", "ctrl+v"]);
+    quickOverlayActive = false;
+    quickReplyTargetApplication = "";
     return { pasted: true };
   } catch (error) {
     overlayWindow?.showInactive();
@@ -318,7 +362,10 @@ function registerIpc(): void {
     const result = await generateWithModel(store.getData(), readApiKey(), request, screenshot);
     const contact = request.contact?.trim() || result.detectedContact;
     if (store.getData().settings.autoShowOverlay) {
+      quickOverlayActive = false;
+      quickReplyTargetApplication = "";
       if (!overlayWindow) overlayWindow = createOverlayWindow();
+      overlayWindow.setSize(420, 180, false);
       positionOverlayNearInput();
       sendToOverlay("overlay:result", { ...result, channel: request.channel, contact });
       overlayWindow.show();
@@ -337,7 +384,7 @@ function registerIpc(): void {
     }).catch((error) => console.warn("[memory] could not remember accepted reply", error));
     return { copied: true, ...pasteResult };
   });
-  ipcMain.handle("overlay:hide", () => overlayWindow?.hide());
+  ipcMain.handle("overlay:hide", () => hideQuickOverlay());
 
   ipcMain.handle("memory:get", () => store.snapshot());
   ipcMain.handle("memory:profile", (_event, profile: UserProfile) => store.saveProfile(profile));
@@ -392,6 +439,7 @@ app.whenReady().then(async () => {
   void refreshQuickSourceRefs().catch(() => undefined);
 
   app.on("activate", () => {
+    if (quickOverlayActive) return;
     if (!mainWindow) mainWindow = createMainWindow();
     mainWindow.show();
   });

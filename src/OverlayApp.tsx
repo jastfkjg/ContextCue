@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CircleAlert, GripHorizontal, ScanLine, X } from "lucide-react";
+import { CircleAlert, ScanLine, X } from "lucide-react";
 import type { ChannelId, GenerationResult, OverlayStatus } from "./shared/types";
 import { hiplyApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
@@ -33,17 +33,10 @@ export function OverlayApp() {
     <main className="overlay-root">
       <header className="overlay-header">
         <span className="overlay-brand"><i /> Hiply</span>
-        <GripHorizontal size={18} className="drag-handle" />
         <button className="overlay-close" onClick={() => void hiplyApi.hideOverlay()} aria-label="Close"><X size={17} /></button>
       </header>
       {payload ? (
-        <>
-          <div className="overlay-context">
-            <span>{payload.contact || "Current conversation"}</span>
-            <span>Swipe or ← → · Enter to insert</span>
-          </div>
-          <CandidateCarousel candidates={payload.candidates} channel={payload.channel} contact={payload.contact} compact />
-        </>
+        <CandidateCarousel candidates={payload.candidates} channel={payload.channel} contact={payload.contact} compact />
       ) : (
         <div className={`overlay-empty overlay-empty--${status.state}`}>
           <span className="overlay-state-icon">{status.state === "loading" ? <ScanLine size={24}/> : <CircleAlert size={24}/>}</span>
