@@ -458,7 +458,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
             <span className="model-monogram">{model.name.trim().slice(0, 1).toUpperCase() || index + 1}</span>
             <span className="model-list-copy"><strong>{model.name || "Untitled model"}</strong><small>{model.model || "Model ID needed"}</small></span>
             <span className={`model-health ${model.apiKeyConfigured ? "model-health--ready" : ""}`} title={model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
-            {form.activeModelId === model.id && <span className="current-chip">CURRENT</span>}
+            {form.activeModelId === model.id && <span className="current-chip">DEFAULT</span>}
           </button>)}
         </div>
         <button className="add-model-button" onClick={addModel}><Plus size={15}/> Add another model</button>
@@ -471,7 +471,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
             <div className="model-editor-header">
               <div className="model-title"><span><Bot size={19}/></span><div><small>MODEL CONFIGURATION</small><h2>{selectedModel.name || "Untitled model"}</h2></div></div>
               <div className="model-editor-actions">
-                {form.activeModelId === selectedModel.id ? <span className="active-model-label"><CircleDot size={14}/> Current model</span> : <button className="use-model-button" onClick={() => { setForm({ ...form, activeModelId: selectedModel.id }); setMessage("Current model changed. Save to apply."); }}><CircleDot size={14}/> Use this model</button>}
+                {form.activeModelId === selectedModel.id ? <span className="active-model-label"><CircleDot size={15}/> Default model</span> : <button className="use-model-button" onClick={() => { setForm({ ...form, activeModelId: selectedModel.id }); setMessage("Default model changed. Save to apply."); }}><CircleDot size={15}/> Set as default</button>}
                 <button className="remove-model-button" disabled={form.models.length === 1} onClick={removeModel} aria-label="Remove model" title={form.models.length === 1 ? "At least one model is required" : "Remove model"}><Trash2 size={15}/></button>
               </div>
             </div>
@@ -486,13 +486,13 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
           </motion.section>}
         </AnimatePresence>
 
-        <div className="preference-grid">
-          <section className="preference-section"><div className="settings-heading"><MessageSquareText size={18}/><div><h2>Reply behavior</h2><p>Default output for every model.</p></div></div><div className="form-grid"><label><span>Candidates</span><select value={form.candidateCount} onChange={(e) => setForm({ ...form, candidateCount: Number(e.target.value) })}><option value={2}>2 candidates</option><option value={3}>3 candidates</option><option value={4}>4 candidates</option><option value={5}>5 candidates</option></select></label><label><span>Reply language</span><select value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value as AppSettings["locale"] })}><option value="auto">Match conversation</option><option value="en">English</option><option value="zh-CN">简体中文</option></select></label></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-          <section className="preference-section"><div className="settings-heading"><Command size={18}/><div><h2>Global shortcut</h2><p>Open Hiply from any app.</p></div></div><label className="full-field"><span>Electron accelerator</span><input value={form.globalShortcut} onChange={(e) => setForm({ ...form, globalShortcut: e.target.value })}/><small>Default: CommandOrControl+Shift+Space</small></label></section>
-        </div>
-        <section className="privacy-strip"><ShieldCheck size={18}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={13}/>No background recording</li><li><Check size={13}/>Explicit memory saves</li></ul></section>
       </div>
     </div>
+    <div className="preference-grid">
+      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Default output for every model.</p></div></div><div className="form-grid"><label><span>Candidates</span><select value={form.candidateCount} onChange={(e) => setForm({ ...form, candidateCount: Number(e.target.value) })}><option value={2}>2 candidates</option><option value={3}>3 candidates</option><option value={4}>4 candidates</option><option value={5}>5 candidates</option></select></label><label><span>Reply language</span><select value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value as AppSettings["locale"] })}><option value="auto">Match conversation</option><option value="en">English</option><option value="zh-CN">简体中文</option></select></label></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Press it while you are in WeChat or any other app.</p></div></div><label className="full-field"><span>Electron accelerator</span><input value={form.globalShortcut} onChange={(e) => setForm({ ...form, globalShortcut: e.target.value })}/><small>macOS: ⌘⇧Space · Windows/Linux: Ctrl+Shift+Space</small></label></section>
+    </div>
+    <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
     <div className="settings-save" aria-live="polite"><span>{message}</span><button className="button button--primary" disabled={saving} onClick={() => void save()}>{saving ? <span className="spinner spinner--dark"/> : <Save size={16}/>} {saving ? "Saving…" : "Save settings"}</button></div>
   </div>;
 }
