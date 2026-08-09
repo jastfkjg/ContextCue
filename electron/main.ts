@@ -8,10 +8,13 @@ import {
   clipboard,
   globalShortcut,
   ipcMain,
+  Menu,
+  nativeImage,
   safeStorage,
   screen,
   shell,
-  systemPreferences
+  systemPreferences,
+  Tray
 } from "electron";
 import type {
   ContactMemory,
@@ -36,6 +39,7 @@ import { generateWithModel } from "./services/model";
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let store: MemoryStore;
 let quickReplyInFlight = false;
 let quickSourceRefs: CaptureSourceRef[] = [];
@@ -79,6 +83,46 @@ function createMainWindow(): BrowserWindow {
     mainWindow = null;
   });
   return window;
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) mainWindow = createMainWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function toggleMainWindow(): void {
+  if (mainWindow?.isVisible()) {
+    mainWindow.hide();
+    return;
+  }
+  showMainWindow();
+}
+
+function createTrayIcon(): Electron.NativeImage {
+  // A monochrome version of the four-part Hiply mark. macOS recolors template
+  // images automatically so the icon remains legible in either menu-bar theme.
+  const png = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAqDuP8AAABTUlEQVRYCe1XsQ3CMBAM0DABI8Ai9GzAWIzBBDTUNNAiMQAVEtQI/qQkSj5nx+aTkMKWXsT23fl4E/vJstRSBvrJwFJk9xJPiY8KjGEOGFez8mu6EHtIaCO6DwwzZeXXzKCDb68Xd/WB1c3K13p0m1yGsH26sW0O5k+0mvRBjmlaw8Sfxqw8BDYZassyy9CrjVSZZ1g2VqHUHhtYZuhQo/g7DMvGXCpBWOvBZuVT8xDFAcfOlMGvDuowDaYMRGZgVD9q62tr5TdyZ61nrPyGIXb2BNczombi61oG7kz1jJXP7jKY+ltLhtpSzzLUqFE8IgV2K5iFB+eaKvjlPDMUVKPkCgV2I/2LxLpUDnso+F70LwcbhPF2vvNP1zFRHXf90aTmYq+OU25kF2AopJ6ipmIGrwI+S8xjSH1ibyK+6mKBWRcionGXOHakNS6ZL3ADCGH7jrckAAAAAElFTkSuQmCC";
+  const icon = nativeImage.createFromBuffer(Buffer.from(png, "base64"), { scaleFactor: 2 });
+  if (icon.isEmpty()) throw new Error("Could not create the Hiply menu-bar icon.");
+  icon.setTemplateImage(true);
+  return icon;
+}
+
+function createTray(): Tray {
+  const nextTray = new Tray(createTrayIcon());
+  nextTray.setToolTip("Hiply");
+  nextTray.on("click", toggleMainWindow);
+  nextTray.on("right-click", () => {
+    nextTray.popUpContextMenu(Menu.buildFromTemplate([
+      { label: "Open Hiply", click: showMainWindow },
+      { label: "Quick reply", click: () => void showQuickReply() },
+      { type: "separator" },
+      { label: "Quit Hiply", role: "quit" }
+    ]));
+  });
+  return nextTray;
 }
 
 function createOverlayWindow(): BrowserWindow {
@@ -436,12 +480,12 @@ app.whenReady().then(async () => {
   registerShortcut(store.getData().settings.globalShortcut);
   mainWindow = createMainWindow();
   overlayWindow = createOverlayWindow();
+  tray = createTray();
   void refreshQuickSourceRefs().catch(() => undefined);
 
   app.on("activate", () => {
     if (quickOverlayActive) return;
-    if (!mainWindow) mainWindow = createMainWindow();
-    mainWindow.show();
+    showMainWindow();
   });
 });
 
@@ -449,4 +493,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("will-quit", () => globalShortcut.unregisterAll());
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  tray?.destroy();
+  tray = null;
+});
