@@ -186,23 +186,47 @@ function showOverlayStatus(status: OverlayStatus): void {
   overlayWindow.showInactive();
 }
 
-async function frontmostApplicationName(): Promise<string> {
+interface FrontmostWindow {
+  applicationName: string;
+  windowTitle: string;
+}
+
+async function frontmostWindow(): Promise<FrontmostWindow> {
   try {
     if (process.platform === "darwin") {
       const { stdout } = await execFileAsync("osascript", [
         "-e",
-        "tell application \"System Events\" to get name of first application process whose frontmost is true"
+        "tell application \"System Events\"",
+        "-e",
+        "set frontProcess to first application process whose frontmost is true",
+        "-e",
+        "set applicationName to name of frontProcess",
+        "-e",
+        "try",
+        "-e",
+        "set windowTitle to name of front window of frontProcess as text",
+        "-e",
+        "on error",
+        "-e",
+        "set windowTitle to \"\"",
+        "-e",
+        "end try",
+        "-e",
+        "return applicationName & linefeed & windowTitle",
+        "-e",
+        "end tell"
       ]);
-      return stdout.trim();
+      const [applicationName = "", ...titleLines] = stdout.trimEnd().split(/\r?\n/);
+      return { applicationName: applicationName.trim(), windowTitle: titleLines.join("\n").trim() };
     }
     if (process.platform === "linux") {
       const { stdout } = await execFileAsync("xdotool", ["getactivewindow", "getwindowname"]);
-      return stdout.trim();
+      return { applicationName: "", windowTitle: stdout.trim() };
     }
   } catch {
-    return "";
+    return { applicationName: "", windowTitle: "" };
   }
-  return "";
+  return { applicationName: "", windowTitle: "" };
 }
 
 async function refreshQuickSourceRefs(): Promise<CaptureSourceRef[]> {
@@ -222,22 +246,32 @@ async function showQuickReply(): Promise<void> {
     quickReplyAnchor = screen.getCursorScreenPoint();
     mainWindow?.hide();
     showOverlayStatus({ state: "loading", message: "Reading the current conversation…" });
-    const [applicationName, availableSources] = await Promise.all([
-      frontmostApplicationName(),
-      quickSourceRefs.length ? Promise.resolve(quickSourceRefs) : refreshQuickSourceRefs()
+    const [frontmost, availableSources] = await Promise.all([
+      frontmostWindow(),
+      // Window IDs and browser titles can change whenever the user switches a
+      // tab. Always discover a fresh source before a quick capture.
+      refreshQuickSourceRefs()
     ]);
-    let source = selectQuickReplySource(availableSources, applicationName);
-    if (!source) source = selectQuickReplySource(await refreshQuickSourceRefs(), applicationName);
-    if (!source) throw new Error("No active chat window was found. Keep the WeChat conversation visible and try again.");
-    quickReplyTargetApplication = applicationName;
+    let source = selectQuickReplySource(availableSources, frontmost.applicationName, frontmost.windowTitle);
+    if (!source) {
+      source = selectQuickReplySource(await refreshQuickSourceRefs(), frontmost.applicationName, frontmost.windowTitle);
+    }
+    if (!source) {
+      throw new Error("No active conversation window was found. Keep the page or app window visible and try again.");
+    }
+    quickReplyTargetApplication = frontmost.applicationName;
     discoveryFinishedAt = performance.now();
 
     let screenshot: string;
     try {
       screenshot = await captureQuickSource(source.id);
     } catch {
-      source = selectQuickReplySource(await refreshQuickSourceRefs(), applicationName);
-      if (!source) throw new Error("The current WeChat window is no longer available. Keep it visible and try again.");
+      source = selectQuickReplySource(
+        await refreshQuickSourceRefs(),
+        frontmost.applicationName,
+        frontmost.windowTitle
+      );
+      if (!source) throw new Error("The current page or app window is no longer available. Keep it visible and try again.");
       screenshot = await captureQuickSource(source.id);
     }
     captureFinishedAt = performance.now();

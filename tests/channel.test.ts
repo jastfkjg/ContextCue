@@ -20,7 +20,8 @@ describe("detectChannel", () => {
 describe("selectQuickReplySource", () => {
   const sources: CaptureSource[] = [
     { id: "wechat", name: "WeChat — Lin Yue", thumbnail: "", channel: "wechat" },
-    { id: "slack", name: "Slack — product-team", thumbnail: "", channel: "slack" }
+    { id: "slack", name: "Slack — product-team", thumbnail: "", channel: "slack" },
+    { id: "xiaohongshu", name: "AI创业18个月，我终于还是要滚去上班了", thumbnail: "", channel: "other" }
   ];
 
   it("selects the visible source that matches the frontmost chat app", () => {
@@ -30,5 +31,20 @@ describe("selectQuickReplySource", () => {
 
   it("falls back to WeChat when the OS cannot report the frontmost app", () => {
     expect(selectQuickReplySource(sources, "")?.id).toBe("wechat");
+  });
+
+  it("selects a browser page by its front window title", () => {
+    expect(selectQuickReplySource(sources, "Google Chrome", "AI创业18个月，我终于还是要滚去上班了")?.id)
+      .toBe("xiaohongshu");
+  });
+
+  it("matches browser title suffix differences", () => {
+    expect(selectQuickReplySource(sources, "Arc", "AI创业18个月，我终于还是要滚去上班了 - 小红书")?.id)
+      .toBe("xiaohongshu");
+  });
+
+  it("supports an arbitrary app when it is the only visible source", () => {
+    const onlySource = [{ id: "notes", name: "Support conversation", thumbnail: "", channel: "other" as const }];
+    expect(selectQuickReplySource(onlySource, "Unknown App")?.id).toBe("notes");
   });
 });

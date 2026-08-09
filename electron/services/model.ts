@@ -141,6 +141,27 @@ function activeModel(data: AppData): AppData["settings"]["models"][number] {
   return data.settings.models.find((model) => model.id === data.settings.activeModelId) ?? data.settings.models[0];
 }
 
+function requestProtocol(
+  configuration: AppData["settings"]["models"][number],
+  screenshot: string
+): ApiProtocol {
+  if (configuration.apiProtocol !== "responses" || !screenshot.startsWith("data:image/")) {
+    return configuration.apiProtocol;
+  }
+  try {
+    const hostname = new URL(configuration.apiBaseUrl).hostname.toLowerCase();
+    // Alibaba Model Studio's Responses API documents image_url as a public
+    // URL. Its Chat Completions API accepts the Base64 Data URLs Hiply uses so
+    // screenshots can remain private and do not need an upload step.
+    if (hostname === "dashscope.aliyuncs.com" || hostname.endsWith(".maas.aliyuncs.com")) {
+      return "chat-completions";
+    }
+  } catch {
+    // The normal request path will surface malformed provider URLs.
+  }
+  return configuration.apiProtocol;
+}
+
 function responsesBody(data: AppData, request: GenerateRequest, screenshot: string) {
   const configuration = activeModel(data);
   const candidateCount = quickCandidateCount(data, request);
@@ -365,7 +386,7 @@ export async function generateWithModel(
   const configuration = activeModel(data);
   if (!configuration) throw new Error("Choose a model in Settings before generating replies.");
   const baseUrl = configuration.apiBaseUrl.replace(/\/$/, "");
-  const protocol = configuration.apiProtocol;
+  const protocol = requestProtocol(configuration, screenshot);
   const endpoint = protocol === "responses" ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
   const body = protocol === "responses"
     ? responsesBody(data, request, screenshot)

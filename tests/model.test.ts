@@ -165,6 +165,44 @@ describe("model memory and parsing", () => {
     expect(JSON.parse(String(options?.body)).model).toBe("qwen3-vl");
   });
 
+  it("uses Alibaba Chat Completions for private Base64 screenshots", async () => {
+    const configured = data();
+    configured.settings.models.push({
+      id: "qwen-plus",
+      name: "Qwen Plus",
+      apiBaseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      model: "qwen3.7-plus",
+      apiProtocol: "responses"
+    });
+    configured.settings.activeModelId = "qwen-plus";
+    const payload = {
+      choices: [{ message: { content: JSON.stringify({
+        candidates: [{ text: "Relevant reply", tone: "Direct", strategy: "Reply" }],
+        detected_contact: "",
+        detected_language: "Chinese"
+      }) } }]
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+
+    await generateWithModel(
+      configured,
+      "secret",
+      { ...request, quick: true },
+      "data:image/jpeg;base64,private-screenshot",
+      fetcher as typeof fetch
+    );
+
+    const [url, options] = fetcher.mock.calls[0]!;
+    expect(url).toBe("https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
+    const body = JSON.parse(String(options?.body));
+    expect(body.messages[1].content[1].image_url.url).toBe("data:image/jpeg;base64,private-screenshot");
+  });
+
   it("uses the smaller schema and token budget for quick replies", async () => {
     const configured = data();
     const payload = {
