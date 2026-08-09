@@ -184,9 +184,9 @@ describe("model memory and parsing", () => {
     await generateWithModel(configured, "secret", { ...request, quick: true }, "data:image/png;base64,abc", fetcher as typeof fetch);
 
     const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
-    expect(body.max_output_tokens).toBe(900);
-    expect(body.text.format.schema.properties.candidates.maxItems).toBe(2);
-    expect(body.input[0].content[0].text).toContain("exactly 2 useful replies");
+    expect(body.max_output_tokens).toBe(1040);
+    expect(body.text.format.schema.properties.candidates.maxItems).toBe(3);
+    expect(body.input[0].content[0].text).toContain("exactly 3 useful replies");
     expect(body.input[1].content[1].detail).toBe("auto");
     expect(body.text.format.schema.properties).not.toHaveProperty("memory_suggestions");
   });

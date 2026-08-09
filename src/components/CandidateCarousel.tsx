@@ -15,6 +15,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
+  const [feedback, setFeedback] = useState("");
   const pointerStart = useRef<number | null>(null);
 
   const move = (next: number) => {
@@ -22,11 +23,13 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
     setDirection(next > index || (index === candidates.length - 1 && wrapped === 0) ? 1 : -1);
     setIndex(wrapped);
     setStatus("idle");
+    setFeedback("");
   };
 
   const useReply = async (paste: boolean) => {
     const result = await hiplyApi.useReply({ text: candidates[index].text, channel, contact, paste });
     setStatus(result.pasted ? "pasted" : "copied");
+    setFeedback(result.error ?? "");
   };
 
   useEffect(() => {
@@ -46,10 +49,12 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
   const insertLabel = channel === "wechat" ? "Insert into WeChat" : "Insert";
   return (
     <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
-      <div className="candidate-meta">
-        <span>{candidate.strategy}</span>
-        <span>{index + 1} / {candidates.length}</span>
-      </div>
+      {!compact && (
+        <div className="candidate-meta">
+          <span>{candidate.strategy}</span>
+          <span>{index + 1} / {candidates.length}</span>
+        </div>
+      )}
       <div
         className="candidate-stage"
         onPointerDown={(event) => { pointerStart.current = event.clientX; }}
@@ -71,7 +76,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
             className="candidate-copy"
           >
             <p>{candidate.text}</p>
-            <span className="tone-label">{candidate.tone}</span>
+            {!compact && <span className="tone-label">{candidate.tone}</span>}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -97,6 +102,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
           {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />} {status === "pasted" ? "Inserted" : insertLabel}
         </button>
       </div>
+      {feedback && <p className="candidate-feedback" role="status">{feedback}</p>}
     </section>
   );
 }

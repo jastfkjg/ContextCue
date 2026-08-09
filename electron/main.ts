@@ -39,6 +39,8 @@ let overlayWindow: BrowserWindow | null = null;
 let store: MemoryStore;
 let quickReplyInFlight = false;
 let quickSourceRefs: CaptureSourceRef[] = [];
+let quickReplyAnchor: { x: number; y: number } | null = null;
+let quickReplyTargetApplication = "";
 
 function rendererUrl(mode?: "overlay"): string {
   const url = process.env.ELECTRON_RENDERER_URL;
@@ -80,13 +82,13 @@ function createMainWindow(): BrowserWindow {
 
 function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 560,
-    height: 390,
-    minWidth: 500,
-    minHeight: 340,
+    width: 440,
+    height: 250,
+    minWidth: 400,
+    minHeight: 230,
     frame: false,
     transparent: true,
-    resizable: true,
+    resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
@@ -115,16 +117,16 @@ function sendToOverlay(channel: "overlay:status" | "overlay:result", payload: un
 
 function positionOverlayNearInput(): void {
   if (!overlayWindow) return;
-  const cursor = screen.getCursorScreenPoint();
-  const { workArea } = screen.getDisplayNearestPoint(cursor);
+  const anchor = quickReplyAnchor ?? screen.getCursorScreenPoint();
+  const { workArea } = screen.getDisplayNearestPoint(anchor);
   const [width, height] = overlayWindow.getSize();
   const margin = 18;
   const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum);
-  const x = clamp(cursor.x - Math.round(width / 2), workArea.x + margin, workArea.x + workArea.width - width - margin);
-  const preferredY = cursor.y - height - 22;
-  const fallbackY = cursor.y + 22;
+  const x = clamp(anchor.x - 24, workArea.x + margin, workArea.x + workArea.width - width - margin);
+  const preferredY = anchor.y + 14;
+  const fallbackY = anchor.y - height - 14;
   const y = clamp(
-    preferredY >= workArea.y + margin ? preferredY : fallbackY,
+    preferredY + height <= workArea.y + workArea.height - margin ? preferredY : fallbackY,
     workArea.y + margin,
     workArea.y + workArea.height - height - margin
   );
@@ -169,6 +171,7 @@ async function showQuickReply(): Promise<void> {
   let discoveryFinishedAt = startedAt;
   let captureFinishedAt = startedAt;
   try {
+    quickReplyAnchor = screen.getCursorScreenPoint();
     showOverlayStatus({ state: "loading", message: "Reading the current conversation…" });
     const [applicationName, availableSources] = await Promise.all([
       frontmostApplicationName(),
@@ -177,6 +180,7 @@ async function showQuickReply(): Promise<void> {
     let source = selectQuickReplySource(availableSources, applicationName);
     if (!source) source = selectQuickReplySource(await refreshQuickSourceRefs(), applicationName);
     if (!source) throw new Error("No active chat window was found. Keep the WeChat conversation visible and try again.");
+    quickReplyTargetApplication = applicationName;
     discoveryFinishedAt = performance.now();
 
     let screenshot: string;
@@ -191,7 +195,10 @@ async function showQuickReply(): Promise<void> {
     const snapshot = store.getData();
     const model = snapshot.settings.models.find((item) => item.id === snapshot.settings.activeModelId)
       ?? snapshot.settings.models[0];
-    showOverlayStatus({ state: "loading", message: `Generating 2 replies with ${model?.name || "the current model"}…` });
+    showOverlayStatus({
+      state: "loading",
+      message: `Generating ${snapshot.settings.candidateCount} replies with ${model?.name || "the current model"}…`
+    });
     const request: GenerateRequest = {
       sourceId: source.id,
       channel: source.channel,
@@ -248,18 +255,29 @@ function encryptApiKey(apiKey: string): string | undefined {
   return safeStorage.encryptString(apiKey.trim()).toString("base64");
 }
 
-async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<boolean> {
+function appleScriptString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ pasted: boolean; error?: string }> {
   try {
     if (process.platform === "darwin") {
+      if (!systemPreferences.isTrustedAccessibilityClient(true)) {
+        await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+        return {
+          pasted: false,
+          error: "Allow Hiply (or Electron while developing) in Accessibility, then click Insert again. The reply was copied."
+        };
+      }
       overlayWindow?.hide();
       mainWindow?.hide();
-      app.hide();
-      const target = targetApplicationName(channel);
-      const script = target
-        ? `tell application "${target}" to activate\ndelay 0.2\ntell application "System Events" to keystroke "v" using command down`
-        : "delay 0.2\ntell application \"System Events\" to keystroke \"v\" using command down";
+      const target = quickReplyTargetApplication || targetApplicationName(channel);
+      const escapedTarget = target ? appleScriptString(target) : "";
+      const script = escapedTarget
+        ? `tell application "System Events"\nif not (exists process "${escapedTarget}") then error "Target application is not running"\nset frontmost of process "${escapedTarget}" to true\ndelay 0.15\nkeystroke "v" using command down\nend tell`
+        : "tell application \"System Events\"\ndelay 0.15\nkeystroke \"v\" using command down\nend tell";
       await execFileAsync("osascript", ["-e", script]);
-      return true;
+      return { pasted: true };
     }
     if (process.platform === "win32") {
       overlayWindow?.hide();
@@ -269,12 +287,16 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<boo
         "-Command",
         "Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('^v')"
       ]);
-      return true;
+      return { pasted: true };
     }
     await execFileAsync("xdotool", ["key", "ctrl+v"]);
-    return true;
-  } catch {
-    return false;
+    return { pasted: true };
+  } catch (error) {
+    overlayWindow?.showInactive();
+    return {
+      pasted: false,
+      error: `Could not focus the chat input. The reply was copied. ${error instanceof Error ? error.message : ""}`.trim()
+    };
   }
 }
 
@@ -307,13 +329,13 @@ function registerIpc(): void {
 
   ipcMain.handle("reply:use", async (_event, request: UseReplyRequest) => {
     clipboard.writeText(request.text);
-    await store.rememberAcceptedReply({
+    const pasteResult = request.paste ? await bestEffortPaste(request.channel) : { pasted: false };
+    void store.rememberAcceptedReply({
       text: request.text,
       channel: request.channel,
       contact: request.contact
-    });
-    const pasted = request.paste ? await bestEffortPaste(request.channel) : false;
-    return { copied: true, pasted };
+    }).catch((error) => console.warn("[memory] could not remember accepted reply", error));
+    return { copied: true, ...pasteResult };
   });
   ipcMain.handle("overlay:hide", () => overlayWindow?.hide());
 

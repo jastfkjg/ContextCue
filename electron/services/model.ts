@@ -53,7 +53,7 @@ const QUICK_OUTPUT_SCHEMA = {
     candidates: {
       ...OUTPUT_SCHEMA.properties.candidates,
       minItems: 1,
-      maxItems: 2
+      maxItems: 5
     },
     detected_contact: { type: "string" },
     detected_language: { type: "string" }
@@ -101,7 +101,25 @@ Rules:
 }
 
 function quickCandidateCount(data: AppData, request: GenerateRequest): number {
-  return request.quick ? Math.min(2, data.settings.candidateCount) : data.settings.candidateCount;
+  return data.settings.candidateCount;
+}
+
+function schemaForRequest(request: GenerateRequest, candidateCount: number) {
+  if (!request.quick) return OUTPUT_SCHEMA;
+  return {
+    ...QUICK_OUTPUT_SCHEMA,
+    properties: {
+      ...QUICK_OUTPUT_SCHEMA.properties,
+      candidates: {
+        ...QUICK_OUTPUT_SCHEMA.properties.candidates,
+        maxItems: candidateCount
+      }
+    }
+  };
+}
+
+function outputTokenLimit(request: GenerateRequest, candidateCount: number): number {
+  return request.quick ? Math.max(900, 500 + candidateCount * 180) : 1400;
 }
 
 function isQwenModel(modelName: string): boolean {
@@ -125,8 +143,8 @@ function activeModel(data: AppData): AppData["settings"]["models"][number] {
 
 function responsesBody(data: AppData, request: GenerateRequest, screenshot: string) {
   const configuration = activeModel(data);
-  const schema = request.quick ? QUICK_OUTPUT_SCHEMA : OUTPUT_SCHEMA;
   const candidateCount = quickCandidateCount(data, request);
+  const schema = schemaForRequest(request, candidateCount);
   return {
     model: configuration.model,
     input: [
@@ -150,15 +168,15 @@ function responsesBody(data: AppData, request: GenerateRequest, screenshot: stri
         schema
       }
     },
-    max_output_tokens: request.quick ? 900 : 1400,
+    max_output_tokens: outputTokenLimit(request, candidateCount),
     ...(request.quick && isQwenModel(configuration.model) ? { reasoning: { effort: "none" } } : {})
   };
 }
 
 function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot: string) {
   const configuration = activeModel(data);
-  const schema = request.quick ? QUICK_OUTPUT_SCHEMA : OUTPUT_SCHEMA;
   const candidateCount = quickCandidateCount(data, request);
+  const schema = schemaForRequest(request, candidateCount);
   return {
     model: configuration.model,
     messages: [
@@ -175,7 +193,7 @@ function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot
       type: "json_schema",
       json_schema: { name: "reply_candidates", strict: true, schema }
     },
-    max_tokens: request.quick ? 900 : 1400,
+    max_tokens: outputTokenLimit(request, candidateCount),
     ...(request.quick && isQwenModel(configuration.model) ? { enable_thinking: false } : {})
   };
 }

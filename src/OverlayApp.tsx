@@ -40,7 +40,7 @@ export function OverlayApp() {
         <>
           <div className="overlay-context">
             <span>{payload.contact || "Current conversation"}</span>
-            <span>Swipe or use ← → · Enter to insert</span>
+            <span>Swipe or ← → · Enter to insert</span>
           </div>
           <CandidateCarousel candidates={payload.candidates} channel={payload.channel} contact={payload.contact} compact />
         </>

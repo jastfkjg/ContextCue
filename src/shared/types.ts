@@ -130,6 +130,12 @@ export interface UseReplyRequest {
   paste: boolean;
 }
 
+export interface UseReplyResult {
+  copied: boolean;
+  pasted: boolean;
+  error?: string;
+}
+
 export interface PermissionStatus {
   screen: "not-determined" | "granted" | "denied" | "restricted" | "unknown";
   accessibility: boolean;
@@ -153,7 +159,7 @@ export interface HiplyApi {
   deleteFact: (id: string) => Promise<MemorySnapshot>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
-  useReply: (request: UseReplyRequest) => Promise<{ copied: boolean; pasted: boolean }>;
+  useReply: (request: UseReplyRequest) => Promise<UseReplyResult>;
   openScreenSettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;
   onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string }) => void) => () => void;
