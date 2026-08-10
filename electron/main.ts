@@ -33,7 +33,12 @@ import {
   listCaptureSources,
   type CaptureSourceRef
 } from "./services/capture";
-import { selectQuickReplySource, targetApplicationName } from "./services/channel";
+import {
+  frontmostMatchesQuickReplyContext,
+  selectQuickReplySource,
+  targetApplicationName,
+  type QuickReplyContext
+} from "./services/channel";
 import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
 import { generateWithModel, testModelConnection } from "./services/model";
 
@@ -47,6 +52,14 @@ let quickSourceRefs: CaptureSourceRef[] = [];
 let quickReplyAnchor: { x: number; y: number } | null = null;
 let quickReplyTargetApplication = "";
 let quickOverlayActive = false;
+let quickReplyContext: QuickReplyContext | null = null;
+let quickOverlayHiddenForContext = false;
+let quickContextCheckInFlight = false;
+let quickContextTimer: NodeJS.Timeout | null = null;
+
+const OVERLAY_RESULT_SIZE = { width: 360, height: 136 };
+const OVERLAY_LOADING_SIZE = { width: 360, height: 142 };
+const OVERLAY_ERROR_SIZE = { width: 360, height: 174 };
 
 function rendererUrl(mode?: "overlay"): string {
   const url = process.env.ELECTRON_RENDERER_URL;
@@ -128,10 +141,10 @@ function createTray(): Tray {
 
 function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 440,
-    height: 230,
-    minWidth: 380,
-    minHeight: 160,
+    width: OVERLAY_RESULT_SIZE.width,
+    height: OVERLAY_RESULT_SIZE.height,
+    minWidth: 320,
+    minHeight: 118,
     frame: false,
     transparent: true,
     resizable: false,
@@ -181,10 +194,11 @@ function positionOverlayNearInput(): void {
 
 function showOverlayStatus(status: OverlayStatus): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
-  overlayWindow.setSize(440, 230, false);
+  const size = status.state === "error" ? OVERLAY_ERROR_SIZE : OVERLAY_LOADING_SIZE;
+  overlayWindow.setSize(size.width, size.height, false);
   positionOverlayNearInput();
   sendToOverlay("overlay:status", status);
-  overlayWindow.showInactive();
+  if (!quickOverlayHiddenForContext) overlayWindow.showInactive();
 }
 
 interface FrontmostWindow {
@@ -235,6 +249,63 @@ async function refreshQuickSourceRefs(): Promise<CaptureSourceRef[]> {
   return quickSourceRefs;
 }
 
+function bindQuickReplyContext(source: CaptureSourceRef, frontmost: FrontmostWindow): void {
+  quickReplyContext = {
+    applicationName: frontmost.applicationName,
+    windowTitle: frontmost.windowTitle,
+    sourceName: source.name,
+    channel: source.channel
+  };
+  quickOverlayHiddenForContext = false;
+}
+
+function clearQuickReplySession(): void {
+  quickOverlayActive = false;
+  quickReplyTargetApplication = "";
+  quickReplyContext = null;
+  quickOverlayHiddenForContext = false;
+}
+
+async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
+  if (
+    quickContextCheckInFlight
+    || !quickOverlayActive
+    || !quickReplyContext
+    || !overlayWindow
+    || overlayWindow.isFocused()
+  ) return;
+
+  if (mainWindow?.isFocused()) {
+    if (overlayWindow.isVisible()) overlayWindow.hide();
+    quickOverlayHiddenForContext = true;
+    return;
+  }
+
+  quickContextCheckInFlight = true;
+  const context = quickReplyContext;
+  try {
+    const current = await frontmostWindow();
+    if (!quickOverlayActive || quickReplyContext !== context) return;
+    const matches = frontmostMatchesQuickReplyContext(
+      context,
+      current.applicationName,
+      current.windowTitle
+    );
+    if (matches) {
+      if (quickOverlayHiddenForContext) {
+        quickOverlayHiddenForContext = false;
+        positionOverlayNearInput();
+        overlayWindow.showInactive();
+      }
+      return;
+    }
+    if (overlayWindow.isVisible()) overlayWindow.hide();
+    quickOverlayHiddenForContext = true;
+  } finally {
+    quickContextCheckInFlight = false;
+  }
+}
+
 async function showQuickReply(): Promise<void> {
   if (quickReplyInFlight) return;
   quickReplyInFlight = true;
@@ -244,6 +315,8 @@ async function showQuickReply(): Promise<void> {
   try {
     quickOverlayActive = true;
     quickReplyTargetApplication = "";
+    quickReplyContext = null;
+    quickOverlayHiddenForContext = false;
     quickReplyAnchor = screen.getCursorScreenPoint();
     mainWindow?.hide();
     showOverlayStatus({ state: "loading", message: "Reading the current conversation…" });
@@ -261,6 +334,7 @@ async function showQuickReply(): Promise<void> {
       throw new Error("No active conversation window was found. Keep the page or app window visible and try again.");
     }
     quickReplyTargetApplication = frontmost.applicationName;
+    bindQuickReplyContext(source, frontmost);
     discoveryFinishedAt = performance.now();
 
     let screenshot: string;
@@ -273,6 +347,7 @@ async function showQuickReply(): Promise<void> {
         frontmost.windowTitle
       );
       if (!source) throw new Error("The current page or app window is no longer available. Keep it visible and try again.");
+      bindQuickReplyContext(source, frontmost);
       screenshot = await captureQuickSource(source.id);
     }
     captureFinishedAt = performance.now();
@@ -291,10 +366,10 @@ async function showQuickReply(): Promise<void> {
     };
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
     const contact = result.detectedContact;
-    overlayWindow?.setSize(420, 180, false);
+    overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
     positionOverlayNearInput();
     sendToOverlay("overlay:result", { ...result, channel: source.channel, contact });
-    overlayWindow?.showInactive();
+    if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     const finishedAt = performance.now();
     console.info(
       `[quick-reply] discover=${Math.round(discoveryFinishedAt - startedAt)}ms `
@@ -366,9 +441,8 @@ async function activateApplication(applicationName: string): Promise<void> {
 async function hideQuickOverlay(): Promise<void> {
   overlayWindow?.hide();
   if (!quickOverlayActive) return;
-  quickOverlayActive = false;
   const target = quickReplyTargetApplication;
-  quickReplyTargetApplication = "";
+  clearQuickReplySession();
   try {
     await activateApplication(target);
   } catch (error) {
@@ -394,8 +468,7 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
         ? `tell application "System Events"\nif not (exists process "${escapedTarget}") then error "Target application is not running"\nset frontmost of process "${escapedTarget}" to true\ndelay 0.15\nkeystroke "v" using command down\nend tell`
         : "tell application \"System Events\"\ndelay 0.15\nkeystroke \"v\" using command down\nend tell";
       await execFileAsync("osascript", ["-e", script]);
-      quickOverlayActive = false;
-      quickReplyTargetApplication = "";
+      clearQuickReplySession();
       return { pasted: true };
     }
     if (process.platform === "win32") {
@@ -406,16 +479,14 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
         "-Command",
         "Add-Type -AssemblyName System.Windows.Forms; Start-Sleep -Milliseconds 200; [System.Windows.Forms.SendKeys]::SendWait('^v')"
       ]);
-      quickOverlayActive = false;
-      quickReplyTargetApplication = "";
+      clearQuickReplySession();
       return { pasted: true };
     }
     await execFileAsync("xdotool", ["key", "ctrl+v"]);
-    quickOverlayActive = false;
-    quickReplyTargetApplication = "";
+    clearQuickReplySession();
     return { pasted: true };
   } catch (error) {
-    overlayWindow?.showInactive();
+    if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     return {
       pasted: false,
       error: `Could not focus the chat input. The reply was copied. ${error instanceof Error ? error.message : ""}`.trim()
@@ -441,10 +512,9 @@ function registerIpc(): void {
     const result = await generateWithModel(store.getData(), readApiKey(), request, screenshot);
     const contact = request.contact?.trim() || result.detectedContact;
     if (store.getData().settings.autoShowOverlay) {
-      quickOverlayActive = false;
-      quickReplyTargetApplication = "";
+      clearQuickReplySession();
       if (!overlayWindow) overlayWindow = createOverlayWindow();
-      overlayWindow.setSize(420, 180, false);
+      overlayWindow.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
       positionOverlayNearInput();
       sendToOverlay("overlay:result", { ...result, channel: request.channel, contact });
       overlayWindow.show();
@@ -532,6 +602,7 @@ app.whenReady().then(async () => {
   overlayWindow = createOverlayWindow();
   tray = createTray();
   void refreshQuickSourceRefs().catch(() => undefined);
+  quickContextTimer = setInterval(() => void syncQuickOverlayWithFrontmostWindow(), 600);
 
   app.on("activate", () => {
     if (quickOverlayActive) return;
@@ -544,6 +615,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  if (quickContextTimer) clearInterval(quickContextTimer);
+  quickContextTimer = null;
   globalShortcut.unregisterAll();
   tray?.destroy();
   tray = null;

@@ -32,7 +32,7 @@ function normalizeWindowName(value: string): string {
     .trim();
 }
 
-function namesReferToSameWindow(left: string, right: string): boolean {
+export function namesReferToSameWindow(left: string, right: string): boolean {
   const first = normalizeWindowName(left);
   const second = normalizeWindowName(right);
   if (!first || !second) return false;
@@ -43,6 +43,35 @@ function namesReferToSameWindow(left: string, right: string): boolean {
   const shorter = first.length <= second.length ? first : second;
   const longer = first.length > second.length ? first : second;
   return shorter.length >= 3 && longer.includes(shorter);
+}
+
+export interface QuickReplyContext {
+  applicationName: string;
+  windowTitle: string;
+  sourceName: string;
+  channel: ChannelId;
+}
+
+export function frontmostMatchesQuickReplyContext(
+  context: QuickReplyContext,
+  applicationName: string,
+  windowTitle = ""
+): boolean {
+  if (!applicationName.trim() && !windowTitle.trim()) return true;
+
+  const sameApplication = namesReferToSameWindow(context.applicationName, applicationName);
+  if (context.windowTitle && windowTitle) {
+    return sameApplication && namesReferToSameWindow(context.windowTitle, windowTitle);
+  }
+
+  const currentChannel = detectChannel(`${applicationName} ${windowTitle}`);
+  if (context.channel !== "other" && currentChannel !== "other") {
+    return context.channel === currentChannel;
+  }
+
+  return sameApplication
+    || namesReferToSameWindow(context.sourceName, windowTitle)
+    || namesReferToSameWindow(context.sourceName, applicationName);
 }
 
 export function selectQuickReplySource<T extends Pick<CaptureSource, "id" | "name" | "channel">>(

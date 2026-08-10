@@ -134,11 +134,23 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
             <button className="icon-button" onClick={() => move(index + 1)} aria-label="Next candidate"><ArrowRight size={17} /></button>
           </div>
         )}
-        <button className="button button--quiet" onClick={() => void useReply(false)}>
-          {status === "copied" ? <Check size={16} /> : <Copy size={16} />} {status === "copied" ? "Copied" : "Copy"}
+        <button
+          className={`button button--quiet ${compact ? "compact-action" : ""}`}
+          onClick={() => void useReply(false)}
+          aria-label={status === "copied" ? "Copied" : "Copy reply"}
+          title={status === "copied" ? "Copied" : "Copy reply"}
+        >
+          {status === "copied" ? <Check size={compact ? 15 : 16} /> : <Copy size={compact ? 15 : 16} />}
+          {!compact && (status === "copied" ? "Copied" : "Copy")}
         </button>
-        <button className="button button--primary" onClick={() => void useReply(true)}>
-          {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />} {status === "pasted" ? "Inserted" : compact ? "Insert" : insertLabel}
+        <button
+          className={`button button--primary ${compact ? "compact-action" : ""}`}
+          onClick={() => void useReply(true)}
+          aria-label={status === "pasted" ? "Inserted" : insertLabel}
+          title={status === "pasted" ? "Inserted" : insertLabel}
+        >
+          {status === "pasted" ? <Check size={compact ? 15 : 16} /> : <CornerDownLeft size={compact ? 15 : 16} />}
+          {!compact && (status === "pasted" ? "Inserted" : insertLabel)}
         </button>
       </div>
       {feedback && <p className="candidate-feedback" role="status">{feedback}</p>}

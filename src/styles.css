@@ -356,18 +356,18 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .workspace-loading { min-height: 70vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 11px; }.workspace-loading .spinner { border-color: #d0d1c9; border-top-color: #44463f; }
 
 /* Floating overlay */
-.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(70 72 65 / 30%); border-radius: 15px; background: rgb(244 243 238 / 96%); box-shadow: 0 14px 38px rgb(0 0 0 / 23%); backdrop-filter: blur(18px); }
-.overlay-header { height: 34px; display: flex; align-items: center; padding: 0 7px 0 12px; -webkit-app-region: drag; }
-.overlay-brand { display: flex; align-items: center; gap: 6px; color: #50524a; font-size: 10px; font-weight: 700; }.overlay-brand i { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); box-shadow: inset 0 0 0 3px #1c1d19; }.overlay-close { width: 24px; height: 24px; margin-left: auto; border: 0; background: transparent; border-radius: 50%; -webkit-app-region: no-drag; }.overlay-close:hover { background: #e7e6e0; }
-.overlay-root .candidate-shell { margin: 0 6px 6px; }.candidate-shell--compact { border-radius: 11px; box-shadow: 0 6px 20px rgb(0 0 0 / 5%); }.candidate-shell--compact .candidate-stage { min-height: 94px; max-height: 96px; overflow-y: auto; overscroll-behavior: contain; }.candidate-shell--compact .candidate-copy { min-height: 94px; padding: 15px 16px 10px; }.candidate-shell--compact .candidate-copy p { font-size: 14px; line-height: 1.42; }.candidate-shell--compact .candidate-actions { align-items: center; padding: 5px 6px; }.candidate-shell--compact .button { min-height: 30px; height: 30px; padding: 0 9px; font-size: 9px; }.candidate-dots--inline { justify-content: flex-start; min-width: 54px; margin-right: auto; padding: 0 6px; }
-.candidate-feedback { position: fixed; z-index: 4; top: 42px; right: 8px; left: 8px; margin: 0; padding: 7px 10px; border: 1px solid #ead6a3; border-radius: 7px; color: #775f24; background: #fff7dc; box-shadow: 0 5px 16px rgb(0 0 0 / 10%); font-size: 8px; line-height: 1.35; }
-.overlay-empty { height: calc(100% - 34px); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #64665e; }
-.overlay-state-icon { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 15px; color: #688b11; background: #e9f6c7; }
+.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(70 72 65 / 24%); border-radius: 12px; background: rgb(251 251 248 / 96%); box-shadow: 0 10px 28px rgb(0 0 0 / 18%); backdrop-filter: blur(18px); }
+.overlay-header { height: 28px; display: flex; align-items: center; padding: 0 5px 0 11px; color: #73756c; -webkit-app-region: drag; }
+.overlay-title { display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 680; }.overlay-title svg { color: #6e9311; }.overlay-close { width: 20px; height: 20px; margin-left: auto; border: 0; background: transparent; border-radius: 6px; -webkit-app-region: no-drag; }.overlay-close:hover { color: #1d1e1a; background: #ecece6; }
+.overlay-root .candidate-shell { margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }.candidate-shell--compact .candidate-stage { min-height: 68px; max-height: 69px; overflow-y: auto; overscroll-behavior: contain; }.candidate-shell--compact .candidate-copy { min-height: 68px; padding: 10px 13px 8px; justify-content: center; }.candidate-shell--compact .candidate-copy p { font-size: 13px; line-height: 1.42; letter-spacing: -.018em; }.candidate-shell--compact .candidate-actions { height: 38px; align-items: center; padding: 4px 6px 5px 11px; gap: 5px; }.candidate-shell--compact .compact-action { width: 28px; min-height: 28px; height: 28px; padding: 0; border-radius: 7px; }.candidate-dots--inline { justify-content: flex-start; min-width: 50px; margin-right: auto; padding: 0; }
+.candidate-feedback { position: fixed; z-index: 4; right: 7px; bottom: 40px; left: 7px; margin: 0; padding: 6px 9px; border: 1px solid #ead6a3; border-radius: 7px; color: #775f24; background: #fff7dc; box-shadow: 0 5px 16px rgb(0 0 0 / 10%); font-size: 8px; line-height: 1.35; }
+.overlay-empty { height: calc(100% - 28px); padding: 12px 18px 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #64665e; }
+.overlay-state-icon { width: 32px; height: 32px; display: grid; place-items: center; margin-bottom: 7px; border-radius: 9px; color: #688b11; background: #edf7d5; }
 .overlay-empty--loading .overlay-state-icon svg { animation: scan-pulse 1.25s ease-in-out infinite; }
 .overlay-empty--error .overlay-state-icon { color: #a94b44; background: #f8dfdc; }
-.overlay-empty strong { color: var(--ink); font-size: 16px; letter-spacing: -.02em; }
-.overlay-empty p { max-width: 390px; margin: 8px 0 0; font-size: 12px; line-height: 1.55; }
-.overlay-empty button { min-width: 88px; min-height: 38px; margin-top: 18px; border: 1px solid #d3d4cc; border-radius: 8px; background: #fbfbf8; font-size: 11px; font-weight: 650; }
+.overlay-empty strong { color: var(--ink); font-size: 12px; letter-spacing: -.02em; }
+.overlay-empty p { max-width: 320px; margin: 4px 0 0; font-size: 9px; line-height: 1.45; }
+.overlay-empty button { min-width: 66px; min-height: 28px; margin-top: 9px; border: 1px solid #d3d4cc; border-radius: 7px; background: #fbfbf8; font-size: 9px; font-weight: 650; }
 @keyframes scan-pulse { 50% { transform: translateY(3px); opacity: .55; } }
 
 @media (max-width: 1050px) {

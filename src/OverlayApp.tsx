@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CircleAlert, ScanLine, X } from "lucide-react";
+import { CircleAlert, MessageSquareReply, ScanLine, X } from "lucide-react";
 import type { ChannelId, GenerationResult, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
@@ -32,8 +32,8 @@ export function OverlayApp() {
   return (
     <main className="overlay-root">
       <header className="overlay-header">
-        <span className="overlay-brand"><i /> ContextCue</span>
-        <button className="overlay-close" onClick={() => void contextCueApi.hideOverlay()} aria-label="Close"><X size={17} /></button>
+        <span className="overlay-title"><MessageSquareReply size={13} /> Reply</span>
+        <button className="overlay-close" onClick={() => void contextCueApi.hideOverlay()} aria-label="Close"><X size={14} /></button>
       </header>
       {payload ? (
         <CandidateCarousel candidates={payload.candidates} channel={payload.channel} contact={payload.contact} compact />

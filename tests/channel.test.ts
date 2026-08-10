@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectChannel, selectQuickReplySource } from "../electron/services/channel";
+import {
+  detectChannel,
+  frontmostMatchesQuickReplyContext,
+  selectQuickReplySource
+} from "../electron/services/channel";
 import type { CaptureSource } from "../src/shared/types";
 
 describe("detectChannel", () => {
@@ -14,6 +18,35 @@ describe("detectChannel", () => {
     ["Notes", "other"]
   ])("maps %s to %s", (title, expected) => {
     expect(detectChannel(title)).toBe(expected);
+  });
+});
+
+describe("frontmostMatchesQuickReplyContext", () => {
+  const wechat = {
+    applicationName: "WeChat",
+    windowTitle: "WeChat",
+    sourceName: "WeChat",
+    channel: "wechat" as const
+  };
+
+  it("keeps the overlay attached to its originating channel", () => {
+    expect(frontmostMatchesQuickReplyContext(wechat, "WeChat", "WeChat")).toBe(true);
+    expect(frontmostMatchesQuickReplyContext(wechat, "Slack", "product-team")).toBe(false);
+  });
+
+  it("hides a browser overlay after switching tabs", () => {
+    const browser = {
+      applicationName: "Google Chrome",
+      windowTitle: "Support chat - Acme",
+      sourceName: "Support chat - Acme - Google Chrome",
+      channel: "other" as const
+    };
+    expect(frontmostMatchesQuickReplyContext(browser, "Google Chrome", "Support chat - Acme")).toBe(true);
+    expect(frontmostMatchesQuickReplyContext(browser, "Google Chrome", "Project board")).toBe(false);
+  });
+
+  it("does not hide when the operating system cannot expose a front window", () => {
+    expect(frontmostMatchesQuickReplyContext(wechat, "", "")).toBe(true);
   });
 });
 
