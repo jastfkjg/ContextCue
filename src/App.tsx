@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  ArrowLeftRight,
   Bot,
   Brain,
   Camera,
@@ -10,7 +11,9 @@ import {
   CircleHelp,
   CircleDot,
   Command,
+  CornerDownLeft,
   ExternalLink,
+  House,
   Eye,
   Keyboard,
   LockKeyhole,
@@ -42,7 +45,7 @@ import type {
   UserProfile
 } from "./shared/types";
 
-type ViewId = "reply" | "memory" | "channels" | "settings";
+type ViewId = "home" | "memory" | "channels" | "settings";
 
 const CHANNEL_LABELS: Record<ChannelId, string> = {
   wechat: "WeChat",
@@ -83,7 +86,7 @@ function sourceLabel(source?: CaptureSource): string {
 
 function NavItem({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <button className={`nav-item ${active ? "nav-item--active" : ""}`} onClick={onClick}>
+    <button className={`nav-item ${active ? "nav-item--active" : ""}`} onClick={onClick} aria-label={label} title={label}>
       {icon}<span>{label}</span>{active && <motion.i layoutId="nav-active" />}
     </button>
   );
@@ -91,6 +94,95 @@ function NavItem({ active, icon, label, onClick }: { active: boolean; icon: Reac
 
 function StatusPill({ configured }: { configured: boolean }) {
   return <span className={`status-pill ${configured ? "status-pill--ok" : ""}`}><i />{configured ? "Ready" : "Setup needed"}</span>;
+}
+
+function HomeView({
+  sources,
+  refreshSources,
+  permissions,
+  settings,
+  onOpenSettings,
+  onOpenChannels
+}: {
+  sources: CaptureSource[];
+  refreshSources: () => Promise<void>;
+  permissions: PermissionStatus | null;
+  settings: AppSettings | null;
+  onOpenSettings: () => void;
+  onOpenChannels: () => void;
+}) {
+  const activeModel = settings?.models.find((model) => model.id === settings.activeModelId) ?? settings?.models[0];
+  const modelReady = Boolean(activeModel?.apiKeyConfigured && activeModel.model.trim());
+  const screenReady = isBrowserDemo || permissions?.screen === "granted" || permissions?.screen === "unknown";
+  const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Space";
+  const readyCount = [modelReady, screenReady, sources.length > 0].filter(Boolean).length;
+
+  return (
+    <div className="workspace home-workspace">
+      <header className="workspace-header home-header">
+        <div>
+          <span className="eyebrow">QUICK START</span>
+          <h1>Reply from the conversation.</h1>
+          <p>Keep ContextCue in the background. Call it only when you need a draft.</p>
+        </div>
+        <span className={`home-readiness ${readyCount === 3 ? "home-readiness--ready" : ""}`}><i />{readyCount === 3 ? "Ready to use" : `${readyCount} of 3 ready`}</span>
+      </header>
+
+      <section className="home-command-stage">
+        <div className="home-command-copy">
+          <span className="home-command-label"><Command size={14}/> Global shortcut</span>
+          <h2>One shortcut.<br/>Right where you’re typing.</h2>
+          <p>Open a conversation in any app, then press:</p>
+          <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">
+            {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
+            <span>Change</span>
+          </button>
+          <small>ContextCue reads the active conversation and opens a compact reply panel. It never sends automatically.</small>
+        </div>
+
+        <div className="home-overlay-demo" aria-hidden="true">
+          <motion.div className="home-demo-window" initial={{ opacity: 0, y: 12, rotate: 1 }} animate={{ opacity: 1, y: 0, rotate: 0 }} transition={{ delay: .08, duration: .35 }}>
+            <header><span><i/> ContextCue</span><small>2 / 3</small></header>
+            <p>Got it — I’ll move it to four and keep you posted.</p>
+            <footer><span><kbd>←</kbd><kbd>→</kbd> choose</span><strong><kbd>↵</kbd> insert</strong></footer>
+          </motion.div>
+          <div className="home-demo-caption"><ShieldCheck size={14}/><span>Only captures after you press the shortcut</span></div>
+        </div>
+      </section>
+
+      <div className="home-lower-grid">
+        <section className="home-workflow">
+          <div className="home-section-heading"><span className="eyebrow">HOW IT WORKS</span><h2>Three steps, without switching context.</h2></div>
+          <ol>
+            <li><span>01</span><div><strong>Stay in the conversation</strong><small>Place the chat you want to answer in front.</small></div><MessageSquareText size={18}/></li>
+            <li><span>02</span><div><strong>Call ContextCue</strong><small>Press your global shortcut to read the visible context.</small></div><Command size={18}/></li>
+            <li><span>03</span><div><strong>Choose and insert</strong><small>Use the arrow keys to switch, then Enter to insert.</small></div><CornerDownLeft size={18}/></li>
+          </ol>
+          <div className="home-key-note"><ArrowLeftRight size={15}/><span><kbd>←</kbd><kbd>→</kbd> switch replies</span><span><kbd>↵</kbd> insert selection</span><small>Sending is always up to you.</small></div>
+        </section>
+
+        <aside className="home-checklist">
+          <div className="home-section-heading"><span className="eyebrow">READY CHECK</span><h2>Before your first reply.</h2></div>
+          <button onClick={onOpenSettings}>
+            <span className={modelReady ? "is-ready" : ""}>{modelReady ? <Check size={15}/> : "1"}</span>
+            <div><strong>Model & API key</strong><small>{modelReady ? `${activeModel?.name} is configured` : "Add a model connection"}</small></div>
+            <ChevronRight size={15}/>
+          </button>
+          <button onClick={() => screenReady ? onOpenChannels() : void contextCueApi.openScreenSettings()}>
+            <span className={screenReady ? "is-ready" : ""}>{screenReady ? <Check size={15}/> : "2"}</span>
+            <div><strong>Screen access</strong><small>{screenReady ? "Permission is available" : "Allow conversation capture"}</small></div>
+            {screenReady ? <ChevronRight size={15}/> : <ExternalLink size={14}/>}
+          </button>
+          <button onClick={() => void refreshSources()}>
+            <span className={sources.length > 0 ? "is-ready" : ""}>{sources.length > 0 ? <Check size={15}/> : "3"}</span>
+            <div><strong>Visible conversation</strong><small>{sources.length > 0 ? `${sources.length} window${sources.length === 1 ? "" : "s"} found` : "Open a chat, then scan again"}</small></div>
+            <RefreshCw size={14}/>
+          </button>
+          <p><ShieldCheck size={14}/> Memory stays local. Screenshots are sent only when you invoke a reply.</p>
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 function ReplyWorkspace({
@@ -418,6 +510,17 @@ function shortcutParts(value: string): string[] {
 
 function ShortcutRecorder({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [recording, setRecording] = useState(false);
+  useEffect(() => {
+    if (!recording) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setRecording(false);
+    };
+    window.addEventListener("keydown", cancel, true);
+    return () => window.removeEventListener("keydown", cancel, true);
+  }, [recording]);
   const record = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return;
     event.preventDefault();
@@ -433,8 +536,8 @@ function ShortcutRecorder({ value, onChange }: { value: string; onChange: (value
     onChange([...modifiers, key].join("+"));
     setRecording(false);
   };
-  return <button type="button" className={`shortcut-recorder ${recording ? "shortcut-recorder--recording" : ""}`} onClick={() => setRecording(true)} onKeyDown={record} aria-pressed={recording}>
-    <span className="shortcut-recorder-copy"><Keyboard size={17}/><span><strong>{recording ? "Press your shortcut" : "Global shortcut"}</strong><small>{recording ? "Use at least one modifier · Esc to cancel" : "Click to record a new shortcut"}</small></span></span>
+  return <button type="button" className={`shortcut-recorder ${recording ? "shortcut-recorder--recording" : ""}`} onClick={() => setRecording((current) => !current)} onKeyDown={record} onBlur={() => setRecording(false)} aria-pressed={recording}>
+    <span className="shortcut-recorder-copy"><Keyboard size={17}/><span><strong>{recording ? "Press your shortcut" : "Global shortcut"}</strong><small>{recording ? "Use a modifier · Esc, click again, or click outside to cancel" : "Click to record a new shortcut"}</small></span></span>
     <span className="shortcut-keys">{recording ? <i>Listening…</i> : shortcutParts(value).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}</span>
   </button>;
 }
@@ -597,7 +700,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
       </div>
     </div>
     <div className="preference-grid">
-      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Reply language</span><div className="choice-group choice-group--language" role="group" aria-label="Reply language">{([{ value: "auto", label: "Match conversation" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}{form.locale === option.value && <Check size={14}/>}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
+      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Reply language</span><div className="choice-group choice-group--language" role="group" aria-label="Reply language">{([{ value: "auto", label: "Match conversation" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
       <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, ContextCue keeps your previous shortcut.</p></section>
     </div>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
@@ -605,7 +708,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
 }
 
 export function App() {
-  const [view, setView] = useState<ViewId>("reply");
+  const [view, setView] = useState<ViewId>("home");
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [memory, setMemory] = useState<MemorySnapshot | null>(null);
@@ -638,7 +741,7 @@ export function App() {
   }, [view]);
 
   const views: Array<{ id: ViewId; label: string; icon: React.ReactNode }> = [
-    { id: "reply", label: "Reply", icon: <Sparkles size={18}/> },
+    { id: "home", label: "Home", icon: <House size={18}/> },
     { id: "memory", label: "Memory", icon: <Brain size={18}/> },
     { id: "channels", label: "Channels", icon: <MessageSquareText size={18}/> },
     { id: "settings", label: "Settings", icon: <Settings size={18}/> }
@@ -658,7 +761,7 @@ export function App() {
       <main className="main-surface">
         <AnimatePresence mode="wait">
           <motion.div key={view} className="view-frame" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.18 }}>
-            {view === "reply" && <ReplyWorkspace sources={sources} selected={selected} setSelected={setSelectedId} refreshSources={refreshSources} permissions={permissions}/>} 
+            {view === "home" && <HomeView sources={sources} refreshSources={refreshSources} permissions={permissions} settings={settings} onOpenSettings={() => setView("settings")} onOpenChannels={() => setView("channels")}/>}
             {view === "memory" && <MemoryView memory={memory} onChange={setMemory}/>} 
             {view === "channels" && <ChannelsView sources={sources} refresh={refreshSources}/>} 
             {view === "settings" && <SettingsView settings={settings} onChange={setSettings}/>} 

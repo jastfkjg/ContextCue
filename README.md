@@ -104,7 +104,7 @@ Model-generated memory suggestions are deliberately opt-in. The UI explains that
 
 ## Security and privacy boundaries
 
-- ContextCue captures only after the user presses the global shortcut, or explicitly selects a source and presses Generate in the main window.
+- ContextCue captures only after the user presses the global shortcut from an active conversation.
 - Screenshots are sent to the configured model provider; they do not remain in the local memory file.
 - Text inside screenshots is treated as untrusted data. The system prompt explicitly rejects instructions found inside the screenshot.
 - Long-term memory stays on the device, except for the small relevant subset included in a generation request.
@@ -128,7 +128,7 @@ electron/preload.ts
   └─ narrow, typed IPC bridge
 
 src/
-  ├─ Reply workspace          capture, intent, generation
+  ├─ Home                     shortcut guide and readiness checks
   ├─ Candidate carousel       swipe / keys / insert
   ├─ Memory workspace         profile, relationships, facts
   ├─ Channels workspace       WeChat / Slack / Lark discovery

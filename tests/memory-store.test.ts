@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { MemoryStore } from "../electron/services/memory-store";
+import { importLegacyBrandData, MemoryStore } from "../electron/services/memory-store";
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => {
@@ -65,5 +65,39 @@ describe("MemoryStore", () => {
     });
     expect(loaded.settings.activeModelId).toBe(loaded.settings.models[0].id);
     expect(loaded.encryptedApiKeys?.[loaded.settings.activeModelId]).toBe("encrypted-value");
+  });
+
+  it("imports models and encrypted keys from the former Hiply data file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-brand-test-"));
+    temporaryDirectories.push(directory);
+    const currentPath = join(directory, "contextcue", "contextcue-data.json");
+    const legacyPath = join(directory, "hiply", "hiply-data.json");
+    const current = new MemoryStore(currentPath);
+    await current.load();
+    await import("node:fs/promises").then(async ({ mkdir, writeFile }) => {
+      await mkdir(join(directory, "hiply"), { recursive: true });
+      await writeFile(legacyPath, JSON.stringify({
+        version: 1,
+        settings: {
+          models: [
+            { id: "openai-default", name: "OpenAI", apiBaseUrl: "https://api.openai.com/v1", model: "gpt-5.6-luna", apiProtocol: "responses" },
+            { id: "qwen", name: "Qwen", apiBaseUrl: "https://qwen.example/v1", model: "qwen3.7-plus", apiProtocol: "responses" }
+          ],
+          activeModelId: "qwen",
+          candidateCount: 4
+        },
+        encryptedApiKeys: { qwen: "encrypted-qwen-key" }
+      }));
+    });
+
+    expect(await importLegacyBrandData(currentPath, legacyPath)).toBe(true);
+    const restored = new MemoryStore(currentPath);
+    const loaded = await restored.load();
+    expect(loaded.settings.models.map((model) => model.id)).toEqual(["openai-default", "qwen"]);
+    expect(loaded.settings.activeModelId).toBe("qwen");
+    expect(loaded.settings.candidateCount).toBe(4);
+    expect(loaded.encryptedApiKeys?.qwen).toBe("encrypted-qwen-key");
+    expect(JSON.parse(await readFile(legacyPath, "utf8")).settings.activeModelId).toBe("qwen");
+    expect(await importLegacyBrandData(currentPath, legacyPath)).toBe(false);
   });
 });

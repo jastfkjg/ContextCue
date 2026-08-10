@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
   AcceptedReply,
@@ -85,6 +85,86 @@ function migrate(input: LegacyAppData): AppData {
     facts: Array.isArray(input.facts) ? input.facts : [],
     acceptedReplies: Array.isArray(input.acceptedReplies) ? input.acceptedReplies.slice(-100) : []
   };
+}
+
+function isPristineInstall(data: AppData): boolean {
+  const defaults = cloneDefaults();
+  const [model] = data.settings.models;
+  const [defaultModel] = defaults.settings.models;
+  return data.contacts.length === 0
+    && data.facts.length === 0
+    && data.acceptedReplies.length === 0
+    && JSON.stringify(data.profile) === JSON.stringify(defaults.profile)
+    && Object.keys(data.encryptedApiKeys ?? {}).length === 0
+    && data.settings.models.length === 1
+    && model.id === defaultModel.id
+    && model.name === defaultModel.name
+    && model.apiBaseUrl === defaultModel.apiBaseUrl
+    && model.model === defaultModel.model
+    && model.apiProtocol === defaultModel.apiProtocol
+    && data.settings.activeModelId === defaults.settings.activeModelId
+    && data.settings.candidateCount === defaults.settings.candidateCount
+    && data.settings.locale === defaults.settings.locale
+    && data.settings.globalShortcut === defaults.settings.globalShortcut
+    && data.settings.autoShowOverlay === defaults.settings.autoShowOverlay;
+}
+
+function mergeById<T extends { id: string }>(primary: T[], additional: T[]): T[] {
+  const seen = new Set(primary.map((item) => item.id));
+  return [...primary, ...additional.filter((item) => !seen.has(item.id))];
+}
+
+async function writeDataFile(filePath: string, data: AppData): Promise<void> {
+  await mkdir(dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.tmp`;
+  await writeFile(temporaryPath, JSON.stringify(data, null, 2), { encoding: "utf8", mode: 0o600 });
+  await rename(temporaryPath, filePath);
+}
+
+export async function importLegacyBrandData(currentFilePath: string, legacyFilePath: string): Promise<boolean> {
+  const markerPath = `${currentFilePath}.hiply-imported`;
+  try {
+    await access(markerPath);
+    return false;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  let legacy: AppData;
+  try {
+    legacy = migrate(JSON.parse(await readFile(legacyFilePath, "utf8")) as LegacyAppData);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+
+  let current: AppData;
+  try {
+    current = migrate(JSON.parse(await readFile(currentFilePath, "utf8")) as LegacyAppData);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    current = cloneDefaults();
+  }
+
+  const pristine = isPristineInstall(current);
+  const merged: AppData = pristine ? legacy : {
+    ...current,
+    settings: {
+      ...current.settings,
+      models: mergeById(current.settings.models, legacy.settings.models)
+    },
+    encryptedApiKeys: {
+      ...(legacy.encryptedApiKeys ?? {}),
+      ...(current.encryptedApiKeys ?? {})
+    },
+    contacts: mergeById(current.contacts, legacy.contacts),
+    facts: mergeById(current.facts, legacy.facts),
+    acceptedReplies: mergeById(current.acceptedReplies, legacy.acceptedReplies).slice(-100)
+  };
+  const changed = JSON.stringify(merged) !== JSON.stringify(current);
+  if (changed) await writeDataFile(currentFilePath, merged);
+  await writeFile(markerPath, new Date().toISOString(), { encoding: "utf8", mode: 0o600 });
+  return changed;
 }
 
 export class MemoryStore {
@@ -188,9 +268,6 @@ export class MemoryStore {
   }
 
   private async persist(): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const temporaryPath = `${this.filePath}.tmp`;
-    await writeFile(temporaryPath, JSON.stringify(this.data, null, 2), { encoding: "utf8", mode: 0o600 });
-    await rename(temporaryPath, this.filePath);
+    await writeDataFile(this.filePath, this.data);
   }
 }

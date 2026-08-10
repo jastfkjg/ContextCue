@@ -34,7 +34,7 @@ import {
   type CaptureSourceRef
 } from "./services/capture";
 import { selectQuickReplySource, targetApplicationName } from "./services/channel";
-import { MemoryStore } from "./services/memory-store";
+import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
 import { generateWithModel, testModelConnection } from "./services/model";
 
 const execFileAsync = promisify(execFile);
@@ -519,7 +519,12 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
-  store = new MemoryStore(join(app.getPath("userData"), "contextcue-data.json"));
+  const dataPath = join(app.getPath("userData"), "contextcue-data.json");
+  const legacyDataPath = join(app.getPath("appData"), "hiply", "hiply-data.json");
+  if (await importLegacyBrandData(dataPath, legacyDataPath)) {
+    console.info("[settings] imported existing Hiply data into ContextCue");
+  }
+  store = new MemoryStore(dataPath);
   await store.load();
   registerIpc();
   registerShortcut(store.getData().settings.globalShortcut);
