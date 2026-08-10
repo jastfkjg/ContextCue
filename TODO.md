@@ -1,4 +1,4 @@
-# Hiply roadmap
+# ContextCue roadmap
 
 This file tracks work that is intentionally not presented as complete in the current MVP.
 
@@ -20,7 +20,7 @@ This file tracks work that is intentionally not presented as complete in the cur
 - [ ] Replace best-effort AppleScript/SendKeys insertion with native accessibility adapters that restore focus and insert at the exact active text field.
 - [ ] Add app-specific adapters for WeChat, Slack, Lark/Feishu, Gmail, Microsoft Teams, and WhatsApp.
 - [ ] Add a safe clipboard restore option after insertion.
-- [ ] Detect the frontmost application before Hiply opens and target that exact process when inserting.
+- [ ] Detect the frontmost application before ContextCue opens and target that exact process when inserting.
 - [ ] Improve channel/contact detection from window titles and visible UI; expose corrections that can be remembered.
 - [ ] Handle self-drawn WeChat UI, browser zoom, dark mode, compact sidebars, and group conversations in screenshot prompts/evals.
 - [ ] Add macOS screen-recording and accessibility permission onboarding with live re-checks after returning from System Settings.

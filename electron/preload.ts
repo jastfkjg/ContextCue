@@ -3,7 +3,7 @@ import type {
   ContactMemory,
   GenerateRequest,
   GenerationResult,
-  HiplyApi,
+  ContextCueApi,
   MemoryFact,
   OverlayStatus,
   SaveSettingsRequest,
@@ -12,7 +12,7 @@ import type {
   UserProfile
 } from "../src/shared/types";
 
-const api: HiplyApi = {
+const api: ContextCueApi = {
   getCaptureSources: () => ipcRenderer.invoke("capture:list"),
   captureSource: (sourceId: string) => ipcRenderer.invoke("capture:source", sourceId),
   generateReplies: (request: GenerateRequest) => ipcRenderer.invoke("reply:generate", request),
@@ -44,4 +44,4 @@ const api: HiplyApi = {
   hideOverlay: () => ipcRenderer.invoke("overlay:hide")
 };
 
-contextBridge.exposeInMainWorld("hiply", api);
+contextBridge.exposeInMainWorld("contextCue", api);

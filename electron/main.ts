@@ -102,25 +102,25 @@ function toggleMainWindow(): void {
 }
 
 function createTrayIcon(): Electron.NativeImage {
-  // A monochrome version of the four-part Hiply mark. macOS recolors template
+  // A monochrome version of the four-part ContextCue mark. macOS recolors template
   // images automatically so the icon remains legible in either menu-bar theme.
   const png = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAqDuP8AAABTUlEQVRYCe1XsQ3CMBAM0DABI8Ai9GzAWIzBBDTUNNAiMQAVEtQI/qQkSj5nx+aTkMKWXsT23fl4E/vJstRSBvrJwFJk9xJPiY8KjGEOGFez8mu6EHtIaCO6DwwzZeXXzKCDb68Xd/WB1c3K13p0m1yGsH26sW0O5k+0mvRBjmlaw8Sfxqw8BDYZassyy9CrjVSZZ1g2VqHUHhtYZuhQo/g7DMvGXCpBWOvBZuVT8xDFAcfOlMGvDuowDaYMRGZgVD9q62tr5TdyZ61nrPyGIXb2BNczombi61oG7kz1jJXP7jKY+ltLhtpSzzLUqFE8IgV2K5iFB+eaKvjlPDMUVKPkCgV2I/2LxLpUDnso+F70LwcbhPF2vvNP1zFRHXf90aTmYq+OU25kF2AopJ6ipmIGrwI+S8xjSH1ibyK+6mKBWRcionGXOHakNS6ZL3ADCGH7jrckAAAAAElFTkSuQmCC";
   const icon = nativeImage.createFromBuffer(Buffer.from(png, "base64"), { scaleFactor: 2 });
-  if (icon.isEmpty()) throw new Error("Could not create the Hiply menu-bar icon.");
+  if (icon.isEmpty()) throw new Error("Could not create the ContextCue menu-bar icon.");
   icon.setTemplateImage(true);
   return icon;
 }
 
 function createTray(): Tray {
   const nextTray = new Tray(createTrayIcon());
-  nextTray.setToolTip("Hiply");
+  nextTray.setToolTip("ContextCue");
   nextTray.on("click", toggleMainWindow);
   nextTray.on("right-click", () => {
     nextTray.popUpContextMenu(Menu.buildFromTemplate([
-      { label: "Open Hiply", click: showMainWindow },
+      { label: "Open ContextCue", click: showMainWindow },
       { label: "Quick reply", click: () => void showQuickReply() },
       { type: "separator" },
-      { label: "Quit Hiply", role: "quit" }
+      { label: "Quit ContextCue", role: "quit" }
     ]));
   });
   return nextTray;
@@ -319,7 +319,7 @@ function registerShortcut(accelerator: string): boolean {
 }
 
 function readApiKey(modelId = store.getData().settings.activeModelId): string {
-  if (process.env.HIPLY_API_KEY && modelId === store.getData().settings.activeModelId) return process.env.HIPLY_API_KEY;
+  if (process.env.CONTEXTCUE_API_KEY && modelId === store.getData().settings.activeModelId) return process.env.CONTEXTCUE_API_KEY;
   const encrypted = store.getData().encryptedApiKeys?.[modelId];
   if (!encrypted || !safeStorage.isEncryptionAvailable()) return "";
   try {
@@ -336,7 +336,7 @@ function configuredModelIds(): Set<string> {
 function encryptApiKey(apiKey: string): string | undefined {
   if (!apiKey.trim()) return undefined;
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Secure key storage is unavailable on this device. Use the HIPLY_API_KEY environment variable instead.");
+    throw new Error("Secure key storage is unavailable on this device. Use the CONTEXTCUE_API_KEY environment variable instead.");
   }
   return safeStorage.encryptString(apiKey.trim()).toString("base64");
 }
@@ -383,7 +383,7 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
         await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
         return {
           pasted: false,
-          error: "Allow Hiply (or Electron while developing) in Accessibility, then click Insert again. The reply was copied."
+          error: "Allow ContextCue (or Electron while developing) in Accessibility, then click Insert again. The reply was copied."
         };
       }
       overlayWindow?.hide();
@@ -519,7 +519,7 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
-  store = new MemoryStore(join(app.getPath("userData"), "hiply-data.json"));
+  store = new MemoryStore(join(app.getPath("userData"), "contextcue-data.json"));
   await store.load();
   registerIpc();
   registerShortcut(store.getData().settings.globalShortcut);

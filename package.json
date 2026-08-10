@@ -1,8 +1,16 @@
 {
-  "name": "hiply",
+  "name": "contextcue",
   "version": "0.1.0",
   "private": true,
   "description": "A local-first desktop reply assistant for WeChat, Slack, Lark, and any visible conversation.",
+  "author": "zilong",
+  "license": "UNLICENSED",
+  "keywords": [
+    "desktop",
+    "reply-assistant",
+    "electron",
+    "local-first"
+  ],
   "main": "out/main/index.js",
   "type": "module",
   "engines": {
@@ -40,27 +48,37 @@
     "vitest": "^4.1.10"
   },
   "build": {
-    "appId": "ai.hiply.desktop",
-    "productName": "Hiply",
+    "appId": "ai.contextcue.desktop",
+    "productName": "ContextCue",
+    "copyright": "Copyright © 2026 zilong",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
     "files": [
       "out/**/*",
       "package.json"
     ],
     "mac": {
       "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
       "target": [
         "dmg",
         "zip"
       ],
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "Hiply uses screenshots you select to understand the visible conversation and draft replies.",
-        "NSMicrophoneUsageDescription": "Hiply uses the microphone only when you choose voice input."
+        "NSScreenCaptureUsageDescription": "ContextCue uses screenshots you select to understand the visible conversation and draft replies.",
+        "NSAppleEventsUsageDescription": "ContextCue uses system automation only when you choose to insert a reply into another application."
       }
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "linux": {
+      "category": "Utility",
+      "icon": "build/icons",
       "target": [
         "AppImage"
       ]

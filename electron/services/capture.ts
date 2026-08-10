@@ -20,7 +20,7 @@ export async function listCaptureSourceRefs(): Promise<CaptureSourceRef[]> {
     fetchWindowIcons: false
   });
   return sources
-    .filter((source) => source.name !== "Hiply")
+    .filter((source) => source.name !== "ContextCue")
     .map((source) => ({ id: source.id, name: source.name, channel: detectChannel(source.name) }))
     .sort((a, b) => Number(b.channel !== "other") - Number(a.channel !== "other"));
 }
@@ -32,7 +32,7 @@ export async function listCaptureSources(): Promise<CaptureSource[]> {
     fetchWindowIcons: true
   });
   return sources
-    .filter((source) => source.name !== "Hiply" && !source.thumbnail.isEmpty())
+    .filter((source) => source.name !== "ContextCue" && !source.thumbnail.isEmpty())
     .map((source) => ({
       id: source.id,
       name: source.name,
@@ -65,7 +65,7 @@ export async function captureSource(
 async function captureMacWindow(sourceId: string): Promise<string> {
   const windowId = /^window:(\d+):/.exec(sourceId)?.[1];
   if (!windowId) throw new Error("The selected source is not a window.");
-  const path = join(tmpdir(), `hiply-quick-${process.pid}-${randomUUID()}.jpg`);
+  const path = join(tmpdir(), `contextcue-quick-${process.pid}-${randomUUID()}.jpg`);
   try {
     await execFileAsync("/usr/sbin/screencapture", ["-x", `-l${windowId}`, "-tjpg", path]);
     const image = nativeImage.createFromBuffer(await readFile(path));

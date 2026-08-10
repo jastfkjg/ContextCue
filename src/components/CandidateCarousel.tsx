@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
 import type { CandidateReply, ChannelId } from "../shared/types";
-import { hiplyApi } from "../lib/api";
+import { contextCueApi } from "../lib/api";
 
 interface Props {
   candidates: CandidateReply[];
@@ -30,7 +30,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
   };
 
   const useReply = async (paste: boolean) => {
-    const result = await hiplyApi.useReply({ text: candidates[index].text, channel, contact, paste });
+    const result = await contextCueApi.useReply({ text: candidates[index].text, channel, contact, paste });
     setStatus(result.pasted ? "pasted" : "copied");
     setFeedback(result.error ?? "");
   };

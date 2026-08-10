@@ -158,7 +158,7 @@ export interface OverlayStatus {
   channel?: ChannelId;
 }
 
-export interface HiplyApi {
+export interface ContextCueApi {
   getCaptureSources: () => Promise<CaptureSource[]>;
   captureSource: (sourceId: string) => Promise<string>;
   generateReplies: (request: GenerateRequest) => Promise<GenerationResult>;

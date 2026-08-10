@@ -29,7 +29,7 @@ import {
   X
 } from "lucide-react";
 import { CandidateCarousel } from "./components/CandidateCarousel";
-import { hiplyApi, isBrowserDemo } from "./lib/api";
+import { contextCueApi, isBrowserDemo } from "./lib/api";
 import type {
   AppSettings,
   CaptureSource,
@@ -132,9 +132,9 @@ function ReplyWorkspace({
     setError("");
     setResult(null);
     try {
-      const fresh = await hiplyApi.captureSource(selected.id);
+      const fresh = await contextCueApi.captureSource(selected.id);
       setScreenshot(fresh);
-      const next = await hiplyApi.generateReplies({
+      const next = await contextCueApi.generateReplies({
         sourceId: selected.id,
         imageDataUrl: isBrowserDemo ? fresh : undefined,
         channel,
@@ -154,7 +154,7 @@ function ReplyWorkspace({
   const saveSuggestion = async (index: number) => {
     if (!result) return;
     const suggestion = result.memorySuggestions[index];
-    await hiplyApi.addFact({ category: suggestion.category, content: suggestion.content, source: "model-suggestion" });
+    await contextCueApi.addFact({ category: suggestion.category, content: suggestion.content, source: "model-suggestion" });
     setSavedSuggestions((current) => new Set(current).add(index));
   };
 
@@ -165,14 +165,14 @@ function ReplyWorkspace({
           <span className="eyebrow">CURRENT REPLY</span>
           <h1>Draft beside the conversation.</h1>
         </div>
-        <div className="shortcut-hint"><Command size={15} /><kbd>⇧</kbd><kbd>Space</kbd><span>open Hiply</span></div>
+        <div className="shortcut-hint"><Command size={15} /><kbd>⇧</kbd><kbd>Space</kbd><span>open ContextCue</span></div>
       </header>
 
       {permissions && permissions.screen !== "granted" && permissions.screen !== "unknown" && (
         <div className="permission-banner">
           <ShieldCheck size={18} />
-          <div><strong>{permissions.screen === "not-determined" ? "Screen access is needed." : "Screen access is off."}</strong><span>Allow Hiply to capture only the window you choose.</span></div>
-          <button onClick={() => void hiplyApi.openScreenSettings()}>Open settings <ExternalLink size={14} /></button>
+          <div><strong>{permissions.screen === "not-determined" ? "Screen access is needed." : "Screen access is off."}</strong><span>Allow ContextCue to capture only the window you choose.</span></div>
+          <button onClick={() => void contextCueApi.openScreenSettings()}>Open settings <ExternalLink size={14} /></button>
         </div>
       )}
 
@@ -273,7 +273,7 @@ function ReplyWorkspace({
               <motion.div key="empty" className="draft-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <div className="empty-cards"><i /><i /><i /></div>
                 <strong>Three ways to reply</strong>
-                <span>Choose a conversation and Hiply will draft distinct, send-ready options in your voice.</span>
+                <span>Choose a conversation and ContextCue will draft distinct, send-ready options in your voice.</span>
                 <div className="keys"><kbd>←</kbd><kbd>→</kbd><small>switch</small><kbd>↵</kbd><small>insert</small></div>
               </motion.div>
             )}
@@ -295,7 +295,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   if (!memory) return <div className="workspace-loading"><span className="spinner" /> Loading memory…</div>;
 
   const saveProfile = async () => {
-    const next = await hiplyApi.saveProfile(profile);
+    const next = await contextCueApi.saveProfile(profile);
     onChange(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1400);
@@ -307,25 +307,25 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   };
   const addFact = async () => {
     if (!fact.trim()) return;
-    onChange(await hiplyApi.addFact({ category: "personal", content: fact, source: "manual" }));
+    onChange(await contextCueApi.addFact({ category: "personal", content: fact, source: "manual" }));
     setFact("");
   };
   const saveContact = async (contact: ContactMemory) => {
-    onChange(await hiplyApi.saveContact(contact));
+    onChange(await contextCueApi.saveContact(contact));
     setEditingContact(null);
   };
 
   return (
     <div className="workspace memory-workspace">
       <header className="workspace-header">
-        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Teach Hiply what matters.</h1></div>
+        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Teach ContextCue what matters.</h1></div>
         <div className="privacy-note"><ShieldCheck size={17} /><span>Stored as a local file<br/><small>Inspectable and removable</small></span></div>
       </header>
       <div className="memory-layout">
         <section className="profile-editor">
           <div className="section-bar"><div><span className="step-number">YOU</span><h2>Voice & profile</h2></div><button className="button button--primary" onClick={() => void saveProfile()}>{saved ? <Check size={16}/> : <Save size={16}/>} {saved ? "Saved" : "Save"}</button></div>
           <div className="form-grid">
-            <label><span>Name</span><input value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} placeholder="How should Hiply refer to you?" /></label>
+            <label><span>Name</span><input value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} placeholder="How should ContextCue refer to you?" /></label>
             <label><span>Role</span><input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} placeholder="Product lead, founder…" /></label>
             <label><span>Company / context</span><input value={profile.company} onChange={(e) => setProfile({ ...profile, company: e.target.value })} placeholder="Optional" /></label>
             <label><span>Language</span><input value={profile.preferredLanguage} onChange={(e) => setProfile({ ...profile, preferredLanguage: e.target.value })} /></label>
@@ -355,14 +355,14 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
             <div className="aside-title"><div><MemoryStick size={16}/><h3>Facts & follow-ups</h3></div><span>{memory.facts.length}</span></div>
             <div className="inline-input compact"><input value={fact} onChange={(e) => setFact(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void addFact(); }} placeholder="Something worth remembering"/><button onClick={() => void addFact()}><Plus size={15}/></button></div>
             <div className="fact-list">
-              {memory.facts.slice(0, 12).map((item) => <div key={item.id}><em>{item.category}</em><span>{item.content}</span><button onClick={async () => onChange(await hiplyApi.deleteFact(item.id))}><Trash2 size={13}/></button></div>)}
+              {memory.facts.slice(0, 12).map((item) => <div key={item.id}><em>{item.category}</em><span>{item.content}</span><button onClick={async () => onChange(await contextCueApi.deleteFact(item.id))}><Trash2 size={13}/></button></div>)}
               {memory.facts.length === 0 && <div className="list-empty">Saved insights appear here.</div>}
             </div>
           </section>
           <div className="learned-count"><strong>{memory.acceptedReplies.length}</strong><span>accepted replies available as style examples</span></div>
         </aside>
       </div>
-      {editingContact && <ContactDialog contact={editingContact} onClose={() => setEditingContact(null)} onSave={saveContact} onDelete={async (id) => { onChange(await hiplyApi.deleteContact(id)); setEditingContact(null); }} />}
+      {editingContact && <ContactDialog contact={editingContact} onClose={() => setEditingContact(null)} onSave={saveContact} onDelete={async (id) => { onChange(await contextCueApi.deleteContact(id)); setEditingContact(null); }} />}
     </div>
   );
 }
@@ -390,7 +390,7 @@ function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh:
     { id: "other", detail: "Any visible screen or application window", level: "Universal" }
   ];
   return <div className="workspace channels-workspace"><header className="workspace-header"><div><span className="eyebrow">CHANNELS</span><h1>Works where the conversation is.</h1></div><button className="button button--quiet" onClick={() => void refresh()}><RefreshCw size={15}/> Scan windows</button></header>
-    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One visual pipeline, every app.</h2><p>Hiply captures only the window you select. It does not require access to your full chat history, and the same reply flow works across native and browser apps.</p></div></div>
+    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One visual pipeline, every app.</h2><p>ContextCue captures only the window you select. It does not require access to your full chat history, and the same reply flow works across native and browser apps.</p></div></div>
     <section className="channel-table"><header><span>Channel</span><span>Context method</span><span>Status</span></header>{supported.map((item) => <div key={item.id}><span><i className={`channel-logo channel-logo--${item.id}`}>{CHANNEL_MARKS[item.id]}</i><strong>{CHANNEL_LABELS[item.id]}</strong></span><span>{item.detail}</span><span className="ready-mark"><i/>{item.level}</span></div>)}</section>
     <section className="visible-windows"><div className="section-bar"><div><span className="step-number">LIVE</span><h2>Visible conversations</h2></div><span>{sources.length} windows found</span></div><div className="window-list">{sources.slice(0, 12).map((source) => <div key={source.id}><img src={source.thumbnail} alt=""/><span><strong>{source.name}</strong><small>{CHANNEL_LABELS[source.channel]}</small></span></div>)}{sources.length === 0 && <div className="list-empty">No capturable windows found. Open a conversation and scan again.</div>}</div></section>
   </div>;
@@ -489,7 +489,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
         setSaveState("saving");
         setSaveMessage("Saving changes…");
         try {
-          const saved = await hiplyApi.saveSettings({ ...requestForm, apiKeys: requestKeys });
+          const saved = await contextCueApi.saveSettings({ ...requestForm, apiKeys: requestKeys });
           lastSavedSignature.current = settingsSignature(saved);
           if (requestId === saveRun.current && latestSignature.current === settingsSignature(requestForm)) {
             setForm(saved);
@@ -546,7 +546,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
     if (!selectedModel) return;
     setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "testing", message: "Sending a minimal request…" } }));
     try {
-      const result = await hiplyApi.testModelConnection({ model: selectedModel, apiKey: apiKeys[selectedModel.id] });
+      const result = await contextCueApi.testModelConnection({ model: selectedModel, apiKey: apiKeys[selectedModel.id] });
       setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "success", message: result.message, latencyMs: result.latencyMs } }));
     } catch (error) {
       setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "error", message: error instanceof Error ? error.message : String(error) } }));
@@ -556,7 +556,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
   const hasModelKey = Boolean(selectedModel && (selectedModel.apiKeyConfigured || apiKeys[selectedModel.id]?.trim()));
 
   return <div className="workspace settings-workspace">
-    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how Hiply replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
+    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how ContextCue replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
     <div className="model-settings-shell">
       <aside className="model-rail">
         <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} {form.models.length === 1 ? "model" : "models"}</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
@@ -598,7 +598,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
     </div>
     <div className="preference-grid">
       <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Reply language</span><div className="choice-group choice-group--language" role="group" aria-label="Reply language">{([{ value: "auto", label: "Match conversation" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}{form.locale === option.value && <Check size={14}/>}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, Hiply keeps your previous shortcut.</p></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, ContextCue keeps your previous shortcut.</p></section>
     </div>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
   </div>;
@@ -616,7 +616,7 @@ export function App() {
 
   const refreshSources = useCallback(async () => {
     try {
-      const next = await hiplyApi.getCaptureSources();
+      const next = await contextCueApi.getCaptureSources();
       setSources(next);
       setSelectedId((current) => next.some((item) => item.id === current) ? current : (next.find((item) => item.channel !== "other")?.id ?? next[0]?.id ?? ""));
     } catch {
@@ -627,9 +627,9 @@ export function App() {
   useEffect(() => {
     void Promise.all([
       refreshSources(),
-      hiplyApi.getMemory().then(setMemory),
-      hiplyApi.getSettings().then(setSettings),
-      hiplyApi.getPermissions().then(setPermissions)
+      contextCueApi.getMemory().then(setMemory),
+      contextCueApi.getSettings().then(setSettings),
+      contextCueApi.getPermissions().then(setPermissions)
     ]);
   }, [refreshSources]);
 
@@ -647,7 +647,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span><i/><b/></span><strong>Hiply</strong></div>
+        <div className="brand"><span><i/><b/></span><strong>ContextCue</strong></div>
         <nav>{views.map((item) => <NavItem key={item.id} active={view === item.id} icon={item.icon} label={item.label} onClick={() => setView(item.id)}/>)}</nav>
         <div className="sidebar-foot">
           {isBrowserDemo && <span className="demo-badge">Browser preview</span>}

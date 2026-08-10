@@ -67,7 +67,7 @@ export function selectQuickReplySource<T extends Pick<CaptureSource, "id" | "nam
   const applicationMatch = sources.find((source) => namesReferToSameWindow(source.name, applicationName));
   if (applicationMatch) return applicationMatch;
 
-  // When only one non-Hiply window is capturable it is safe and useful to use
+  // When only one non-ContextCue window is capturable it is safe and useful to use
   // it even if the OS could not expose its title (common on Linux/Wayland).
   if (sources.length === 1) return sources[0];
   if (!applicationName.trim() && !windowTitle.trim()) {

@@ -31,8 +31,8 @@ export const DEFAULT_DATA: AppData = {
     models: [{
       id: "openai-default",
       name: "OpenAI",
-      apiBaseUrl: process.env.HIPLY_API_BASE_URL || "https://api.openai.com/v1",
-      model: process.env.HIPLY_MODEL || "gpt-5.6-luna",
+      apiBaseUrl: process.env.CONTEXTCUE_API_BASE_URL || "https://api.openai.com/v1",
+      model: process.env.CONTEXTCUE_MODEL || "gpt-5.6-luna",
       apiProtocol: "responses"
     }],
     activeModelId: "openai-default",

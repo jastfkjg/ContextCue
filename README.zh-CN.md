@@ -1,6 +1,6 @@
-# Hiply
+# ContextCue
 
-Hiply 是一个参考 [OKEight](https://hiply.pages.dev/) 实现的、本地优先的桌面回复助手。它会截取用户明确选择的对话窗口，将截图和相关的长期记忆一起发送给支持视觉理解的大模型，再返回多个可以直接发送的候选回答。用户可以左右滑动、使用方向键或点击按钮切换回答，并复制或插入选中的内容。
+ContextCue 是一个参考 OKEight 实现的、本地优先的桌面回复助手。它会截取用户明确选择的对话窗口，将截图和相关的长期记忆一起发送给支持视觉理解的大模型，再返回多个可以直接发送的候选回答。用户可以左右滑动、使用方向键或点击按钮切换回答，并复制或插入选中的内容。
 
 [English README](./README.md)
 
@@ -13,7 +13,7 @@ Hiply 是一个参考 [OKEight](https://hiply.pages.dev/) 实现的、本地优�
 - 支持按钮、圆点、`←` / `→` 键和左右滑动切换候选回答。
 - 支持复制回答，以及将回答尽力插入微信、Slack、Lark 等应用。
 - 生成完成后显示置顶的紧凑候选回复悬浮窗。
-- 使用 `CommandOrControl+Shift+Space` 从任意应用唤起 Hiply。
+- 使用 `CommandOrControl+Shift+Space` 从任意应用唤起 ContextCue。
 - 本地保存个人资料、表达规则、联系人关系卡、长期事实和跟进事项。
 - 记录用户真正采用的回答，并在之后作为风格示例。
 - 大模型建议的记忆必须由用户手动确认后才能保存，不会自动写入。
@@ -52,9 +52,9 @@ npm run dev
 
 1. 打开 **Settings**。
 2. 填写 API Base URL、模型、协议和 API Key。
-3. macOS 用户需要允许“屏幕录制”权限，然后重启 Hiply。
+3. macOS 用户需要允许“屏幕录制”权限，然后重启 ContextCue。
 4. 打开微信、Slack、Lark 或其他应用中的对话。
-5. 在聊天窗口按 `CommandOrControl+Shift+Space`。Hiply 会直接读取当前会话，并在输入区附近显示候选回复，不会打开主窗口。
+5. 在聊天窗口按 `CommandOrControl+Shift+Space`。ContextCue 会直接读取当前会话，并在输入区附近显示候选回复，不会打开主窗口。
 6. 左右滑动、使用方向键或点击箭头切换候选；点击 **Insert into WeChat** 或按 Enter 后，所选内容会写入聊天输入框，但不会自动发送。
 
 默认使用 `https://api.openai.com/v1`、Responses API 和 `gpt-5.6-luna`。这些都可以在设置中修改。OpenAI 当前模型说明显示，最新模型系列可以通过 Responses API 接收图片输入：[OpenAI 模型文档](https://developers.openai.com/api/docs/models)。
@@ -63,9 +63,9 @@ npm run dev
 
 ```bash
 cp .env.example .env
-export HIPLY_API_KEY="your-key"
-export HIPLY_API_BASE_URL="https://api.openai.com/v1"
-export HIPLY_MODEL="gpt-5.6-luna"
+export CONTEXTCUE_API_KEY="your-key"
+export CONTEXTCUE_API_BASE_URL="https://api.openai.com/v1"
+export CONTEXTCUE_MODEL="gpt-5.6-luna"
 npm run dev
 ```
 
@@ -86,7 +86,7 @@ npm run dist         # 生成安装包
 
 ## 长期记忆
 
-Hiply 将长期记忆保存在 Electron 对应平台的 `userData/hiply-data.json` 中，包括：
+ContextCue 将长期记忆保存在 Electron 对应平台的 `userData/contextcue-data.json` 中，包括：
 
 - `profile`：用户身份、语言、表达风格和全局规则；
 - `contacts`：联系人关系、渠道和专属沟通语气；
@@ -107,7 +107,7 @@ Hiply 将长期记忆保存在 Electron 对应平台的 `userData/hiply-data.jso
 - 保存后 API Key 不会再暴露给渲染进程。
 - 插入失败时，回答仍保留在剪贴板中，可以手动粘贴。
 
-以上是 Hiply 自身的产品边界，不代表第三方模型服务商的数据政策。处理敏感对话前，应检查所使用模型服务商的数据保留条款。
+以上是 ContextCue 自身的产品边界，不代表第三方模型服务商的数据政策。处理敏感对话前，应检查所使用模型服务商的数据保留条款。
 
 ## 技术结构
 

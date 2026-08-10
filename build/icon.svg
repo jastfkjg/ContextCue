@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">ContextCue app icon</title>
+  <desc id="description">Four dark reply tiles on a vivid lime rounded square.</desc>
+  <defs>
+    <linearGradient id="surface" x1="174" y1="112" x2="850" y2="912" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D8FF70"/>
+      <stop offset="0.52" stop-color="#C8FF3D"/>
+      <stop offset="1" stop-color="#A9E51C"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="318" y1="294" x2="710" y2="730" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#272922"/>
+      <stop offset="1" stop-color="#11120F"/>
+    </linearGradient>
+    <filter id="shadow" x="16" y="22" width="992" height="1000" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#283500" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="72" y="56" width="880" height="880" rx="218" fill="url(#surface)"/>
+    <rect x="74" y="58" width="876" height="876" rx="216" fill="none" stroke="#668D00" stroke-opacity="0.2" stroke-width="4"/>
+  </g>
+  <g fill="url(#tile)">
+    <rect x="300" y="286" width="184" height="184" rx="47"/>
+    <rect x="540" y="286" width="184" height="184" rx="47"/>
+    <rect x="300" y="526" width="184" height="184" rx="47"/>
+    <rect x="540" y="526" width="184" height="184" rx="47"/>
+  </g>
+  <path d="M340 314c-11 0-20 9-20 20v52" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-opacity="0.11" stroke-width="14"/>
+  <path d="M580 314c-11 0-20 9-20 20v52" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-opacity="0.11" stroke-width="14"/>
+</svg>

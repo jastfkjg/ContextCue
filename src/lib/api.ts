@@ -2,7 +2,7 @@ import type {
   AppSettings,
   CaptureSource,
   GenerationResult,
-  HiplyApi,
+  ContextCueApi,
   MemorySnapshot,
   UserProfile
 } from "../shared/types";
@@ -114,7 +114,7 @@ const demoResult: GenerationResult = {
   generatedAt: new Date().toISOString()
 };
 
-const browserDemoApi: HiplyApi = {
+const browserDemoApi: ContextCueApi = {
   getCaptureSources: async () => demoSources,
   captureSource: async (id) => demoSources.find((source) => source.id === id)?.thumbnail ?? demoSources[0].thumbnail,
   generateReplies: async () => {
@@ -171,5 +171,5 @@ const browserDemoApi: HiplyApi = {
   hideOverlay: async () => undefined
 };
 
-export const hiplyApi: HiplyApi = window.hiply ?? browserDemoApi;
-export const isBrowserDemo = !window.hiply;
+export const contextCueApi: ContextCueApi = window.contextCue ?? browserDemoApi;
+export const isBrowserDemo = !window.contextCue;

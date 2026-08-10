@@ -11,7 +11,7 @@ afterEach(async () => {
 
 describe("MemoryStore", () => {
   it("persists profile, relationships, facts, and accepted replies", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "hiply-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
     temporaryDirectories.push(directory);
     const path = join(directory, "data.json");
     const store = new MemoryStore(path);
@@ -31,7 +31,7 @@ describe("MemoryStore", () => {
   });
 
   it("does not duplicate the same memory fact", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "hiply-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
     temporaryDirectories.push(directory);
     const store = new MemoryStore(join(directory, "data.json"));
     await store.load();
@@ -41,7 +41,7 @@ describe("MemoryStore", () => {
   });
 
   it("migrates the legacy single-model settings without losing its encrypted key", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "hiply-test-"));
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
     temporaryDirectories.push(directory);
     const path = join(directory, "data.json");
     await import("node:fs/promises").then(({ writeFile }) => writeFile(path, JSON.stringify({

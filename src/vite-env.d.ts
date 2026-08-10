@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { HiplyApi } from "./shared/types";
+import type { ContextCueApi } from "./shared/types";
 
 declare global {
   interface Window {
-    hiply: HiplyApi;
+    contextCue: ContextCueApi;
   }
 }
 
