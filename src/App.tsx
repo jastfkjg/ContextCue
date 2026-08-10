@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Bot,
   Brain,
   Camera,
   Check,
+  CheckCircle2,
   ChevronRight,
   CircleHelp,
   CircleDot,
   Command,
   ExternalLink,
   Eye,
+  Keyboard,
   LockKeyhole,
   MemoryStick,
   MessageSquareText,
@@ -23,6 +25,7 @@ import {
   Sparkles,
   Trash2,
   Users,
+  Wifi,
   X
 } from "lucide-react";
 import { CandidateCarousel } from "./components/CandidateCarousel";
@@ -393,38 +396,139 @@ function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh:
   </div>;
 }
 
+type AutoSaveState = "saved" | "pending" | "saving" | "incomplete" | "error";
+type ConnectionState = { state: "testing" | "success" | "error"; message: string; latencyMs?: number };
+
+function settingsSignature(settings: AppSettings): string {
+  return JSON.stringify(settings);
+}
+
+function shortcutParts(value: string): string[] {
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+  return value.split("+").map((part) => {
+    if (part === "CommandOrControl") return isMac ? "⌘" : "Ctrl";
+    if (part === "Command") return "⌘";
+    if (part === "Control") return "Ctrl";
+    if (part === "Shift") return isMac ? "⇧" : "Shift";
+    if (part === "Alt") return isMac ? "⌥" : "Alt";
+    if (part === "Space") return "Space";
+    return part;
+  });
+}
+
+function ShortcutRecorder({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [recording, setRecording] = useState(false);
+  const record = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!recording) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Escape") { setRecording(false); return; }
+    if (["Meta", "Control", "Alt", "Shift"].includes(event.key)) return;
+    const modifiers: string[] = [];
+    if (event.metaKey || event.ctrlKey) modifiers.push("CommandOrControl");
+    if (event.altKey) modifiers.push("Alt");
+    if (event.shiftKey) modifiers.push("Shift");
+    if (!modifiers.length) return;
+    const key = event.code === "Space" ? "Space" : event.key.length === 1 ? event.key.toUpperCase() : event.key;
+    onChange([...modifiers, key].join("+"));
+    setRecording(false);
+  };
+  return <button type="button" className={`shortcut-recorder ${recording ? "shortcut-recorder--recording" : ""}`} onClick={() => setRecording(true)} onKeyDown={record} aria-pressed={recording}>
+    <span className="shortcut-recorder-copy"><Keyboard size={17}/><span><strong>{recording ? "Press your shortcut" : "Global shortcut"}</strong><small>{recording ? "Use at least one modifier · Esc to cancel" : "Click to record a new shortcut"}</small></span></span>
+    <span className="shortcut-keys">{recording ? <i>Listening…</i> : shortcutParts(value).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}</span>
+  </button>;
+}
+
 function SettingsView({ settings, onChange }: { settings: AppSettings | null; onChange: (settings: AppSettings) => void }) {
   const [form, setForm] = useState<AppSettings | null>(settings);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<AutoSaveState>("saved");
+  const [saveMessage, setSaveMessage] = useState("Saved automatically");
+  const [connectionStates, setConnectionStates] = useState<Record<string, ConnectionState>>({});
+  const lastSavedSignature = useRef(settings ? settingsSignature(settings) : "");
+  const latestSignature = useRef(lastSavedSignature.current);
+  const saveRun = useRef(0);
+  const saveQueue = useRef(Promise.resolve());
+  const pendingSaveCount = useRef(0);
+
   useEffect(() => {
+    if (!settings) return;
+    lastSavedSignature.current = settingsSignature(settings);
+    latestSignature.current = lastSavedSignature.current;
     setForm(settings);
-    setSelectedModelId((current) => settings?.models.some((model) => model.id === current) ? current : (settings?.activeModelId ?? ""));
+    setSelectedModelId((current) => settings.models.some((model) => model.id === current) ? current : settings.activeModelId);
     setApiKeys({});
+    setSaveState("saved");
+    setSaveMessage("Saved automatically");
   }, [settings]);
+
+  useEffect(() => {
+    if (!form) return;
+    const signature = settingsSignature(form);
+    latestSignature.current = signature;
+    const requestId = ++saveRun.current;
+    const pendingKeys = Object.values(apiKeys).some((key) => key.trim());
+    if (signature === lastSavedSignature.current && !pendingKeys && pendingSaveCount.current === 0) return;
+    const incomplete = !form.models.length
+      || !form.models.some((model) => model.id === form.activeModelId)
+      || form.models.some((model) => !model.name.trim() || !model.apiBaseUrl.trim() || !model.model.trim());
+    if (incomplete) {
+      setSaveState("incomplete");
+      setSaveMessage("Complete the required model fields to save");
+      return;
+    }
+
+    setSaveState("pending");
+    setSaveMessage("Waiting for you to finish…");
+    const requestForm = form;
+    const requestKeys = apiKeys;
+    const timeout = window.setTimeout(() => {
+      pendingSaveCount.current += 1;
+      saveQueue.current = saveQueue.current.catch(() => undefined).then(async () => {
+        setSaveState("saving");
+        setSaveMessage("Saving changes…");
+        try {
+          const saved = await hiplyApi.saveSettings({ ...requestForm, apiKeys: requestKeys });
+          lastSavedSignature.current = settingsSignature(saved);
+          if (requestId === saveRun.current && latestSignature.current === settingsSignature(requestForm)) {
+            setForm(saved);
+            setApiKeys({});
+            setSaveState("saved");
+            setSaveMessage("Saved automatically");
+            onChange(saved);
+          }
+        } catch (error) {
+          if (requestId === saveRun.current) {
+            setSaveState("error");
+            setSaveMessage(error instanceof Error ? error.message : String(error));
+          }
+        } finally {
+          pendingSaveCount.current = Math.max(0, pendingSaveCount.current - 1);
+        }
+      });
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [apiKeys, form, onChange]);
+
   if (!form) return <div className="workspace-loading"><span className="spinner"/> Loading settings…</div>;
   const selectedModel = form.models.find((model) => model.id === selectedModelId) ?? form.models[0];
   const activeModel = form.models.find((model) => model.id === form.activeModelId) ?? form.models[0];
+  const selectedConnection = selectedModel ? connectionStates[selectedModel.id] : undefined;
   const updateModel = (changes: Partial<LlmConfig>) => {
     if (!selectedModel) return;
     setForm({ ...form, models: form.models.map((model) => model.id === selectedModel.id ? { ...model, ...changes } : model) });
-    setMessage("");
+    setConnectionStates((current) => {
+      const next = { ...current };
+      delete next[selectedModel.id];
+      return next;
+    });
   };
   const addModel = () => {
     const id = crypto.randomUUID();
-    const next = {
-      id,
-      name: "New provider",
-      apiBaseUrl: "https://api.openai.com/v1",
-      model: "",
-      apiProtocol: "responses" as const,
-      apiKeyConfigured: false
-    };
+    const next = { id, name: "New provider", apiBaseUrl: "https://api.openai.com/v1", model: "", apiProtocol: "responses" as const, apiKeyConfigured: false };
     setForm({ ...form, models: [...form.models, next] });
     setSelectedModelId(id);
-    setMessage("New model added. Complete its details, then save.");
   };
   const removeModel = () => {
     if (!selectedModel || form.models.length === 1) return;
@@ -437,27 +541,30 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
       delete next[selectedModel.id];
       return next;
     });
-    setMessage("Model removed. Save to apply this change.");
   };
-  const save = async () => {
-    setSaving(true);
-    setMessage("");
+  const testConnection = async () => {
+    if (!selectedModel) return;
+    setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "testing", message: "Sending a minimal request…" } }));
     try {
-      const saved = await hiplyApi.saveSettings({ ...form, apiKeys });
-      onChange(saved); setForm(saved); setApiKeys({}); setMessage("Settings saved.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
-    finally { setSaving(false); }
+      const result = await hiplyApi.testModelConnection({ model: selectedModel, apiKey: apiKeys[selectedModel.id] });
+      setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "success", message: result.message, latencyMs: result.latencyMs } }));
+    } catch (error) {
+      setConnectionStates((current) => ({ ...current, [selectedModel.id]: { state: "error", message: error instanceof Error ? error.message : String(error) } }));
+    }
   };
+  const modelComplete = Boolean(selectedModel?.name.trim() && selectedModel.apiBaseUrl.trim() && selectedModel.model.trim());
+  const hasModelKey = Boolean(selectedModel && (selectedModel.apiKeyConfigured || apiKeys[selectedModel.id]?.trim()));
+
   return <div className="workspace settings-workspace">
-    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect multiple providers and choose which model Hiply uses.</p></div><StatusPill configured={Boolean(activeModel?.apiKeyConfigured)}/></header>
+    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how Hiply replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
     <div className="model-settings-shell">
       <aside className="model-rail">
-        <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} configured</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
+        <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} {form.models.length === 1 ? "model" : "models"}</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
         <div className="model-list" role="listbox" aria-label="Configured models">
           {form.models.map((model, index) => <button key={model.id} role="option" aria-selected={selectedModel?.id === model.id} className={`model-list-item ${selectedModel?.id === model.id ? "model-list-item--selected" : ""}`} onClick={() => setSelectedModelId(model.id)}>
             <span className="model-monogram">{model.name.trim().slice(0, 1).toUpperCase() || index + 1}</span>
             <span className="model-list-copy"><strong>{model.name || "Untitled model"}</strong><small>{model.model || "Model ID needed"}</small></span>
-            <span className={`model-health ${model.apiKeyConfigured ? "model-health--ready" : ""}`} title={model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
+            <span className={`model-health ${model.apiKeyConfigured ? "model-health--ready" : ""}`} title={model.apiKeyConfigured ? "API key configured" : "API key needed"} aria-label={model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
             {form.activeModelId === model.id && <span className="current-chip">DEFAULT</span>}
           </button>)}
         </div>
@@ -471,7 +578,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
             <div className="model-editor-header">
               <div className="model-title"><span><Bot size={19}/></span><div><small>MODEL CONFIGURATION</small><h2>{selectedModel.name || "Untitled model"}</h2></div></div>
               <div className="model-editor-actions">
-                {form.activeModelId === selectedModel.id ? <span className="active-model-label"><CircleDot size={15}/> Default model</span> : <button className="use-model-button" onClick={() => { setForm({ ...form, activeModelId: selectedModel.id }); setMessage("Default model changed. Save to apply."); }}><CircleDot size={15}/> Set as default</button>}
+                {form.activeModelId === selectedModel.id ? <span className="active-model-label"><CircleDot size={15}/> Default model</span> : <button className="use-model-button" onClick={() => setForm({ ...form, activeModelId: selectedModel.id })}><CircleDot size={15}/> Set as default</button>}
                 <button className="remove-model-button" disabled={form.models.length === 1} onClick={removeModel} aria-label="Remove model" title={form.models.length === 1 ? "At least one model is required" : "Remove model"}><Trash2 size={15}/></button>
               </div>
             </div>
@@ -479,21 +586,21 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
               <label><span>Display name</span><input value={selectedModel.name} onChange={(event) => updateModel({ name: event.target.value })} placeholder="e.g. OpenAI work"/></label>
               <label><span>Model ID</span><input value={selectedModel.model} onChange={(event) => updateModel({ model: event.target.value })} placeholder="e.g. gpt-5.6"/></label>
               <label className="model-url-field"><span>API base URL</span><input type="url" value={selectedModel.apiBaseUrl} onChange={(event) => updateModel({ apiBaseUrl: event.target.value })} placeholder="https://api.openai.com/v1"/></label>
-              <label><span>Protocol</span><select value={selectedModel.apiProtocol} onChange={(event) => updateModel({ apiProtocol: event.target.value as typeof selectedModel.apiProtocol })}><option value="responses">Responses API</option><option value="chat-completions">Chat Completions</option></select></label>
+              <fieldset className="protocol-field"><legend>API format <button type="button" aria-label="About API formats" title="This must match the endpoint format supported by your provider."><CircleHelp size={14}/></button></legend><div className="protocol-options"><button type="button" className={selectedModel.apiProtocol === "responses" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "responses" })}><span>Responses API<small>OpenAI current</small></span>{selectedModel.apiProtocol === "responses" && <Check size={15}/>}</button><button type="button" className={selectedModel.apiProtocol === "chat-completions" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "chat-completions" })}><span>Chat Completions<small>Broadly compatible</small></span>{selectedModel.apiProtocol === "chat-completions" && <Check size={15}/>}</button></div><p>{selectedModel.apiProtocol === "responses" ? "Use for api.openai.com or a provider that explicitly supports /responses." : "Use for Ollama, DashScope, and most OpenAI-compatible /chat/completions providers."}</p></fieldset>
               <label><span>API key</span><input type="password" autoComplete="new-password" value={apiKeys[selectedModel.id] ?? ""} onChange={(event) => setApiKeys({ ...apiKeys, [selectedModel.id]: event.target.value })} placeholder={selectedModel.apiKeyConfigured ? "••••••••  Saved securely" : "Paste a key"}/></label>
             </div>
-            <div className="security-line"><ShieldCheck size={15}/><span>{selectedModel.apiKeyConfigured ? "A secure key is saved. Enter a new one only to replace it." : "This model needs an API key before it can generate replies."}</span></div>
+            <div className="connection-row"><div className="security-line"><ShieldCheck size={15}/><span>{selectedModel.apiKeyConfigured ? "A secure key is saved. Enter a new one only to replace it." : "The key is encrypted by your operating system after the model is complete."}</span></div><button className="test-connection-button" disabled={!modelComplete || !hasModelKey || selectedConnection?.state === "testing"} onClick={() => void testConnection()}>{selectedConnection?.state === "testing" ? <span className="spinner spinner--dark"/> : <Wifi size={16}/>} {selectedConnection?.state === "testing" ? "Testing…" : "Test connection"}</button></div>
+            {selectedConnection && selectedConnection.state !== "testing" && <div className={`connection-result connection-result--${selectedConnection.state}`} role="status">{selectedConnection.state === "success" ? <CheckCircle2 size={16}/> : <CircleHelp size={16}/>}<span><strong>{selectedConnection.state === "success" ? `Connected${selectedConnection.latencyMs ? ` · ${selectedConnection.latencyMs} ms` : ""}` : "Connection failed"}</strong><small>{selectedConnection.message}</small></span></div>}
           </motion.section>}
         </AnimatePresence>
 
       </div>
     </div>
     <div className="preference-grid">
-      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Default output for every model.</p></div></div><div className="form-grid"><label><span>Candidates</span><select value={form.candidateCount} onChange={(e) => setForm({ ...form, candidateCount: Number(e.target.value) })}><option value={2}>2 candidates</option><option value={3}>3 candidates</option><option value={4}>4 candidates</option><option value={5}>5 candidates</option></select></label><label><span>Reply language</span><select value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value as AppSettings["locale"] })}><option value="auto">Match conversation</option><option value="en">English</option><option value="zh-CN">简体中文</option></select></label></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Press it while you are in WeChat or any other app.</p></div></div><label className="full-field"><span>Electron accelerator</span><input value={form.globalShortcut} onChange={(e) => setForm({ ...form, globalShortcut: e.target.value })}/><small>macOS: ⌘⇧Space · Windows/Linux: Ctrl+Shift+Space</small></label></section>
+      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Reply language</span><div className="choice-group choice-group--language" role="group" aria-label="Reply language">{([{ value: "auto", label: "Match conversation" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}{form.locale === option.value && <Check size={14}/>}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, Hiply keeps your previous shortcut.</p></section>
     </div>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
-    <div className="settings-save" aria-live="polite"><span>{message}</span><button className="button button--primary" disabled={saving} onClick={() => void save()}>{saving ? <span className="spinner spinner--dark"/> : <Save size={16}/>} {saving ? "Saving…" : "Save settings"}</button></div>
   </div>;
 }
 

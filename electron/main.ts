@@ -22,6 +22,7 @@ import type {
   MemoryFact,
   OverlayStatus,
   SaveSettingsRequest,
+  TestModelConnectionRequest,
   UseReplyRequest,
   UserProfile
 } from "../src/shared/types";
@@ -34,7 +35,7 @@ import {
 } from "./services/capture";
 import { selectQuickReplySource, targetApplicationName } from "./services/channel";
 import { MemoryStore } from "./services/memory-store";
-import { generateWithModel } from "./services/model";
+import { generateWithModel, testModelConnection } from "./services/model";
 
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
@@ -475,6 +476,9 @@ function registerIpc(): void {
   ipcMain.handle("memory:fact-delete", (_event, id: string) => store.deleteFact(id));
 
   ipcMain.handle("settings:get", () => store.settings(configuredModelIds()));
+  ipcMain.handle("settings:test-model", (_event, incoming: TestModelConnectionRequest) =>
+    testModelConnection(incoming.model, incoming.apiKey?.trim() || readApiKey(incoming.model.id))
+  );
   ipcMain.handle(
     "settings:save",
     async (_event, incoming: SaveSettingsRequest) => {
@@ -498,9 +502,16 @@ function registerIpc(): void {
         if (modelIds.has(id) && apiKey.trim()) encryptedApiKeys[id] = encryptApiKey(apiKey)!;
       }
       const settings = { ...preferences, models: storedModels };
-      await store.saveSettings(settings, encryptedApiKeys);
-      if (!registerShortcut(settings.globalShortcut)) {
+      const previousShortcut = store.getData().settings.globalShortcut;
+      if (settings.globalShortcut !== previousShortcut && !registerShortcut(settings.globalShortcut)) {
+        registerShortcut(previousShortcut);
         throw new Error(`The shortcut ${settings.globalShortcut} is already used by another application.`);
+      }
+      try {
+        await store.saveSettings(settings, encryptedApiKeys);
+      } catch (error) {
+        if (settings.globalShortcut !== previousShortcut) registerShortcut(previousShortcut);
+        throw error;
       }
       return store.settings(configuredModelIds());
     }

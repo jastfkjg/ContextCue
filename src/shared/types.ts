@@ -106,6 +106,17 @@ export type SaveSettingsRequest = AppSettings & {
   apiKeys?: Record<string, string>;
 };
 
+export interface TestModelConnectionRequest {
+  model: LlmConfig;
+  apiKey?: string;
+}
+
+export interface TestModelConnectionResult {
+  ok: true;
+  message: string;
+  latencyMs: number;
+}
+
 export interface AppData {
   version: 1;
   profile: UserProfile;
@@ -159,6 +170,7 @@ export interface HiplyApi {
   deleteFact: (id: string) => Promise<MemorySnapshot>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
+  testModelConnection: (request: TestModelConnectionRequest) => Promise<TestModelConnectionResult>;
   useReply: (request: UseReplyRequest) => Promise<UseReplyResult>;
   openScreenSettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;

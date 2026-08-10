@@ -7,6 +7,7 @@ import type {
   MemoryFact,
   OverlayStatus,
   SaveSettingsRequest,
+  TestModelConnectionRequest,
   UseReplyRequest,
   UserProfile
 } from "../src/shared/types";
@@ -25,6 +26,8 @@ const api: HiplyApi = {
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings: SaveSettingsRequest) =>
     ipcRenderer.invoke("settings:save", settings),
+  testModelConnection: (request: TestModelConnectionRequest) =>
+    ipcRenderer.invoke("settings:test-model", request),
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
   openScreenSettings: () => ipcRenderer.invoke("permissions:open-screen"),
   getPermissions: () => ipcRenderer.invoke("permissions:get"),

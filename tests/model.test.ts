@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppData, GenerateRequest } from "../src/shared/types";
 import { DEFAULT_DATA } from "../electron/services/memory-store";
-import { buildMemoryContext, generateWithModel, parseModelJson } from "../electron/services/model";
+import { buildMemoryContext, generateWithModel, parseModelJson, testModelConnection } from "../electron/services/model";
 
 function data(): AppData {
   return {
@@ -265,5 +265,46 @@ describe("model memory and parsing", () => {
 
     const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
     expect(body.enable_thinking).toBe(false);
+  });
+
+  it("tests the configured protocol with a minimal authenticated request", async () => {
+    const configuration = {
+      id: "openai",
+      name: "OpenAI",
+      apiBaseUrl: "https://api.openai.com/v1/",
+      model: "gpt-5.6",
+      apiProtocol: "responses" as const,
+      apiKeyConfigured: true
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: "OK" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    const result = await testModelConnection(configuration, "secret", fetcher as typeof fetch);
+
+    expect(result.ok).toBe(true);
+    expect(fetcher).toHaveBeenCalledOnce();
+    const [url, options] = fetcher.mock.calls[0]!;
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    expect((options?.headers as Record<string, string>).Authorization).toBe("Bearer secret");
+    expect(JSON.parse(String(options?.body))).toMatchObject({ model: "gpt-5.6", max_output_tokens: 16 });
+  });
+
+  it("surfaces the provider message when a connection test fails", async () => {
+    const configuration = {
+      id: "local",
+      name: "Compatible provider",
+      apiBaseUrl: "https://example.com/v1",
+      model: "vision-model",
+      apiProtocol: "chat-completions" as const,
+      apiKeyConfigured: false
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ error: { message: "Unknown model" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" }
+    }));
+
+    await expect(testModelConnection(configuration, "secret", fetcher as typeof fetch)).rejects.toThrow("Unknown model");
   });
 });

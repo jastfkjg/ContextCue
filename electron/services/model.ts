@@ -4,7 +4,9 @@ import type {
   CandidateReply,
   GenerateRequest,
   GenerationResult,
-  MemorySuggestion
+  LlmConfig,
+  MemorySuggestion,
+  TestModelConnectionResult
 } from "../../src/shared/types";
 
 const OUTPUT_SCHEMA = {
@@ -418,4 +420,59 @@ export async function generateWithModel(
     throw new Error("The model returned no final answer. For a thinking model, disable thinking or increase its output budget.");
   }
   return parseModelJson(text, quickCandidateCount(data, request));
+}
+
+export async function testModelConnection(
+  configuration: LlmConfig,
+  apiKey: string,
+  fetcher: typeof fetch = fetch
+): Promise<TestModelConnectionResult> {
+  const baseUrl = configuration.apiBaseUrl.trim().replace(/\/$/, "");
+  const model = configuration.model.trim();
+  if (!baseUrl || !model) throw new Error("Add an API base URL and model ID before testing.");
+  if (!apiKey.trim()) throw new Error("Add an API key before testing this connection.");
+
+  let endpoint: string;
+  try {
+    endpoint = configuration.apiProtocol === "responses"
+      ? `${new URL(baseUrl).toString().replace(/\/$/, "")}/responses`
+      : `${new URL(baseUrl).toString().replace(/\/$/, "")}/chat/completions`;
+  } catch {
+    throw new Error("Enter a valid API base URL, including https:// or http://.");
+  }
+
+  const body = configuration.apiProtocol === "responses"
+    ? { model, input: "Reply with only: OK", max_output_tokens: 16 }
+    : { model, messages: [{ role: "user", content: "Reply with only: OK" }], max_tokens: 16 };
+  const startedAt = performance.now();
+  let response: Response;
+  try {
+    response = await fetcher(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey.trim()}`
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(12_000)
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("The provider did not respond within 12 seconds.");
+    }
+    throw new Error(`Could not reach the provider: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  const latencyMs = Math.round(performance.now() - startedAt);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const root = payload as { error?: { message?: string } | string; message?: string };
+    const providerMessage = typeof root.error === "string" ? root.error : root.error?.message || root.message;
+    throw new Error(providerMessage || `Connection test failed with HTTP ${response.status}.`);
+  }
+  return {
+    ok: true,
+    latencyMs,
+    message: `${configuration.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.`
+  };
 }

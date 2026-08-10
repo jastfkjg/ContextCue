@@ -154,6 +154,11 @@ const browserDemoApi: HiplyApi = {
     };
     return demoSettings;
   },
+  testModelConnection: async ({ model, apiKey }) => {
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    if (!apiKey && !model.apiKeyConfigured) throw new Error("Add an API key before testing this connection.");
+    return { ok: true, latencyMs: 642, message: `${model.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.` };
+  },
   useReply: async () => ({ copied: true, pasted: false }),
   openScreenSettings: async () => undefined,
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
