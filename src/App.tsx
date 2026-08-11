@@ -7,6 +7,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleHelp,
   CircleDot,
@@ -20,6 +21,7 @@ import {
   Hash,
   Keyboard,
   LockKeyhole,
+  Ellipsis,
   MessageSquareText,
   Plus,
   RefreshCw,
@@ -415,11 +417,13 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   const saveTimer = useRef<number>();
   const pendingDocument = useRef<MemoryDocument | null>(null);
   const revision = useRef(0);
+  const scopeDetails = useRef<HTMLDetailsElement>(null);
+  const moreDetails = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
     if (!memory || pendingDocument.current) return;
     setDocuments(memory.documents);
-    setSelectedId((current) => memory.documents.some((document) => document.id === current) ? current : (memory.documents[0]?.id ?? ""));
+    setSelectedId((current) => current === "__learned__" || memory.documents.some((document) => document.id === current) ? current : (memory.documents[0]?.id ?? ""));
   }, [memory]);
 
   useEffect(() => () => {
@@ -429,7 +433,8 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
 
   if (!memory) return <div className="workspace-loading"><span className="spinner" /> Loading memory…</div>;
 
-  const activeDocument = documents.find((document) => document.id === selectedId) ?? documents[0];
+  const learnedSelected = selectedId === "__learned__";
+  const activeDocument = learnedSelected ? undefined : (documents.find((document) => document.id === selectedId) ?? documents[0]);
 
   const persistDocument = async (document: MemoryDocument, currentRevision: number) => {
     setSaveState("saving");
@@ -465,6 +470,8 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
 
   const selectDocument = (id: string) => {
     flushPendingDocument();
+    scopeDetails.current?.removeAttribute("open");
+    moreDetails.current?.removeAttribute("open");
     setSelectedId(id);
   };
 
@@ -505,6 +512,11 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
     onChange(next);
   };
 
+  const deleteFact = async (id: string, content: string) => {
+    if (!window.confirm(`Remove “${content}” from learned memory?`)) return;
+    onChange(await contextCueApi.deleteFact(id));
+  };
+
   const scopeOptions: Array<{ value: MemoryDocumentScope; label: string; icon: React.ReactNode }> = [
     { value: "global", label: "Global", icon: <Globe2 size={14}/> },
     { value: "channel", label: "Channel", icon: <Hash size={14}/> },
@@ -531,27 +543,70 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
               </button>
             ))}
           </div>
+          <div className="memory-learned-nav">
+            <span>LEARNED</span>
+            <button className={learnedSelected ? "memory-file--active" : ""} onClick={() => selectDocument("__learned__")} aria-pressed={learnedSelected}>
+              <span className="memory-file-icon"><Brain size={16}/></span>
+              <span><strong>Learned facts</strong><small>Saved from reply suggestions</small></span>
+              <b>{memory.facts.length}</b>
+            </button>
+          </div>
           <div className="memory-rail-note"><ShieldCheck size={14}/><span>Only enabled, relevant files are added to a reply.</span></div>
         </aside>
 
         <section className="memory-document-pane">
-          {activeDocument ? (
+          {learnedSelected ? (
+            <div className="learned-memory-pane">
+              <header>
+                <div><span className="eyebrow">LEARNED MEMORY</span><h2>Facts saved from replies</h2><p>These are accepted suggestions, kept separate from the Markdown files you write.</p></div>
+                <span className="learned-total"><strong>{memory.facts.length}</strong> saved</span>
+              </header>
+              <div className="learned-memory-list">
+                {memory.facts.map((fact) => (
+                  <div key={fact.id}>
+                    <span className="learned-memory-mark"><Brain size={15}/></span>
+                    <div><span>{fact.category}</span><p>{fact.content}</p><small>{fact.source === "model-suggestion" ? "Accepted suggestion" : "Added manually"} · {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(fact.createdAt))}</small></div>
+                    <button onClick={() => void deleteFact(fact.id, fact.content)} aria-label={`Remove ${fact.content}`} title="Remove learned fact"><Trash2 size={15}/></button>
+                  </div>
+                ))}
+                {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>When ContextCue suggests something worth remembering, you decide whether to save it.</span></div>}
+              </div>
+              <footer><span>{memory.acceptedReplies.length} accepted replies are also used as private style examples.</span></footer>
+            </div>
+          ) : activeDocument ? (
             <>
               <header className="memory-document-header">
                 <div className="memory-filename"><FileText size={17}/><input ref={documentFilenameInputRef} value={activeDocument.filename} onChange={(event) => updateDocument({ filename: event.target.value })} onBlur={() => { if (!activeDocument.filename.trim()) updateDocument({ filename: "untitled.md" }); }} aria-label="Memory filename" spellCheck={false}/></div>
-                <div className="memory-editor-actions">
+                <div className="memory-document-tools">
+                  <details className="memory-scope-menu" ref={scopeDetails} onToggle={(event) => { if (event.currentTarget.open) moreDetails.current?.removeAttribute("open"); }}>
+                    <summary aria-label={`Change scope. Currently ${scopeLabel(activeDocument)}`}>{activeDocument.scope === "global" ? <Globe2 size={14}/> : activeDocument.scope === "channel" ? <Hash size={14}/> : <UserRound size={14}/>}<span>{scopeLabel(activeDocument)}</span><ChevronDown size={13}/></summary>
+                    <div className="memory-scope-popover">
+                      <span className="memory-popover-label">INCLUDE THIS FILE WHEN</span>
+                      <div className="memory-scope-options">
+                        {scopeOptions.map((option) => <button key={option.value} className={activeDocument.scope === option.value ? "is-active" : ""} onClick={() => { updateDocument({ scope: option.value, scopeValue: option.value === "global" ? undefined : activeDocument.scope === option.value ? activeDocument.scopeValue : option.value === "channel" ? "other" : "" }); if (option.value === "global") scopeDetails.current?.removeAttribute("open"); }} aria-pressed={activeDocument.scope === option.value}>{option.icon}{option.label}</button>)}
+                      </div>
+                      {activeDocument.scope === "channel" && <label className="memory-scope-value"><span>Channel</span><select value={activeDocument.scopeValue ?? "other"} onChange={(event) => updateDocument({ scopeValue: event.target.value })}>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
+                      {activeDocument.scope === "person" && <label className="memory-scope-value"><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Exact contact name"/></label>}
+                      <p>{activeDocument.scope === "global" ? "Considered for every reply." : activeDocument.scope === "channel" ? "Used only for replies in this channel." : "Used only when this contact is detected."}</p>
+                    </div>
+                  </details>
+                  <button className={`memory-active-control ${activeDocument.enabled ? "is-active" : ""}`} onClick={() => updateDocument({ enabled: !activeDocument.enabled })} role="switch" aria-checked={activeDocument.enabled}><i/>{activeDocument.enabled ? "Active" : "Paused"}</button>
                   <div className="memory-view-switch" role="group" aria-label="Document view">
                     <button className={mode === "write" ? "is-active" : ""} onClick={() => setMode("write")} aria-pressed={mode === "write"}>Write</button>
                     <button className={mode === "preview" ? "is-active" : ""} onClick={() => setMode("preview")} aria-pressed={mode === "preview"}><Eye size={13}/> Preview</button>
                   </div>
                   <span className={`memory-save-state memory-save-state--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner"/> : saveState === "saved" ? <Check size={13}/> : <i/>}{saveState === "pending" ? "Unsaved" : saveState === "saving" ? "Saving" : saveState === "error" ? "Couldn’t save" : "Saved"}</span>
+                  <details className="memory-more-menu" ref={moreDetails} onToggle={(event) => { if (event.currentTarget.open) scopeDetails.current?.removeAttribute("open"); }}>
+                    <summary aria-label="File actions" title="File actions"><Ellipsis size={17}/></summary>
+                    <div><button onClick={() => { moreDetails.current?.removeAttribute("open"); void deleteDocument(); }}><Trash2 size={14}/> Delete file</button></div>
+                  </details>
                 </div>
               </header>
               <AnimatePresence mode="wait" initial={false}>
                 {mode === "write" ? (
                   <motion.div key="write" className="memory-editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <textarea value={activeDocument.content} onChange={(event) => updateDocument({ content: event.target.value })} aria-label={`Edit ${activeDocument.filename}`} placeholder="# What should ContextCue know?" spellCheck/>
-                    <footer><span>Markdown supported</span><span>{activeDocument.content.length.toLocaleString()} characters</span></footer>
+                    <footer><span>Markdown</span><span>~{tokenEstimate.toLocaleString()} tokens</span><span>Updated {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(activeDocument.updatedAt))}</span><span>{activeDocument.content.length.toLocaleString()} characters</span></footer>
                   </motion.div>
                 ) : (
                   <motion.div key="preview" className="memory-preview-scroll" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><MarkdownPreview content={activeDocument.content}/></motion.div>
@@ -562,38 +617,6 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
             <div className="memory-no-document"><FileText size={28}/><h2>Create your first memory file</h2><p>Keep background, preferences, people, or project context in plain Markdown.</p><button className="button button--primary" onClick={() => void addDocument()}><Plus size={15}/> New file</button></div>
           )}
         </section>
-
-        <aside className="memory-inspector">
-          {activeDocument ? (
-            <>
-              <section>
-                <span className="memory-inspector-label">INCLUDE WHEN</span>
-                <div className="memory-scope-options">
-                  {scopeOptions.map((option) => <button key={option.value} className={activeDocument.scope === option.value ? "is-active" : ""} onClick={() => updateDocument({ scope: option.value, scopeValue: option.value === "global" ? undefined : activeDocument.scope === option.value ? activeDocument.scopeValue : option.value === "channel" ? "other" : "" })} aria-pressed={activeDocument.scope === option.value}>{option.icon}{option.label}</button>)}
-                </div>
-                {activeDocument.scope === "channel" && <label className="memory-scope-value"><span>Channel</span><select value={activeDocument.scopeValue ?? "other"} onChange={(event) => updateDocument({ scopeValue: event.target.value })}>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
-                {activeDocument.scope === "person" && <label className="memory-scope-value"><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Exact contact name"/></label>}
-                <p>{activeDocument.scope === "global" ? "This file is considered for every reply." : activeDocument.scope === "channel" ? "Used only when replying in this channel." : "Used only when this contact is detected."}</p>
-              </section>
-
-              <section>
-                <span className="memory-inspector-label">STATUS</span>
-                <button className={`memory-enable-row ${activeDocument.enabled ? "is-active" : ""}`} onClick={() => updateDocument({ enabled: !activeDocument.enabled })} role="switch" aria-checked={activeDocument.enabled}>
-                  <span><strong>{activeDocument.enabled ? "Active" : "Paused"}</strong><small>{activeDocument.enabled ? "Available to ContextCue" : "Never added to replies"}</small></span><i/>
-                </button>
-                <dl className="memory-metrics"><div><dt>Context size</dt><dd>~{tokenEstimate.toLocaleString()} tokens</dd></div><div><dt>Format</dt><dd>Markdown</dd></div><div><dt>Updated</dt><dd>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(activeDocument.updatedAt))}</dd></div></dl>
-              </section>
-
-              <section className="memory-learned-section">
-                <div className="memory-inspector-title"><span className="memory-inspector-label">LEARNED</span><strong>{memory.facts.length}</strong></div>
-                <p>Facts accepted from reply suggestions stay separate and removable.</p>
-                <div className="memory-learned-list">{memory.facts.slice(0, 4).map((fact) => <div key={fact.id}><span><em>{fact.category}</em>{fact.content}</span><button aria-label={`Delete ${fact.content}`} onClick={async () => onChange(await contextCueApi.deleteFact(fact.id))}><X size={13}/></button></div>)}{memory.facts.length === 0 && <div className="memory-learned-empty">No learned facts yet.</div>}</div>
-              </section>
-
-              <button className="memory-delete-file" onClick={() => void deleteDocument()}><Trash2 size={14}/> Delete file</button>
-            </>
-          ) : <p className="memory-inspector-empty">Select a file to manage when it should be used.</p>}
-        </aside>
       </div>
     </div>
   );

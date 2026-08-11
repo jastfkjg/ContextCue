@@ -36,7 +36,7 @@ function legacyDocuments(profile: UserProfile, contacts: ContactMemory[] = [], c
   const profileContent = [
     "# About me",
     "",
-    ...(aboutLines.length ? aboutLines : ["<!-- Add stable background that helps ContextCue understand you. -->"]),
+    ...aboutLines,
     ...(profile.about ? ["", "## Background", "", profile.about] : [])
   ].join("\n");
   const preferenceContent = [
@@ -141,7 +141,9 @@ function migrate(input: LegacyAppData): AppData {
           ...document,
           id: document.id || randomUUID(),
           filename: document.filename?.trim() || "untitled.md",
-          content: typeof document.content === "string" ? document.content : "",
+          content: typeof document.content === "string"
+            ? document.content.replace(/<!--\s*Add stable background that helps ContextCue understand you\.\s*-->/g, "").replace(/\n{3,}/g, "\n\n")
+            : "",
           scope: ["global", "channel", "person"].includes(document.scope) ? document.scope : "global",
           enabled: document.enabled !== false,
           createdAt: document.createdAt || new Date().toISOString(),
