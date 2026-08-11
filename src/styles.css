@@ -301,13 +301,17 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .use-model-button, .active-model-label { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: 9px; font-size: 12px; font-weight: 650; white-space: nowrap; }
 .use-model-button { border: 1px solid #cddf99; background: #f2f8df; color: #577411; }
 .use-model-button:hover { background: #e9f5c8; }
+.use-model-button:disabled { color: #9a7a51; border-color: #e3c9a3; background: #fff8ec; }
 .active-model-label { color: #5e7d13; background: #eef6d7; }
+.active-model-label--warning { color: #936025; background: #fff1dc; }
 .remove-model-button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #d6d7cf; border-radius: 9px; background: #fbfbf8; color: #85877e; }
 .remove-model-button:hover:not(:disabled) { border-color: #e4b9b5; color: var(--danger); background: #fff5f4; }
 .model-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px 16px; }
 .model-form-grid label > span, .settings-workspace .field-title { font-size: 12px; }
 .model-form-grid input, .model-form-grid select { height: 49px; padding: 0 14px; border-radius: 10px; font-size: 14px; }
 .model-url-field { grid-column: 1 / -1; }
+.vision-capability { position: relative; grid-column: 1 / -1; min-height: 58px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 0 13px; border: 1px solid #d5d5ce; border-radius: 10px; background: #fff; cursor: pointer; }
+.model-form-grid .vision-capability input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }.vision-capability > svg { color: #718f20; }.vision-capability > span { display: flex; flex-direction: column; gap: 3px; }.vision-capability strong { font-size: 11px; }.vision-capability small { color: #777970; font-size: 9px; }.vision-capability > i { color: #627f1c; font-size: 9px; font-style: normal; font-weight: 700; }.vision-capability--enabled { border-color: #cddf99; background: #f7faee; }.vision-capability--warning { border-color: #e3c9a3; background: #fff8ec; }.vision-capability--warning > svg, .vision-capability--warning > i { color: #a26822; }
 .protocol-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .protocol-field legend { width: 100%; display: flex; align-items: center; gap: 5px; margin-bottom: 7px; color: #5f6159; font-size: 12px; font-weight: 630; }
 .protocol-field legend button { width: 24px; height: 24px; margin: -5px 0; display: grid; place-items: center; border: 0; background: transparent; color: #85877e; }

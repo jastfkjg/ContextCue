@@ -10,6 +10,7 @@ import type {
   MemorySnapshot,
   UserProfile
 } from "../../src/shared/types";
+import { inferImageInputSupport } from "../../src/shared/model-capabilities";
 
 export const DEFAULT_DATA: AppData = {
   version: 1,
@@ -33,7 +34,8 @@ export const DEFAULT_DATA: AppData = {
       name: "OpenAI",
       apiBaseUrl: process.env.CONTEXTCUE_API_BASE_URL || "https://api.openai.com/v1",
       model: process.env.CONTEXTCUE_MODEL || "gpt-5.6-luna",
-      apiProtocol: "responses"
+      apiProtocol: "responses",
+      supportsImageInput: true
     }],
     activeModelId: "openai-default",
     candidateCount: 3,
@@ -59,15 +61,22 @@ type LegacyAppData = Partial<AppData> & {
 function migrate(input: LegacyAppData): AppData {
   const defaults = cloneDefaults();
   const legacySettings = input.settings;
-  const configuredModels = Array.isArray(legacySettings?.models) && legacySettings.models.length
+  const configuredModelsSource = Array.isArray(legacySettings?.models) && legacySettings.models.length
     ? legacySettings.models
     : [{
         id: "openai-default",
         name: "OpenAI",
         apiBaseUrl: legacySettings?.apiBaseUrl || defaults.settings.models[0].apiBaseUrl,
         model: legacySettings?.model || defaults.settings.models[0].model,
-        apiProtocol: legacySettings?.apiProtocol || defaults.settings.models[0].apiProtocol
+        apiProtocol: legacySettings?.apiProtocol || defaults.settings.models[0].apiProtocol,
+        supportsImageInput: inferImageInputSupport(legacySettings?.model || defaults.settings.models[0].model)
       }];
+  const configuredModels = configuredModelsSource.map((model) => ({
+    ...model,
+    supportsImageInput: typeof model.supportsImageInput === "boolean"
+      ? model.supportsImageInput
+      : inferImageInputSupport(model.model)
+  }));
   const activeModelId = configuredModels.some((model) => model.id === legacySettings?.activeModelId)
     ? legacySettings!.activeModelId!
     : configuredModels[0].id;
@@ -102,6 +111,7 @@ function isPristineInstall(data: AppData): boolean {
     && model.apiBaseUrl === defaultModel.apiBaseUrl
     && model.model === defaultModel.model
     && model.apiProtocol === defaultModel.apiProtocol
+    && model.supportsImageInput === defaultModel.supportsImageInput
     && data.settings.activeModelId === defaults.settings.activeModelId
     && data.settings.candidateCount === defaults.settings.candidateCount
     && data.settings.locale === defaults.settings.locale

@@ -86,6 +86,7 @@ export interface LlmConfig {
   apiBaseUrl: string;
   model: string;
   apiProtocol: ApiProtocol;
+  supportsImageInput: boolean;
   apiKeyConfigured: boolean;
 }
 

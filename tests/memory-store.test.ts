@@ -67,6 +67,28 @@ describe("MemoryStore", () => {
     expect(loaded.encryptedApiKeys?.[loaded.settings.activeModelId]).toBe("encrypted-value");
   });
 
+  it("marks an existing DeepSeek text model as unable to read screenshots", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(path, JSON.stringify({
+      version: 1,
+      settings: {
+        models: [{
+          id: "deepseek",
+          name: "DeepSeek",
+          apiBaseUrl: "https://example.com/v1",
+          model: "deepseek-v4-flash",
+          apiProtocol: "chat-completions"
+        }],
+        activeModelId: "deepseek"
+      }
+    })));
+
+    const loaded = await new MemoryStore(path).load();
+    expect(loaded.settings.models[0].supportsImageInput).toBe(false);
+  });
+
   it("imports models and encrypted keys from the former Hiply data file", async () => {
     const directory = await mkdtemp(join(tmpdir(), "contextcue-brand-test-"));
     temporaryDirectories.push(directory);

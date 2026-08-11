@@ -102,6 +102,23 @@ describe("model memory and parsing", () => {
     expect(result.candidates.map((candidate) => candidate.text)).toEqual(["One", "Two"]);
   });
 
+  it("blocks text-only models before sending a context-free request", async () => {
+    const configured = data();
+    configured.settings.models[0].name = "DeepSeek Flash";
+    configured.settings.models[0].model = "deepseek-v4-flash";
+    configured.settings.models[0].supportsImageInput = false;
+    const fetcher = vi.fn();
+
+    await expect(generateWithModel(
+      configured,
+      "secret",
+      request,
+      "data:image/png;base64,abc",
+      fetcher as typeof fetch
+    )).rejects.toThrow("text-only model");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("sends screenshot and memory through the Responses API", async () => {
     const payload = {
       output: [{ content: [{ type: "output_text", text: JSON.stringify({
@@ -136,7 +153,8 @@ describe("model memory and parsing", () => {
       name: "Local vision",
       apiBaseUrl: "http://localhost:11434/v1",
       model: "qwen3-vl",
-      apiProtocol: "chat-completions"
+      apiProtocol: "chat-completions",
+      supportsImageInput: true
     });
     configured.settings.activeModelId = "local-vision";
     const payload = {
@@ -172,7 +190,8 @@ describe("model memory and parsing", () => {
       name: "Qwen Plus",
       apiBaseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       model: "qwen3.7-plus",
-      apiProtocol: "responses"
+      apiProtocol: "responses",
+      supportsImageInput: true
     });
     configured.settings.activeModelId = "qwen-plus";
     const payload = {
@@ -274,6 +293,7 @@ describe("model memory and parsing", () => {
       apiBaseUrl: "https://api.openai.com/v1/",
       model: "gpt-5.6",
       apiProtocol: "responses" as const,
+      supportsImageInput: true,
       apiKeyConfigured: true
     };
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ output_text: "OK" }), {
@@ -298,6 +318,7 @@ describe("model memory and parsing", () => {
       apiBaseUrl: "https://example.com/v1",
       model: "vision-model",
       apiProtocol: "chat-completions" as const,
+      supportsImageInput: true,
       apiKeyConfigured: false
     };
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ error: { message: "Unknown model" } }), {

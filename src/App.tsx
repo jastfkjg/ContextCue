@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { contextCueApi, isBrowserDemo } from "./lib/api";
+import { inferImageInputSupport } from "./shared/model-capabilities";
 import type {
   AppSettings,
   CaptureSource,
@@ -112,7 +113,7 @@ function HomeView({
   onOpenChannels: () => void;
 }) {
   const activeModel = settings?.models.find((model) => model.id === settings.activeModelId) ?? settings?.models[0];
-  const modelReady = Boolean(activeModel?.apiKeyConfigured && activeModel.model.trim());
+  const modelReady = Boolean(activeModel?.apiKeyConfigured && activeModel.supportsImageInput && activeModel.model.trim());
   const screenReady = isBrowserDemo || permissions?.screen === "granted" || permissions?.screen === "unknown";
   const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Space";
   const readyCount = [modelReady, screenReady, sources.length > 0].filter(Boolean).length;
@@ -629,7 +630,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
   };
   const addModel = () => {
     const id = crypto.randomUUID();
-    const next = { id, name: "New provider", apiBaseUrl: "https://api.openai.com/v1", model: "", apiProtocol: "responses" as const, apiKeyConfigured: false };
+    const next = { id, name: "New provider", apiBaseUrl: "https://api.openai.com/v1", model: "", apiProtocol: "responses" as const, supportsImageInput: true, apiKeyConfigured: false };
     setForm({ ...form, models: [...form.models, next] });
     setSelectedModelId(id);
   };
@@ -659,7 +660,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
   const hasModelKey = Boolean(selectedModel && (selectedModel.apiKeyConfigured || apiKeys[selectedModel.id]?.trim()));
 
   return <div className="workspace settings-workspace">
-    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how ContextCue replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
+    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how ContextCue replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel?.supportsImageInput && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
     <div className="model-settings-shell">
       <aside className="model-rail">
         <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} {form.models.length === 1 ? "model" : "models"}</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
@@ -667,7 +668,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
           {form.models.map((model, index) => <button key={model.id} role="option" aria-selected={selectedModel?.id === model.id} className={`model-list-item ${selectedModel?.id === model.id ? "model-list-item--selected" : ""}`} onClick={() => setSelectedModelId(model.id)}>
             <span className="model-monogram">{model.name.trim().slice(0, 1).toUpperCase() || index + 1}</span>
             <span className="model-list-copy"><strong>{model.name || "Untitled model"}</strong><small>{model.model || "Model ID needed"}</small></span>
-            <span className={`model-health ${model.apiKeyConfigured ? "model-health--ready" : ""}`} title={model.apiKeyConfigured ? "API key configured" : "API key needed"} aria-label={model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
+            <span className={`model-health ${model.apiKeyConfigured && model.supportsImageInput ? "model-health--ready" : ""}`} title={!model.supportsImageInput ? "Image input required" : model.apiKeyConfigured ? "API key configured" : "API key needed"} aria-label={!model.supportsImageInput ? "Image input required" : model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
             {form.activeModelId === model.id && <span className="current-chip">DEFAULT</span>}
           </button>)}
         </div>
@@ -681,14 +682,15 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
             <div className="model-editor-header">
               <div className="model-title"><span><Bot size={19}/></span><div><small>MODEL CONFIGURATION</small><h2>{selectedModel.name || "Untitled model"}</h2></div></div>
               <div className="model-editor-actions">
-                {form.activeModelId === selectedModel.id ? <span className="active-model-label"><CircleDot size={15}/> Default model</span> : <button className="use-model-button" onClick={() => setForm({ ...form, activeModelId: selectedModel.id })}><CircleDot size={15}/> Set as default</button>}
+                {form.activeModelId === selectedModel.id ? <span className={`active-model-label ${selectedModel.supportsImageInput ? "" : "active-model-label--warning"}`}><CircleDot size={15}/> {selectedModel.supportsImageInput ? "Default model" : "Default · text only"}</span> : <button className="use-model-button" disabled={!selectedModel.supportsImageInput} title={selectedModel.supportsImageInput ? "Set as default" : "ContextCue needs image input to read screenshots"} onClick={() => setForm({ ...form, activeModelId: selectedModel.id })}><CircleDot size={15}/> Set as default</button>}
                 <button className="remove-model-button" disabled={form.models.length === 1} onClick={removeModel} aria-label="Remove model" title={form.models.length === 1 ? "At least one model is required" : "Remove model"}><Trash2 size={15}/></button>
               </div>
             </div>
             <div className="model-form-grid">
               <label><span>Display name</span><input value={selectedModel.name} onChange={(event) => updateModel({ name: event.target.value })} placeholder="e.g. OpenAI work"/></label>
-              <label><span>Model ID</span><input value={selectedModel.model} onChange={(event) => updateModel({ model: event.target.value })} placeholder="e.g. gpt-5.6"/></label>
+              <label><span>Model ID</span><input value={selectedModel.model} onChange={(event) => { const model = event.target.value; updateModel({ model, supportsImageInput: inferImageInputSupport(model) }); }} placeholder="e.g. gpt-5.6"/></label>
               <label className="model-url-field"><span>API base URL</span><input type="url" value={selectedModel.apiBaseUrl} onChange={(event) => updateModel({ apiBaseUrl: event.target.value })} placeholder="https://api.openai.com/v1"/></label>
+              <label className={`vision-capability ${selectedModel.supportsImageInput ? "vision-capability--enabled" : "vision-capability--warning"}`}><input type="checkbox" checked={selectedModel.supportsImageInput} onChange={(event) => updateModel({ supportsImageInput: event.target.checked })}/><Eye size={17}/><span><strong>Image input</strong><small>Required to read conversation screenshots</small></span><i>{selectedModel.supportsImageInput ? "Supported" : "Text only"}</i></label>
               <fieldset className="protocol-field"><legend>API format <button type="button" aria-label="About API formats" title="This must match the endpoint format supported by your provider."><CircleHelp size={14}/></button></legend><div className="protocol-options"><button type="button" className={selectedModel.apiProtocol === "responses" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "responses" })}><span>Responses API<small>OpenAI current</small></span>{selectedModel.apiProtocol === "responses" && <Check size={15}/>}</button><button type="button" className={selectedModel.apiProtocol === "chat-completions" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "chat-completions" })}><span>Chat Completions<small>Broadly compatible</small></span>{selectedModel.apiProtocol === "chat-completions" && <Check size={15}/>}</button></div><p>{selectedModel.apiProtocol === "responses" ? "Use for api.openai.com or a provider that explicitly supports /responses." : "Use for Ollama, DashScope, and most OpenAI-compatible /chat/completions providers."}</p></fieldset>
               <label><span>API key</span><input type="password" autoComplete="new-password" value={apiKeys[selectedModel.id] ?? ""} onChange={(event) => setApiKeys({ ...apiKeys, [selectedModel.id]: event.target.value })} placeholder={selectedModel.apiKeyConfigured ? "••••••••  Saved securely" : "Paste a key"}/></label>
             </div>
@@ -754,7 +756,7 @@ export function App() {
         <nav>{views.map((item) => <NavItem key={item.id} active={view === item.id} icon={item.icon} label={item.label} onClick={() => setView(item.id)}/>)}</nav>
         <div className="sidebar-foot">
           {isBrowserDemo && <span className="demo-badge">Browser preview</span>}
-          <div className={`model-status ${activeModel?.apiKeyConfigured ? "" : "model-status--needed"}`}><i/><span><strong>{activeModel?.name || "Model not set"}</strong><small>{activeModel ? `${activeModel.model || "Model ID needed"} · ${activeModel.apiKeyConfigured ? "ready" : "add key"}` : "Add a model"}</small></span></div>
+          <div className={`model-status ${activeModel?.apiKeyConfigured && activeModel.supportsImageInput ? "" : "model-status--needed"}`}><i/><span><strong>{activeModel?.name || "Model not set"}</strong><small>{activeModel ? `${activeModel.model || "Model ID needed"} · ${!activeModel.supportsImageInput ? "image input required" : activeModel.apiKeyConfigured ? "ready" : "add key"}` : "Add a model"}</small></span></div>
           <button onClick={() => setView("settings")}><CircleHelp size={16}/> Setup guide</button>
         </div>
       </aside>

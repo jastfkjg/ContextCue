@@ -68,6 +68,7 @@ let demoSettings: AppSettings = {
       apiBaseUrl: "https://api.openai.com/v1",
       model: "gpt-5.6-luna",
       apiProtocol: "responses",
+      supportsImageInput: true,
       apiKeyConfigured: false
     },
     {
@@ -76,6 +77,7 @@ let demoSettings: AppSettings = {
       apiBaseUrl: "http://localhost:11434/v1",
       model: "qwen3-vl",
       apiProtocol: "chat-completions",
+      supportsImageInput: true,
       apiKeyConfigured: true
     }
   ],

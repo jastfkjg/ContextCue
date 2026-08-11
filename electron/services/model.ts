@@ -8,6 +8,7 @@ import type {
   MemorySuggestion,
   TestModelConnectionResult
 } from "../../src/shared/types";
+import { inferImageInputSupport } from "../../src/shared/model-capabilities";
 
 const OUTPUT_SCHEMA = {
   type: "object",
@@ -387,6 +388,14 @@ export async function generateWithModel(
 
   const configuration = activeModel(data);
   if (!configuration) throw new Error("Choose a model in Settings before generating replies.");
+  const supportsImageInput = typeof configuration.supportsImageInput === "boolean"
+    ? configuration.supportsImageInput
+    : inferImageInputSupport(configuration.model);
+  if (!supportsImageInput) {
+    throw new Error(
+      `${configuration.name || configuration.model} is a text-only model. ContextCue needs a model with image input to read the conversation screenshot. Choose a visual model in Settings.`
+    );
+  }
   const baseUrl = configuration.apiBaseUrl.replace(/\/$/, "");
   const protocol = requestProtocol(configuration, screenshot);
   const endpoint = protocol === "responses" ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
@@ -431,6 +440,9 @@ export async function testModelConnection(
   const model = configuration.model.trim();
   if (!baseUrl || !model) throw new Error("Add an API base URL and model ID before testing.");
   if (!apiKey.trim()) throw new Error("Add an API key before testing this connection.");
+  if (!configuration.supportsImageInput) {
+    throw new Error("This model is configured as text-only. ContextCue requires image input to read conversation screenshots.");
+  }
 
   let endpoint: string;
   try {
