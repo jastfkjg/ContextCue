@@ -63,6 +63,7 @@ jobs:
           npx electron-builder \
             --mac dmg \
             --${{ matrix.arch }} \
+            --publish never \
             -c.mac.identity=null \
             -c.mac.hardenedRuntime=false
 
