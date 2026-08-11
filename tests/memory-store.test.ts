@@ -40,6 +40,38 @@ describe("MemoryStore", () => {
     expect(store.snapshot().facts).toHaveLength(1);
   });
 
+  it("persists token usage with configured model snapshots", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-usage-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    await store.recordTokenUsage({
+      modelId: "work-openai",
+      modelName: "OpenAI work",
+      model: "gpt-5.6",
+      apiProtocol: "responses",
+      requestType: "quick-reply",
+      channel: "lark",
+      inputTokens: 1200,
+      outputTokens: 180,
+      totalTokens: 1380,
+      cachedTokens: 200,
+      reasoningTokens: 40,
+      reported: true,
+      latencyMs: 760
+    });
+
+    const records = new MemoryStore(path);
+    await records.load();
+    expect(records.tokenUsage().records[0]).toMatchObject({
+      modelId: "work-openai",
+      model: "gpt-5.6",
+      totalTokens: 1380,
+      requestType: "quick-reply"
+    });
+  });
+
   it("persists, updates, and removes Markdown memory files", async () => {
     const directory = await mkdtemp(join(tmpdir(), "contextcue-documents-test-"));
     temporaryDirectories.push(directory);

@@ -26,6 +26,7 @@ const api: ContextCueApi = {
   addFact: (fact: Pick<MemoryFact, "category" | "content" | "contactId" | "source">) =>
     ipcRenderer.invoke("memory:fact-add", fact),
   deleteFact: (id: string) => ipcRenderer.invoke("memory:fact-delete", id),
+  getTokenUsage: () => ipcRenderer.invoke("usage:get"),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   saveSettings: (settings: SaveSettingsRequest) =>
     ipcRenderer.invoke("settings:save", settings),

@@ -9,6 +9,8 @@ import type {
   MemoryDocument,
   MemoryFact,
   MemorySnapshot,
+  TokenUsageRecord,
+  TokenUsageSnapshot,
   UserProfile
 } from "../../src/shared/types";
 import { inferImageInputSupport } from "../../src/shared/model-capabilities";
@@ -79,6 +81,7 @@ export const DEFAULT_DATA: AppData = {
   contacts: [],
   facts: [],
   acceptedReplies: [],
+  tokenUsage: [],
   settings: {
     models: [{
       id: "openai-default",
@@ -159,7 +162,8 @@ function migrate(input: LegacyAppData): AppData {
     encryptedApiKeys: input.encryptedApiKeys ?? (input.encryptedApiKey ? { [activeModelId]: input.encryptedApiKey } : undefined),
     contacts,
     facts: Array.isArray(input.facts) ? input.facts : [],
-    acceptedReplies: Array.isArray(input.acceptedReplies) ? input.acceptedReplies.slice(-100) : []
+    acceptedReplies: Array.isArray(input.acceptedReplies) ? input.acceptedReplies.slice(-100) : [],
+    tokenUsage: Array.isArray(input.tokenUsage) ? input.tokenUsage.slice(-5000) : []
   };
 }
 
@@ -170,6 +174,7 @@ function isPristineInstall(data: AppData): boolean {
   return data.contacts.length === 0
     && data.facts.length === 0
     && data.acceptedReplies.length === 0
+    && data.tokenUsage.length === 0
     && JSON.stringify(data.profile) === JSON.stringify(defaults.profile)
     && JSON.stringify(data.documents.map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...document }) => document))
       === JSON.stringify(defaults.documents.map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...document }) => document))
@@ -239,7 +244,8 @@ export async function importLegacyBrandData(currentFilePath: string, legacyFileP
     contacts: mergeById(current.contacts, legacy.contacts),
     documents: mergeById(current.documents, legacy.documents),
     facts: mergeById(current.facts, legacy.facts),
-    acceptedReplies: mergeById(current.acceptedReplies, legacy.acceptedReplies).slice(-100)
+    acceptedReplies: mergeById(current.acceptedReplies, legacy.acceptedReplies).slice(-100),
+    tokenUsage: mergeById(current.tokenUsage, legacy.tokenUsage).slice(-5000)
   };
   const changed = JSON.stringify(merged) !== JSON.stringify(current);
   if (changed) await writeDataFile(currentFilePath, merged);
@@ -279,6 +285,10 @@ export class MemoryStore {
       facts: structuredClone(this.data.facts),
       acceptedReplies: structuredClone(this.data.acceptedReplies)
     };
+  }
+
+  tokenUsage(): TokenUsageSnapshot {
+    return { records: structuredClone(this.data.tokenUsage).reverse() };
   }
 
   settings(configuredModelIds: Set<string>): AppSettings {
@@ -365,6 +375,16 @@ export class MemoryStore {
   async rememberAcceptedReply(reply: Omit<AcceptedReply, "id" | "createdAt">): Promise<void> {
     this.data.acceptedReplies.push({ ...reply, id: randomUUID(), createdAt: new Date().toISOString() });
     this.data.acceptedReplies = this.data.acceptedReplies.slice(-100);
+    await this.persist();
+  }
+
+  async recordTokenUsage(record: Omit<TokenUsageRecord, "id" | "createdAt">): Promise<void> {
+    this.data.tokenUsage.push({
+      ...structuredClone(record),
+      id: randomUUID(),
+      createdAt: new Date().toISOString()
+    });
+    this.data.tokenUsage = this.data.tokenUsage.slice(-5000);
     await this.persist();
   }
 

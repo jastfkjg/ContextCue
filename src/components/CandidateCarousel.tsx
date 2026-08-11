@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
 import type { CandidateReply, ChannelId } from "../shared/types";
 import { contextCueApi } from "../lib/api";
+import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
 
 interface Props {
   candidates: CandidateReply[];
@@ -17,9 +18,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
   const [feedback, setFeedback] = useState("");
   const pointerStart = useRef<number | null>(null);
-  const wheelDistance = useRef(0);
-  const wheelLocked = useRef(false);
-  const wheelEndTimer = useRef<number | null>(null);
+  const horizontalSwipe = useRef(createHorizontalSwipeTracker());
 
   const move = (next: number) => {
     const wrapped = (next + candidates.length) % candidates.length;
@@ -48,24 +47,16 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  useEffect(() => () => {
-    if (wheelEndTimer.current !== null) window.clearTimeout(wheelEndTimer.current);
-  }, []);
-
   const handleTrackpadSwipe = (event: React.WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaX) <= Math.abs(event.deltaY) || Math.abs(event.deltaX) < 1) return;
     event.preventDefault();
-    if (wheelEndTimer.current !== null) window.clearTimeout(wheelEndTimer.current);
-    wheelEndTimer.current = window.setTimeout(() => {
-      wheelDistance.current = 0;
-      wheelLocked.current = false;
-    }, 180);
-    if (wheelLocked.current) return;
-    wheelDistance.current += event.deltaX;
-    if (Math.abs(wheelDistance.current) < 32) return;
-    move(index + (wheelDistance.current > 0 ? 1 : -1));
-    wheelDistance.current = 0;
-    wheelLocked.current = true;
+    const direction = consumeHorizontalSwipe(
+      horizontalSwipe.current,
+      event.deltaX,
+      event.deltaY,
+      event.timeStamp
+    );
+    if (direction) move(index + direction);
   };
 
   const candidate = candidates[index];

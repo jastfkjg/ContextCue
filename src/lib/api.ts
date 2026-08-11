@@ -5,6 +5,7 @@ import type {
   ContextCueApi,
   MemoryDocument,
   MemorySnapshot,
+  TokenUsageRecord,
   UserProfile
 } from "../shared/types";
 
@@ -109,6 +110,37 @@ let demoSettings: AppSettings = {
   autoShowOverlay: true
 };
 
+const demoUsageModels = [
+  { id: "openai-default", name: "OpenAI", model: "gpt-5.6-luna", protocol: "responses" as const },
+  { id: "local-demo", name: "Local vision", model: "qwen3-vl", protocol: "chat-completions" as const }
+];
+
+const demoTokenUsage: TokenUsageRecord[] = Array.from({ length: 24 }, (_, index) => {
+  const configured = demoUsageModels[index % 3 === 0 ? 1 : 0];
+  const inputTokens = configured.id === "openai-default" ? 1860 + (index % 5) * 164 : 2380 + (index % 4) * 210;
+  const outputTokens = configured.id === "openai-default" ? 286 + (index % 4) * 42 : 342 + (index % 3) * 58;
+  const createdAt = new Date();
+  createdAt.setDate(createdAt.getDate() - Math.floor(index / 2));
+  createdAt.setHours(index % 2 ? 9 : 16, 18 + index, 0, 0);
+  return {
+    id: `demo-usage-${index}`,
+    modelId: configured.id,
+    modelName: configured.name,
+    model: configured.model,
+    apiProtocol: configured.protocol,
+    requestType: index % 4 === 0 ? "reply" : "quick-reply",
+    channel: (["wechat", "slack", "lark"] as const)[index % 3],
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cachedTokens: configured.id === "openai-default" ? Math.round(inputTokens * .24) : 0,
+    reasoningTokens: index % 5 === 0 ? 64 : 0,
+    reported: true,
+    latencyMs: configured.id === "openai-default" ? 1240 + index * 17 : 780 + index * 13,
+    createdAt: createdAt.toISOString()
+  };
+});
+
 const demoResult: GenerationResult = {
   candidates: [
     {
@@ -174,6 +206,7 @@ const browserDemoApi: ContextCueApi = {
     demoMemory = { ...demoMemory, facts: demoMemory.facts.filter((item) => item.id !== id) };
     return demoMemory;
   },
+  getTokenUsage: async () => ({ records: demoTokenUsage }),
   getSettings: async () => demoSettings,
   saveSettings: async (settings) => {
     const { apiKeys = {}, ...rest } = settings;

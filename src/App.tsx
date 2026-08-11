@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowLeftRight,
+  BarChart3,
   Bot,
   Brain,
   Camera,
@@ -12,6 +13,8 @@ import {
   CircleHelp,
   CircleDot,
   Command,
+  Cpu,
+  Clock,
   CornerDownLeft,
   ExternalLink,
   House,
@@ -29,6 +32,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   Trash2,
   UserRound,
   Wifi,
@@ -47,10 +51,11 @@ import type {
   MemoryDocument,
   MemoryDocumentScope,
   MemorySnapshot,
-  PermissionStatus
+  PermissionStatus,
+  TokenUsageRecord
 } from "./shared/types";
 
-type ViewId = "home" | "memory" | "channels" | "settings";
+type ViewId = "home" | "memory" | "channels" | "usage" | "settings";
 
 const CHANNEL_LABELS: Record<ChannelId, string> = {
   wechat: "WeChat",
@@ -639,6 +644,157 @@ function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh:
   </div>;
 }
 
+type UsageRange = "7d" | "30d" | "all";
+
+const USAGE_COLORS = ["#789f13", "#5577c6", "#c17b36", "#8b62aa", "#3f9186", "#bd596c"];
+
+function usageModelKey(record: Pick<TokenUsageRecord, "modelId" | "model">): string {
+  return `${record.modelId}::${record.model}`;
+}
+
+function usageColor(key: string): string {
+  let hash = 2166136261;
+  for (const character of key) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return USAGE_COLORS[(hash >>> 0) % USAGE_COLORS.length];
+}
+
+function compactTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (value >= 10_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}K`;
+  return value.toLocaleString();
+}
+
+function usageDayKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function UsageView({ settings }: { settings: AppSettings | null }) {
+  const [records, setRecords] = useState<TokenUsageRecord[] | null>(null);
+  const [range, setRange] = useState<UsageRange>("30d");
+  const [modelFilter, setModelFilter] = useState("all");
+
+  useEffect(() => {
+    let active = true;
+    void contextCueApi.getTokenUsage().then((snapshot) => {
+      if (active) setRecords(snapshot.records);
+    }).catch(() => {
+      if (active) setRecords([]);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const modelOptions = useMemo(() => {
+    const options = new Map<string, { key: string; name: string; model: string }>();
+    settings?.models.forEach((model) => options.set(`${model.id}::${model.model}`, { key: `${model.id}::${model.model}`, name: model.name, model: model.model }));
+    records?.forEach((record) => {
+      const key = usageModelKey(record);
+      if (!options.has(key)) options.set(key, { key, name: record.modelName, model: record.model });
+    });
+    return [...options.values()];
+  }, [records, settings]);
+
+  const rangedRecords = useMemo(() => {
+    if (!records) return [];
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    if (range !== "all") start.setDate(start.getDate() - (range === "7d" ? 6 : 29));
+    return records.filter((record) => {
+      const inRange = range === "all" || new Date(record.createdAt).getTime() >= start.getTime();
+      const matchesModel = modelFilter === "all" || usageModelKey(record) === modelFilter;
+      return inRange && matchesModel;
+    });
+  }, [modelFilter, range, records]);
+
+  const totals = useMemo(() => rangedRecords.reduce((sum, record) => ({
+    input: sum.input + (record.reported ? record.inputTokens : 0),
+    output: sum.output + (record.reported ? record.outputTokens : 0),
+    total: sum.total + (record.reported ? record.totalTokens : 0),
+    reported: sum.reported + (record.reported ? 1 : 0),
+    latency: sum.latency + record.latencyMs
+  }), { input: 0, output: 0, total: 0, reported: 0, latency: 0 }), [rangedRecords]);
+
+  const chart = useMemo(() => {
+    const chartDays = range === "7d" ? 7 : 30;
+    const days = Array.from({ length: chartDays }, (_, index) => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() - (chartDays - index - 1));
+      return { key: usageDayKey(date), date, total: 0, models: new Map<string, number>() };
+    });
+    const byDay = new Map(days.map((day) => [day.key, day]));
+    rangedRecords.forEach((record) => {
+      if (!record.reported) return;
+      const day = byDay.get(usageDayKey(new Date(record.createdAt)));
+      if (!day) return;
+      const key = usageModelKey(record);
+      day.total += record.totalTokens;
+      day.models.set(key, (day.models.get(key) ?? 0) + record.totalTokens);
+    });
+    return { days, max: Math.max(1, ...days.map((day) => day.total)) };
+  }, [range, rangedRecords]);
+
+  const breakdown = useMemo(() => {
+    const models = new Map<string, { key: string; name: string; model: string; input: number; output: number; total: number; requests: number }>();
+    rangedRecords.forEach((record) => {
+      const key = usageModelKey(record);
+      const current = models.get(key) ?? { key, name: record.modelName, model: record.model, input: 0, output: 0, total: 0, requests: 0 };
+      current.requests += 1;
+      if (record.reported) {
+        current.input += record.inputTokens;
+        current.output += record.outputTokens;
+        current.total += record.totalTokens;
+      }
+      models.set(key, current);
+    });
+    return [...models.values()].sort((left, right) => right.total - left.total);
+  }, [rangedRecords]);
+
+  if (!records) return <div className="workspace-loading"><span className="spinner"/> Loading token usage…</div>;
+  const average = totals.reported ? Math.round(totals.total / totals.reported) : 0;
+  const chartModelKeys = breakdown.map((model) => model.key);
+  const rangeLabel = range === "all" ? "All time" : range === "7d" ? "Last 7 days" : "Last 30 days";
+
+  return <div className="workspace usage-workspace">
+    <header className="workspace-header usage-header">
+      <div><span className="eyebrow">TOKEN USAGE</span><h1>Model usage, request by request.</h1><p>Counts come directly from each provider response and stay on this device.</p></div>
+      <div className="usage-filters">
+        <label><span>Model</span><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)}><option value="all">All models</option>{modelOptions.map((model) => <option key={model.key} value={model.key}>{model.name} · {model.model}</option>)}</select></label>
+        <div className="usage-range" role="group" aria-label="Usage period">{(["7d", "30d", "all"] as const).map((option) => <button key={option} className={range === option ? "usage-range--active" : ""} onClick={() => setRange(option)}>{option === "all" ? "All" : option}</button>)}</div>
+      </div>
+    </header>
+
+    <section className="usage-summary" aria-label={`${rangeLabel} summary`}>
+      <div className="usage-primary-total"><span>Total tokens · {rangeLabel}</span><strong>{compactTokens(totals.total)}</strong><small>{totals.reported} of {rangedRecords.length} requests reported usage</small></div>
+      <dl><div><dt>Input</dt><dd>{compactTokens(totals.input)}</dd></div><div><dt>Output</dt><dd>{compactTokens(totals.output)}</dd></div><div><dt>Requests</dt><dd>{rangedRecords.length.toLocaleString()}</dd></div><div><dt>Avg / request</dt><dd>{compactTokens(average)}</dd></div></dl>
+    </section>
+
+    {rangedRecords.length ? <>
+      <section className="usage-trend">
+        <div className="usage-section-heading"><div><TrendingUp size={18}/><span><strong>Daily token usage</strong><small>{range === "all" ? "Latest 30 days · all-time totals above" : rangeLabel}</small></span></div><div className="usage-legend">{breakdown.map((model) => <span key={model.key}><i style={{ backgroundColor: usageColor(model.key) }}/>{model.name}</span>)}</div></div>
+        <div className="usage-chart" aria-label="Daily token usage chart">
+          <div className="usage-chart-scale"><span>{compactTokens(chart.max)}</span><span>{compactTokens(Math.round(chart.max / 2))}</span><span>0</span></div>
+          <div className="usage-chart-plot">{chart.days.map((day, index) => <div className="usage-chart-day" key={day.key} title={`${new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(day.date)} · ${day.total.toLocaleString()} tokens`}><div className="usage-bar-stack">{chartModelKeys.map((key) => <i key={key} style={{ height: `${((day.models.get(key) ?? 0) / chart.max) * 100}%`, backgroundColor: usageColor(key) }}/>)}</div><span>{(chart.days.length === 7 || index === 0 || index === chart.days.length - 1 || index % 7 === 0) ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(day.date) : ""}</span></div>)}</div>
+        </div>
+      </section>
+
+      <section className="usage-models">
+        <div className="usage-section-heading"><div><Cpu size={18}/><span><strong>By configured model</strong><small>Each connection and model ID is tracked separately.</small></span></div></div>
+        <div className="usage-model-table"><header><span>Model</span><span>Share</span><span>Requests</span><span>Input</span><span>Output</span><span>Total</span></header>{breakdown.map((model) => <div key={model.key}><span className="usage-model-name"><i style={{ backgroundColor: usageColor(model.key) }}/><span><strong>{model.name}</strong><small>{model.model}</small></span></span><span><span className="usage-share-track"><i style={{ width: `${totals.total ? model.total / totals.total * 100 : 0}%`, backgroundColor: usageColor(model.key) }}/></span><small>{totals.total ? Math.round(model.total / totals.total * 100) : 0}%</small></span><span>{model.requests}</span><span>{compactTokens(model.input)}</span><span>{compactTokens(model.output)}</span><strong>{compactTokens(model.total)}</strong></div>)}</div>
+      </section>
+
+      <section className="usage-history">
+        <div className="usage-section-heading"><div><Clock size={18}/><span><strong>Request history</strong><small>Most recent 50 calls in this view.</small></span></div></div>
+        <div className="usage-history-table"><header><span>When</span><span>Model</span><span>Request</span><span>Input</span><span>Output</span><span>Total</span></header>{rangedRecords.slice(0, 50).map((record) => <div key={record.id}><time dateTime={record.createdAt}>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(record.createdAt))}</time><span className="history-model"><i style={{ backgroundColor: usageColor(usageModelKey(record)) }}/><span><strong>{record.modelName}</strong><small>{record.model}</small></span></span><span><strong>{record.requestType === "quick-reply" ? "Quick reply" : record.requestType === "connection-test" ? "Connection test" : "Workspace reply"}</strong><small>{record.channel ? CHANNEL_LABELS[record.channel] : "Configuration"} · {(record.latencyMs / 1000).toFixed(1)}s</small></span><span>{record.reported ? record.inputTokens.toLocaleString() : "—"}</span><span>{record.reported ? record.outputTokens.toLocaleString() : "—"}</span><strong>{record.reported ? record.totalTokens.toLocaleString() : "Not reported"}</strong></div>)}</div>
+      </section>
+    </> : <section className="usage-empty"><BarChart3 size={28}/><h2>No usage in this view</h2><p>Generate a reply or widen the selected date range. Providers that do not report token counts will still appear in request history.</p></section>}
+  </div>;
+}
+
 type AutoSaveState = "saved" | "pending" | "saving" | "incomplete" | "error";
 type ConnectionState = { state: "testing" | "success" | "error"; message: string; latencyMs?: number };
 
@@ -896,6 +1052,7 @@ export function App() {
     { id: "home", label: "Home", icon: <House size={18}/> },
     { id: "memory", label: "Memory", icon: <Brain size={18}/> },
     { id: "channels", label: "Channels", icon: <MessageSquareText size={18}/> },
+    { id: "usage", label: "Token usage", icon: <BarChart3 size={18}/> },
     { id: "settings", label: "Settings", icon: <Settings size={18}/> }
   ];
 
@@ -916,6 +1073,7 @@ export function App() {
             {view === "home" && <HomeView sources={sources} refreshSources={refreshSources} permissions={permissions} settings={settings} onOpenSettings={() => setView("settings")} onOpenChannels={() => setView("channels")}/>}
             {view === "memory" && <MemoryView memory={memory} onChange={setMemory}/>} 
             {view === "channels" && <ChannelsView sources={sources} refresh={refreshSources}/>} 
+            {view === "usage" && <UsageView settings={settings}/>}
             {view === "settings" && <SettingsView settings={settings} onChange={setSettings}/>} 
           </motion.div>
         </AnimatePresence>

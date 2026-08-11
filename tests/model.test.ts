@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppData, GenerateRequest } from "../src/shared/types";
 import { DEFAULT_DATA } from "../electron/services/memory-store";
-import { buildMemoryContext, generateWithModel, parseModelJson, testModelConnection } from "../electron/services/model";
+import { buildMemoryContext, generateWithModel, parseModelJson, responseTokenUsage, testModelConnection } from "../electron/services/model";
 
 function data(): AppData {
   return {
@@ -84,6 +84,31 @@ describe("model memory and parsing", () => {
     expect(result.candidates[0].text).toBe("One {confirmed}");
   });
 
+  it("normalizes token usage from Responses and Chat Completions providers", () => {
+    expect(responseTokenUsage({ usage: {
+      input_tokens: 1200,
+      output_tokens: 240,
+      total_tokens: 1440,
+      input_tokens_details: { cached_tokens: 300 },
+      output_tokens_details: { reasoning_tokens: 80 }
+    } }, 812.4)).toEqual({
+      inputTokens: 1200,
+      outputTokens: 240,
+      totalTokens: 1440,
+      cachedTokens: 300,
+      reasoningTokens: 80,
+      reported: true,
+      latencyMs: 812
+    });
+    expect(responseTokenUsage({ usage: { prompt_tokens: 900, completion_tokens: 100 } })).toMatchObject({
+      inputTokens: 900,
+      outputTokens: 100,
+      totalTokens: 1000,
+      reported: true
+    });
+    expect(responseTokenUsage({})).toMatchObject({ totalTokens: 0, reported: false });
+  });
+
   it("merges partial candidate objects and removes duplicate replies", () => {
     const first = JSON.stringify({
       candidates: [{ text: "One", tone: "Direct", strategy: "Confirm" }],
@@ -142,6 +167,7 @@ describe("model memory and parsing", () => {
 
   it("sends screenshot and memory through the Responses API", async () => {
     const payload = {
+      usage: { input_tokens: 1800, output_tokens: 260, total_tokens: 2060 },
       output: [{ content: [{ type: "output_text", text: JSON.stringify({
         candidates: [
           { text: "One", tone: "Direct", strategy: "Confirm" },
@@ -158,6 +184,7 @@ describe("model memory and parsing", () => {
     );
     const result = await generateWithModel(data(), "secret", request, "data:image/png;base64,abc", fetcher as typeof fetch);
     expect(result.candidates[0].text).toBe("One");
+    expect(result.tokenUsage).toMatchObject({ inputTokens: 1800, outputTokens: 260, totalTokens: 2060, reported: true });
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, options] = fetcher.mock.calls[0]!;
     expect(url).toBe("https://api.openai.com/v1/responses");

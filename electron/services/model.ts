@@ -4,6 +4,7 @@ import type {
   CandidateReply,
   GenerateRequest,
   GenerationResult,
+  GenerationTokenUsage,
   LlmConfig,
   MemorySuggestion,
   TestModelConnectionResult
@@ -269,6 +270,30 @@ function responseText(payload: unknown, protocol: ApiProtocol): string {
   return "";
 }
 
+function tokenCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0;
+}
+
+export function responseTokenUsage(payload: unknown, latencyMs = 0): GenerationTokenUsage {
+  const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  const usage = root.usage && typeof root.usage === "object" ? root.usage as Record<string, unknown> : {};
+  const inputDetails = (usage.input_tokens_details ?? usage.prompt_tokens_details) as Record<string, unknown> | undefined;
+  const outputDetails = (usage.output_tokens_details ?? usage.completion_tokens_details) as Record<string, unknown> | undefined;
+  const hasReportedCount = ["input_tokens", "output_tokens", "prompt_tokens", "completion_tokens", "total_tokens"]
+    .some((key) => typeof usage[key] === "number");
+  const inputTokens = tokenCount(usage.input_tokens ?? usage.prompt_tokens);
+  const outputTokens = tokenCount(usage.output_tokens ?? usage.completion_tokens);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: tokenCount(usage.total_tokens) || inputTokens + outputTokens,
+    cachedTokens: tokenCount(inputDetails?.cached_tokens),
+    reasoningTokens: tokenCount(outputDetails?.reasoning_tokens),
+    reported: hasReportedCount,
+    latencyMs: Math.max(0, Math.round(latencyMs))
+  };
+}
+
 function normalizeReplyObject(value: unknown): Record<string, unknown> | undefined {
   if (Array.isArray(value)) return { candidates: value };
   if (!value || typeof value !== "object") return undefined;
@@ -418,6 +443,7 @@ export async function generateWithModel(
     ? responsesBody(data, request, screenshot)
     : chatCompletionsBody(data, request, screenshot);
 
+  const startedAt = performance.now();
   const response = await fetcher(endpoint, {
     method: "POST",
     headers: {
@@ -443,7 +469,10 @@ export async function generateWithModel(
     });
     throw new Error("The model returned no final answer. For a thinking model, disable thinking or increase its output budget.");
   }
-  return parseModelJson(text, quickCandidateCount(data, request));
+  return {
+    ...parseModelJson(text, quickCandidateCount(data, request)),
+    tokenUsage: responseTokenUsage(payload, performance.now() - startedAt)
+  };
 }
 
 export async function testModelConnection(
@@ -500,6 +529,7 @@ export async function testModelConnection(
   return {
     ok: true,
     latencyMs,
-    message: `${configuration.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.`
+    message: `${configuration.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.`,
+    tokenUsage: responseTokenUsage(payload, latencyMs)
   };
 }

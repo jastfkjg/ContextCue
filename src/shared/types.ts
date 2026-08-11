@@ -28,6 +28,32 @@ export interface GenerationResult {
   detectedLanguage: string;
   memorySuggestions: MemorySuggestion[];
   generatedAt: string;
+  tokenUsage?: GenerationTokenUsage;
+}
+
+export interface GenerationTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+  reported: boolean;
+  latencyMs: number;
+}
+
+export interface TokenUsageRecord extends GenerationTokenUsage {
+  id: string;
+  modelId: string;
+  modelName: string;
+  model: string;
+  apiProtocol: ApiProtocol;
+  requestType: "reply" | "quick-reply" | "connection-test";
+  channel?: ChannelId;
+  createdAt: string;
+}
+
+export interface TokenUsageSnapshot {
+  records: TokenUsageRecord[];
 }
 
 export interface GenerateRequest {
@@ -129,6 +155,7 @@ export interface TestModelConnectionResult {
   ok: true;
   message: string;
   latencyMs: number;
+  tokenUsage?: GenerationTokenUsage;
 }
 
 export interface AppData {
@@ -138,6 +165,7 @@ export interface AppData {
   contacts: ContactMemory[];
   facts: MemoryFact[];
   acceptedReplies: AcceptedReply[];
+  tokenUsage: TokenUsageRecord[];
   settings: StoredAppSettings;
   encryptedApiKeys?: Record<string, string>;
 }
@@ -186,6 +214,7 @@ export interface ContextCueApi {
   deleteContact: (id: string) => Promise<MemorySnapshot>;
   addFact: (fact: Pick<MemoryFact, "category" | "content" | "contactId" | "source">) => Promise<MemorySnapshot>;
   deleteFact: (id: string) => Promise<MemorySnapshot>;
+  getTokenUsage: () => Promise<TokenUsageSnapshot>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
   testModelConnection: (request: TestModelConnectionRequest) => Promise<TestModelConnectionResult>;

@@ -24,6 +24,7 @@ import type {
   OverlayStatus,
   SaveSettingsRequest,
   TestModelConnectionRequest,
+  TokenUsageRecord,
   UseReplyRequest,
   UserProfile
 } from "../src/shared/types";
@@ -366,6 +367,7 @@ async function showQuickReply(): Promise<void> {
       quick: true
     };
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
+    await rememberTokenUsage(request, result, snapshot);
     const contact = result.detectedContact;
     overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
     positionOverlayNearInput();
@@ -407,6 +409,26 @@ function readApiKey(modelId = store.getData().settings.activeModelId): string {
 
 function configuredModelIds(): Set<string> {
   return new Set(store.getData().settings.models.filter((model) => Boolean(readApiKey(model.id))).map((model) => model.id));
+}
+
+async function rememberTokenUsage(
+  request: GenerateRequest,
+  result: Awaited<ReturnType<typeof generateWithModel>>,
+  data = store.getData()
+): Promise<void> {
+  if (!result.tokenUsage) return;
+  const model = data.settings.models.find((item) => item.id === data.settings.activeModelId) ?? data.settings.models[0];
+  if (!model) return;
+  const record: Omit<TokenUsageRecord, "id" | "createdAt"> = {
+    ...result.tokenUsage,
+    modelId: model.id,
+    modelName: model.name,
+    model: model.model,
+    apiProtocol: model.apiProtocol,
+    requestType: request.quick ? "quick-reply" : "reply",
+    channel: request.channel
+  };
+  await store.recordTokenUsage(record);
 }
 
 function encryptApiKey(apiKey: string): string | undefined {
@@ -510,7 +532,9 @@ function registerIpc(): void {
 
   ipcMain.handle("reply:generate", async (_event, request: GenerateRequest) => {
     const screenshot = request.imageDataUrl || (request.sourceId ? await captureSource(request.sourceId) : "");
-    const result = await generateWithModel(store.getData(), readApiKey(), request, screenshot);
+    const snapshot = store.getData();
+    const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
+    await rememberTokenUsage(request, result, snapshot);
     const contact = request.contact?.trim() || result.detectedContact;
     if (store.getData().settings.autoShowOverlay) {
       clearQuickReplySession();
@@ -547,11 +571,23 @@ function registerIpc(): void {
     (_event, fact: Pick<MemoryFact, "category" | "content" | "contactId" | "source">) => store.addFact(fact)
   );
   ipcMain.handle("memory:fact-delete", (_event, id: string) => store.deleteFact(id));
+  ipcMain.handle("usage:get", () => store.tokenUsage());
 
   ipcMain.handle("settings:get", () => store.settings(configuredModelIds()));
-  ipcMain.handle("settings:test-model", (_event, incoming: TestModelConnectionRequest) =>
-    testModelConnection(incoming.model, incoming.apiKey?.trim() || readApiKey(incoming.model.id))
-  );
+  ipcMain.handle("settings:test-model", async (_event, incoming: TestModelConnectionRequest) => {
+    const result = await testModelConnection(incoming.model, incoming.apiKey?.trim() || readApiKey(incoming.model.id));
+    if (result.tokenUsage) {
+      await store.recordTokenUsage({
+        ...result.tokenUsage,
+        modelId: incoming.model.id,
+        modelName: incoming.model.name,
+        model: incoming.model.model,
+        apiProtocol: incoming.model.apiProtocol,
+        requestType: "connection-test"
+      });
+    }
+    return result;
+  });
   ipcMain.handle(
     "settings:save",
     async (_event, incoming: SaveSettingsRequest) => {
