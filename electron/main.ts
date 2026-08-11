@@ -60,7 +60,7 @@ let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
 
 const OVERLAY_RESULT_SIZE = { width: 420, height: 112 };
-const OVERLAY_LOADING_SIZE = { width: 420, height: 122 };
+const OVERLAY_LOADING_SIZE = { width: 420, height: 96 };
 const OVERLAY_ERROR_SIZE = { width: 420, height: 150 };
 
 function rendererUrl(mode?: "overlay"): string {
@@ -321,7 +321,14 @@ async function showQuickReply(): Promise<void> {
     quickOverlayHiddenForContext = false;
     quickReplyAnchor = screen.getCursorScreenPoint();
     mainWindow?.hide();
-    showOverlayStatus({ state: "loading", message: "Reading the current conversation…" });
+    const initialSnapshot = store.getData();
+    const initialModel = initialSnapshot.settings.models.find((item) => item.id === initialSnapshot.settings.activeModelId)
+      ?? initialSnapshot.settings.models[0];
+    showOverlayStatus({
+      state: "loading",
+      message: "Reading the current conversation…",
+      modelName: initialModel?.model || initialModel?.name || "Configured model"
+    });
     const [frontmost, availableSources] = await Promise.all([
       frontmostWindow(),
       // Window IDs and browser titles can change whenever the user switches a
@@ -358,7 +365,8 @@ async function showQuickReply(): Promise<void> {
       ?? snapshot.settings.models[0];
     showOverlayStatus({
       state: "loading",
-      message: `Generating ${snapshot.settings.candidateCount} replies with ${model?.name || "the current model"}…`
+      message: `Generating ${snapshot.settings.candidateCount} replies…`,
+      modelName: model?.model || model?.name || "Configured model"
     });
     const request: GenerateRequest = {
       sourceId: source.id,
@@ -557,6 +565,20 @@ function registerIpc(): void {
       contact: request.contact
     }).catch((error) => console.warn("[memory] could not remember accepted reply", error));
     return { copied: true, ...pasteResult };
+  });
+  ipcMain.on("overlay:move-by", (event, deltaX: number, deltaY: number) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
+
+    const [currentX, currentY] = overlayWindow.getPosition();
+    const [width, height] = overlayWindow.getSize();
+    const pointer = screen.getCursorScreenPoint();
+    const { workArea } = screen.getDisplayNearestPoint(pointer);
+    const margin = 8;
+    const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum);
+    const nextX = clamp(Math.round(currentX + deltaX), workArea.x + margin, workArea.x + workArea.width - width - margin);
+    const nextY = clamp(Math.round(currentY + deltaY), workArea.y + margin, workArea.y + workArea.height - height - margin);
+    overlayWindow.setPosition(nextX, nextY, false);
   });
   ipcMain.handle("overlay:hide", () => hideQuickOverlay());
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
 import type { CandidateReply, ChannelId } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
@@ -10,15 +10,15 @@ interface Props {
   channel: ChannelId;
   contact: string;
   compact?: boolean;
-  onClose?: () => void;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, compact = false, onClose }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, compact = false }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
   const [feedback, setFeedback] = useState("");
   const pointerStart = useRef<number | null>(null);
+  const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const horizontalSwipe = useRef(createHorizontalSwipeTracker());
 
   const move = (next: number) => {
@@ -73,11 +73,38 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
       <div
         className="candidate-stage"
         onWheel={handleTrackpadSwipe}
-        onPointerDown={(event) => { pointerStart.current = event.clientX; }}
+        onPointerDown={(event) => {
+          if (compact && event.button === 0) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
+            return;
+          }
+          pointerStart.current = event.clientX;
+        }}
+        onPointerMove={(event) => {
+          const drag = windowDrag.current;
+          if (!compact || !drag || drag.pointerId !== event.pointerId) return;
+          const deltaX = event.screenX - drag.screenX;
+          const deltaY = event.screenY - drag.screenY;
+          if (deltaX || deltaY) {
+            contextCueApi.moveOverlay(deltaX, deltaY);
+            drag.screenX = event.screenX;
+            drag.screenY = event.screenY;
+          }
+        }}
         onPointerUp={(event) => {
+          if (compact) {
+            if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+            return;
+          }
           if (pointerStart.current === null) return;
           const delta = event.clientX - pointerStart.current;
           if (Math.abs(delta) > 48) move(index + (delta < 0 ? 1 : -1));
+          pointerStart.current = null;
+        }}
+        onPointerCancel={(event) => {
+          if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
           pointerStart.current = null;
         }}
       >
@@ -119,12 +146,6 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
               {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
               <span>{status === "pasted" ? "Inserted" : "Insert"}</span>
             </button>
-            {onClose && (
-              <button className="compact-text-action" onClick={onClose} aria-label="Close quick reply">
-                <X size={16} />
-                <span>Close</span>
-              </button>
-            )}
             <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
               {candidates.map((_, dot) => (
                 <button

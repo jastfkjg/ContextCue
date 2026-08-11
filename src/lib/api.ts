@@ -228,11 +228,21 @@ const browserDemoApi: ContextCueApi = {
   openScreenSettings: async () => undefined,
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
   onOverlayResult: (callback) => {
-    if (new URLSearchParams(window.location.search).get("mode") !== "overlay") return () => undefined;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") !== "overlay" || params.get("preview") === "loading") return () => undefined;
     const timeout = window.setTimeout(() => callback({ ...demoResult, channel: "wechat", contact: demoResult.detectedContact }), 650);
     return () => window.clearTimeout(timeout);
   },
-  onOverlayStatus: () => () => undefined,
+  onOverlayStatus: (callback) => {
+    if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
+    const timeout = window.setTimeout(() => callback({
+      state: "loading",
+      message: "Generating 3 replies…",
+      modelName: "qwen3.7-flash"
+    }), 0);
+    return () => window.clearTimeout(timeout);
+  },
+  moveOverlay: () => undefined,
   hideOverlay: async () => undefined
 };
 

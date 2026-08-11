@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CircleAlert, ScanLine } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { CircleAlert, X } from "lucide-react";
 import type { ChannelId, GenerationResult, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
@@ -9,6 +9,29 @@ type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string }
 export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Waiting for a conversation…" });
+  const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
+
+  const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
+  };
+
+  const continueWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = windowDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.screenX - drag.screenX;
+    const deltaY = event.screenY - drag.screenY;
+    if (!deltaX && !deltaY) return;
+    contextCueApi.moveOverlay(deltaX, deltaY);
+    drag.screenX = event.screenX;
+    drag.screenY = event.screenY;
+  };
+
+  const endWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   useEffect(() => {
     const stopResult = contextCueApi.onOverlayResult((result) => {
@@ -30,22 +53,46 @@ export function OverlayApp() {
   }, []);
 
   return (
-    <main className="overlay-root">
+    <main className={`overlay-root ${!payload ? `overlay-root--${status.state}` : ""}`}>
+      <button
+        className="overlay-hover-close"
+        onClick={() => void contextCueApi.hideOverlay()}
+        aria-label="Close quick reply"
+        title="Close"
+      >
+        <X size={17} />
+      </button>
       {payload ? (
         <CandidateCarousel
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}
           compact
-          onClose={() => void contextCueApi.hideOverlay()}
         />
       ) : (
-        <div className={`overlay-empty overlay-empty--${status.state}`}>
-          <span className="overlay-state-icon">{status.state === "loading" ? <ScanLine size={24}/> : <CircleAlert size={24}/>}</span>
-          <strong>{status.state === "loading" ? "Drafting beside your chat" : "Couldn’t open quick reply"}</strong>
-          <p>{status.message}</p>
-          {status.state === "error" && <button onClick={() => void contextCueApi.hideOverlay()}>Close</button>}
-        </div>
+        status.state === "loading" ? (
+          <div
+            className="overlay-processing"
+            role="status"
+            aria-label={`${status.message} Model: ${status.modelName || "Configured model"}`}
+            onPointerDown={beginWindowDrag}
+            onPointerMove={continueWindowDrag}
+            onPointerUp={endWindowDrag}
+            onPointerCancel={endWindowDrag}
+          >
+            <div>
+              <strong>Generating replies…</strong>
+              <span>Model · {status.modelName || "Configured model"}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="overlay-empty overlay-empty--error">
+            <span className="overlay-state-icon"><CircleAlert size={24}/></span>
+            <strong>Couldn’t open quick reply</strong>
+            <p>{status.message}</p>
+            <button onClick={() => void contextCueApi.hideOverlay()}>Close</button>
+          </div>
+        )
       )}
     </main>
   );

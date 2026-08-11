@@ -45,6 +45,7 @@ const api: ContextCueApi = {
     ipcRenderer.on("overlay:status", listener);
     return () => ipcRenderer.removeListener("overlay:status", listener);
   },
+  moveOverlay: (deltaX, deltaY) => ipcRenderer.send("overlay:move-by", deltaX, deltaY),
   hideOverlay: () => ipcRenderer.invoke("overlay:hide")
 };
 

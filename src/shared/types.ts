@@ -199,6 +199,7 @@ export interface PermissionStatus {
 export interface OverlayStatus {
   state: "loading" | "error";
   message: string;
+  modelName?: string;
   channel?: ChannelId;
 }
 
@@ -223,5 +224,6 @@ export interface ContextCueApi {
   getPermissions: () => Promise<PermissionStatus>;
   onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string }) => void) => () => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
+  moveOverlay: (deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
 }
