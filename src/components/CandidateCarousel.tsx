@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, X } from "lucide-react";
 import type { CandidateReply, ChannelId } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
@@ -10,9 +10,10 @@ interface Props {
   channel: ChannelId;
   contact: string;
   compact?: boolean;
+  onClose?: () => void;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, compact = false }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, compact = false, onClose }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
@@ -109,40 +110,60 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
       )}
       <div className="candidate-actions">
         {compact ? (
-          <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
-            {candidates.map((_, dot) => (
-              <button
-                key={dot}
-                className={dot === index ? "active" : ""}
-                onClick={() => move(dot)}
-                aria-label={`Show candidate ${dot + 1}`}
-              />
-            ))}
-          </div>
+          <>
+            <button className="compact-text-action" onClick={() => move(index + 1)} aria-label="Show next reply">
+              <ArrowLeftRight size={16} />
+              <span>Next</span>
+            </button>
+            <button className="compact-text-action" onClick={() => void useReply(true)} aria-label={status === "pasted" ? "Inserted" : insertLabel}>
+              {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
+              <span>{status === "pasted" ? "Inserted" : "Insert"}</span>
+            </button>
+            {onClose && (
+              <button className="compact-text-action" onClick={onClose} aria-label="Close quick reply">
+                <X size={16} />
+                <span>Close</span>
+              </button>
+            )}
+            <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
+              {candidates.map((_, dot) => (
+                <button
+                  key={dot}
+                  className={dot === index ? "active" : ""}
+                  onClick={() => move(dot)}
+                  aria-label={`Show candidate ${dot + 1}`}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="arrow-pair">
             <button className="icon-button" onClick={() => move(index - 1)} aria-label="Previous candidate"><ArrowLeft size={17} /></button>
             <button className="icon-button" onClick={() => move(index + 1)} aria-label="Next candidate"><ArrowRight size={17} /></button>
           </div>
         )}
-        <button
-          className={`button button--quiet ${compact ? "compact-action" : ""}`}
-          onClick={() => void useReply(false)}
-          aria-label={status === "copied" ? "Copied" : "Copy reply"}
-          title={status === "copied" ? "Copied" : "Copy reply"}
-        >
-          {status === "copied" ? <Check size={compact ? 15 : 16} /> : <Copy size={compact ? 15 : 16} />}
-          {!compact && (status === "copied" ? "Copied" : "Copy")}
-        </button>
-        <button
-          className={`button button--primary ${compact ? "compact-action" : ""}`}
-          onClick={() => void useReply(true)}
-          aria-label={status === "pasted" ? "Inserted" : insertLabel}
-          title={status === "pasted" ? "Inserted" : insertLabel}
-        >
-          {status === "pasted" ? <Check size={compact ? 15 : 16} /> : <CornerDownLeft size={compact ? 15 : 16} />}
-          {!compact && (status === "pasted" ? "Inserted" : insertLabel)}
-        </button>
+        {!compact && (
+          <>
+            <button
+              className="button button--quiet"
+              onClick={() => void useReply(false)}
+              aria-label={status === "copied" ? "Copied" : "Copy reply"}
+              title={status === "copied" ? "Copied" : "Copy reply"}
+            >
+              {status === "copied" ? <Check size={16} /> : <Copy size={16} />}
+              {status === "copied" ? "Copied" : "Copy"}
+            </button>
+            <button
+              className="button button--primary"
+              onClick={() => void useReply(true)}
+              aria-label={status === "pasted" ? "Inserted" : insertLabel}
+              title={status === "pasted" ? "Inserted" : insertLabel}
+            >
+              {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
+              {status === "pasted" ? "Inserted" : insertLabel}
+            </button>
+          </>
+        )}
       </div>
       {feedback && <p className="candidate-feedback" role="status">{feedback}</p>}
     </section>

@@ -59,9 +59,9 @@ let quickOverlayHiddenForContext = false;
 let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
 
-const OVERLAY_RESULT_SIZE = { width: 360, height: 136 };
-const OVERLAY_LOADING_SIZE = { width: 360, height: 142 };
-const OVERLAY_ERROR_SIZE = { width: 360, height: 174 };
+const OVERLAY_RESULT_SIZE = { width: 420, height: 112 };
+const OVERLAY_LOADING_SIZE = { width: 420, height: 122 };
+const OVERLAY_ERROR_SIZE = { width: 420, height: 150 };
 
 function rendererUrl(mode?: "overlay"): string {
   const url = process.env.ELECTRON_RENDERER_URL;
@@ -145,8 +145,8 @@ function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: OVERLAY_RESULT_SIZE.width,
     height: OVERLAY_RESULT_SIZE.height,
-    minWidth: 320,
-    minHeight: 118,
+    minWidth: 340,
+    minHeight: 96,
     frame: false,
     transparent: true,
     resizable: false,
