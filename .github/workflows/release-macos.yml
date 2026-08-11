@@ -1,0 +1,112 @@
+name: Release macOS
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x64
+            runner: macos-15-intel
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          expected_tag="v${package_version}"
+
+          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${package_version}."
+            echo "Expected tag: ${expected_tag}"
+            exit 1
+          fi
+
+      - name: Run checks
+        run: |
+          npm run lint
+          npm test
+
+      - name: Build unsigned DMG
+        run: |
+          npm run build
+          npx electron-builder \
+            --mac dmg \
+            --${{ matrix.arch }} \
+            -c.mac.identity=null \
+            -c.mac.hardenedRuntime=false
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextcue-macos-${{ matrix.arch }}
+          path: dist/ContextCue-*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download packaged DMGs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: contextcue-macos-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum ContextCue-*.dmg > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release-assets/ContextCue-*.dmg \
+            release-assets/SHA256SUMS \
+            --verify-tag \
+            --latest \
+            --title "ContextCue ${GITHUB_REF_NAME} — macOS Beta" \
+            --notes "Unsigned early-access macOS build. On first launch, Control-click ContextCue, choose Open, and confirm the macOS prompt." \
+            --generate-notes
