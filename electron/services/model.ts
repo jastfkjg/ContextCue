@@ -75,10 +75,25 @@ export function buildMemoryContext(data: AppData, request: GenerateRequest): str
   const accepted = data.acceptedReplies
     .filter((item) => item.channel === request.channel && (!contactName || item.contact.toLowerCase() === contactName))
     .slice(request.quick ? -3 : -6);
+  const relevantDocuments = data.documents
+    .filter((document) => {
+      if (!document.enabled) return false;
+      if (document.scope === "global") return true;
+      if (document.scope === "channel") return document.scopeValue === request.channel;
+      return Boolean(contactName && document.scopeValue?.trim().toLowerCase() === contactName);
+    })
+    .slice(0, request.quick ? 6 : 16)
+    .map((document) => ({
+      file: document.filename,
+      scope: document.scope,
+      content: document.content.replace(/<!--[^]*?-->/g, "").trim()
+    }))
+    .filter((document) => document.content);
 
   return JSON.stringify(
     {
-      user_profile: data.profile,
+      memory_documents: relevantDocuments,
+      legacy_user_profile: relevantDocuments.length ? undefined : data.profile,
       relationship: contact ?? null,
       relevant_long_term_facts: relevantFacts.map(({ category, content }) => ({ category, content })),
       examples_the_user_previously_accepted: accepted.map(({ text }) => text)

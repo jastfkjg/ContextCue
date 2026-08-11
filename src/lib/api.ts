@@ -3,6 +3,7 @@ import type {
   CaptureSource,
   GenerationResult,
   ContextCueApi,
+  MemoryDocument,
   MemorySnapshot,
   UserProfile
 } from "../shared/types";
@@ -55,6 +56,26 @@ let demoMemory: MemorySnapshot = {
     avoid: "Overly enthusiastic language and unnecessary exclamation marks",
     customRules: ["Lead with the answer", "Offer concrete next steps"]
   },
+  documents: [
+    {
+      id: "profile",
+      filename: "profile.md",
+      content: "# About me\n\nI’m Alex, a product designer working across China and Europe.\n\n## Current context\n\nI’m building tools that make AI assistance feel more personal and controllable.",
+      scope: "global",
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "preferences",
+      filename: "preferences.md",
+      content: "# Communication preferences\n\n- Match the language of the conversation\n- Be warm, concise, calm, and direct\n- Lead with the answer\n- Offer concrete next steps\n\n## Avoid\n\n- Generic AI phrasing\n- Unnecessary exclamation marks\n- Invented facts",
+      scope: "global",
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ],
   contacts: [],
   facts: [],
   acceptedReplies: []
@@ -124,6 +145,15 @@ const browserDemoApi: ContextCueApi = {
     return demoResult;
   },
   getMemory: async () => demoMemory,
+  saveMemoryDocument: async (document: MemoryDocument) => {
+    const saved = { ...document, updatedAt: new Date().toISOString() };
+    demoMemory = { ...demoMemory, documents: [...demoMemory.documents.filter((item) => item.id !== saved.id), saved] };
+    return demoMemory;
+  },
+  deleteMemoryDocument: async (id) => {
+    demoMemory = { ...demoMemory, documents: demoMemory.documents.filter((item) => item.id !== id) };
+    return demoMemory;
+  },
   saveProfile: async (profile: UserProfile) => (demoMemory = { ...demoMemory, profile }),
   saveContact: async (contact) => {
     demoMemory = { ...demoMemory, contacts: [contact, ...demoMemory.contacts.filter((item) => item.id !== contact.id)] };

@@ -15,19 +15,20 @@ import {
   ExternalLink,
   House,
   Eye,
+  FileText,
+  Globe2,
+  Hash,
   Keyboard,
   LockKeyhole,
-  MemoryStick,
   MessageSquareText,
   Plus,
   RefreshCw,
-  Save,
   ScanLine,
   Settings,
   ShieldCheck,
   Sparkles,
   Trash2,
-  Users,
+  UserRound,
   Wifi,
   X
 } from "lucide-react";
@@ -39,12 +40,12 @@ import type {
   AppSettings,
   CaptureSource,
   ChannelId,
-  ContactMemory,
   GenerationResult,
   LlmConfig,
+  MemoryDocument,
+  MemoryDocumentScope,
   MemorySnapshot,
-  PermissionStatus,
-  UserProfile
+  PermissionStatus
 } from "./shared/types";
 
 type ViewId = "home" | "memory" | "channels" | "settings";
@@ -67,18 +68,6 @@ const CHANNEL_MARKS: Record<ChannelId, string> = {
   teams: "T",
   whatsapp: "W",
   other: "·"
-};
-
-const emptyProfile: UserProfile = {
-  displayName: "",
-  pronouns: "",
-  role: "",
-  company: "",
-  about: "",
-  preferredLanguage: "Match the conversation",
-  writingStyle: "Warm, concise, natural, and direct",
-  avoid: "Generic AI phrasing and invented facts",
-  customRules: []
 };
 
 function sourceLabel(source?: CaptureSource): string {
@@ -378,100 +367,237 @@ function ReplyWorkspace({
   );
 }
 
-function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onChange: (memory: MemorySnapshot) => void }) {
-  const [profile, setProfile] = useState<UserProfile>(memory?.profile ?? emptyProfile);
-  const [rule, setRule] = useState("");
-  const [fact, setFact] = useState("");
-  const [editingContact, setEditingContact] = useState<ContactMemory | null>(null);
-  const [saved, setSaved] = useState(false);
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={index}>{part.slice(1, -1)}</code>;
+    return part;
+  });
+}
 
-  useEffect(() => { if (memory) setProfile(memory.profile); }, [memory]);
+function MarkdownPreview({ content }: { content: string }) {
+  const lines = content.replace(/<!--[^]*?-->/g, "").split("\n");
+  const blocks: React.ReactNode[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) continue;
+    if (/^[-*] /.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*] /.test(lines[index])) {
+        items.push(lines[index].replace(/^[-*] /, ""));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(<ul key={`list-${index}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}</ul>);
+    } else if (line.startsWith("### ")) blocks.push(<h3 key={index}>{renderInlineMarkdown(line.slice(4))}</h3>);
+    else if (line.startsWith("## ")) blocks.push(<h2 key={index}>{renderInlineMarkdown(line.slice(3))}</h2>);
+    else if (line.startsWith("# ")) blocks.push(<h1 key={index}>{renderInlineMarkdown(line.slice(2))}</h1>);
+    else if (line.startsWith("> ")) blocks.push(<blockquote key={index}>{renderInlineMarkdown(line.slice(2))}</blockquote>);
+    else if (/^---+$/.test(line.trim())) blocks.push(<hr key={index}/>);
+    else blocks.push(<p key={index}>{renderInlineMarkdown(line)}</p>);
+  }
+  return <div className="markdown-preview">{blocks.length ? blocks : <div className="markdown-empty"><FileText size={25}/><strong>This file is empty</strong><span>Switch to Write and add the context you want ContextCue to use.</span></div>}</div>;
+}
+
+type MemorySaveState = "saved" | "pending" | "saving" | "error";
+
+function scopeLabel(document: MemoryDocument): string {
+  if (document.scope === "global") return "Every conversation";
+  if (document.scope === "channel") return document.scopeValue ? CHANNEL_LABELS[document.scopeValue as ChannelId] ?? document.scopeValue : "Choose a channel";
+  return document.scopeValue || "Choose a person";
+}
+
+function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onChange: (memory: MemorySnapshot) => void }) {
+  const [documents, setDocuments] = useState<MemoryDocument[]>(memory?.documents ?? []);
+  const [selectedId, setSelectedId] = useState(memory?.documents[0]?.id ?? "");
+  const [mode, setMode] = useState<"write" | "preview">("write");
+  const [saveState, setSaveState] = useState<MemorySaveState>("saved");
+  const saveTimer = useRef<number>();
+  const pendingDocument = useRef<MemoryDocument | null>(null);
+  const revision = useRef(0);
+
+  useEffect(() => {
+    if (!memory || pendingDocument.current) return;
+    setDocuments(memory.documents);
+    setSelectedId((current) => memory.documents.some((document) => document.id === current) ? current : (memory.documents[0]?.id ?? ""));
+  }, [memory]);
+
+  useEffect(() => () => {
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    if (pendingDocument.current) void contextCueApi.saveMemoryDocument(pendingDocument.current);
+  }, []);
+
   if (!memory) return <div className="workspace-loading"><span className="spinner" /> Loading memory…</div>;
 
-  const saveProfile = async () => {
-    const next = await contextCueApi.saveProfile(profile);
+  const activeDocument = documents.find((document) => document.id === selectedId) ?? documents[0];
+
+  const persistDocument = async (document: MemoryDocument, currentRevision: number) => {
+    setSaveState("saving");
+    try {
+      const next = await contextCueApi.saveMemoryDocument(document);
+      if (revision.current !== currentRevision) return;
+      pendingDocument.current = null;
+      setDocuments(next.documents);
+      onChange(next);
+      setSaveState("saved");
+    } catch {
+      if (revision.current === currentRevision) setSaveState("error");
+    }
+  };
+
+  const updateDocument = (patch: Partial<MemoryDocument>) => {
+    if (!activeDocument) return;
+    const updated = { ...activeDocument, ...patch, updatedAt: new Date().toISOString() };
+    setDocuments((current) => current.map((document) => document.id === updated.id ? updated : document));
+    pendingDocument.current = updated;
+    revision.current += 1;
+    const currentRevision = revision.current;
+    setSaveState("pending");
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => void persistDocument(updated, currentRevision), 650);
+  };
+
+  const flushPendingDocument = () => {
+    if (!pendingDocument.current) return;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    void persistDocument(pendingDocument.current, revision.current);
+  };
+
+  const selectDocument = (id: string) => {
+    flushPendingDocument();
+    setSelectedId(id);
+  };
+
+  const addDocument = async () => {
+    flushPendingDocument();
+    const now = new Date().toISOString();
+    const existing = new Set(documents.map((document) => document.filename));
+    let index = 1;
+    while (existing.has(index === 1 ? "untitled.md" : `untitled-${index}.md`)) index += 1;
+    const filename = index === 1 ? "untitled.md" : `untitled-${index}.md`;
+    const document: MemoryDocument = {
+      id: crypto.randomUUID(),
+      filename,
+      content: "# Untitled memory\n\n",
+      scope: "global",
+      enabled: true,
+      createdAt: now,
+      updatedAt: now
+    };
+    const next = await contextCueApi.saveMemoryDocument(document);
+    pendingDocument.current = null;
+    setDocuments(next.documents);
+    setSelectedId(document.id);
+    setMode("write");
     onChange(next);
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1400);
+    window.requestAnimationFrame(() => documentFilenameInputRef.current?.select());
   };
-  const addRule = () => {
-    if (!rule.trim()) return;
-    setProfile((current) => ({ ...current, customRules: [...current.customRules, rule.trim()] }));
-    setRule("");
+
+  const documentFilenameInputRef = useRef<HTMLInputElement>(null);
+
+  const deleteDocument = async () => {
+    if (!activeDocument || !window.confirm(`Delete ${activeDocument.filename}? This cannot be undone.`)) return;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    pendingDocument.current = null;
+    const next = await contextCueApi.deleteMemoryDocument(activeDocument.id);
+    setDocuments(next.documents);
+    setSelectedId(next.documents[0]?.id ?? "");
+    onChange(next);
   };
-  const addFact = async () => {
-    if (!fact.trim()) return;
-    onChange(await contextCueApi.addFact({ category: "personal", content: fact, source: "manual" }));
-    setFact("");
-  };
-  const saveContact = async (contact: ContactMemory) => {
-    onChange(await contextCueApi.saveContact(contact));
-    setEditingContact(null);
-  };
+
+  const scopeOptions: Array<{ value: MemoryDocumentScope; label: string; icon: React.ReactNode }> = [
+    { value: "global", label: "Global", icon: <Globe2 size={14}/> },
+    { value: "channel", label: "Channel", icon: <Hash size={14}/> },
+    { value: "person", label: "Person", icon: <UserRound size={14}/> }
+  ];
+  const tokenEstimate = activeDocument ? Math.max(1, Math.ceil(activeDocument.content.length / 4)) : 0;
 
   return (
     <div className="workspace memory-workspace">
-      <header className="workspace-header">
-        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Teach ContextCue what matters.</h1></div>
-        <div className="privacy-note"><ShieldCheck size={17} /><span>Stored as a local file<br/><small>Inspectable and removable</small></span></div>
+      <header className="workspace-header memory-header">
+        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Memory files</h1><p>Write the background and preferences ContextCue should carry into your replies.</p></div>
+        <div className="privacy-note"><ShieldCheck size={17}/><span>Stored locally<br/><small>Inspectable and removable</small></span></div>
       </header>
-      <div className="memory-layout">
-        <section className="profile-editor">
-          <div className="section-bar"><div><span className="step-number">YOU</span><h2>Voice & profile</h2></div><button className="button button--primary" onClick={() => void saveProfile()}>{saved ? <Check size={16}/> : <Save size={16}/>} {saved ? "Saved" : "Save"}</button></div>
-          <div className="form-grid">
-            <label><span>Name</span><input value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} placeholder="How should ContextCue refer to you?" /></label>
-            <label><span>Role</span><input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} placeholder="Product lead, founder…" /></label>
-            <label><span>Company / context</span><input value={profile.company} onChange={(e) => setProfile({ ...profile, company: e.target.value })} placeholder="Optional" /></label>
-            <label><span>Language</span><input value={profile.preferredLanguage} onChange={(e) => setProfile({ ...profile, preferredLanguage: e.target.value })} /></label>
+
+      <div className="memory-studio">
+        <aside className="memory-file-rail" aria-label="Memory files">
+          <div className="memory-rail-heading"><div><span>FILES</span><strong>{documents.length} Markdown {documents.length === 1 ? "file" : "files"}</strong></div><button onClick={() => void addDocument()} aria-label="New memory file" title="New memory file"><Plus size={17}/></button></div>
+          <div className="memory-file-list">
+            {documents.map((document) => (
+              <button key={document.id} className={document.id === activeDocument?.id ? "memory-file--active" : ""} onClick={() => selectDocument(document.id)} aria-pressed={document.id === activeDocument?.id}>
+                <span className="memory-file-icon"><FileText size={16}/></span>
+                <span><strong>{document.filename}</strong><small>{scopeLabel(document)}</small></span>
+                <i className={document.enabled ? "is-enabled" : ""}/>
+              </button>
+            ))}
           </div>
-          <label className="full-field"><span>About you</span><textarea value={profile.about} onChange={(e) => setProfile({ ...profile, about: e.target.value })} placeholder="Stable context that helps with replies." /></label>
-          <label className="full-field"><span>Your writing style</span><textarea value={profile.writingStyle} onChange={(e) => setProfile({ ...profile, writingStyle: e.target.value })} /></label>
-          <label className="full-field"><span>Avoid</span><textarea value={profile.avoid} onChange={(e) => setProfile({ ...profile, avoid: e.target.value })} /></label>
-          <div className="rules-block">
-            <span className="field-title">Rules that always apply</span>
-            <div className="rule-list">
-              {profile.customRules.map((item, index) => <span key={`${item}-${index}`}>{item}<button onClick={() => setProfile({ ...profile, customRules: profile.customRules.filter((_, i) => i !== index) })}><X size={13}/></button></span>)}
-            </div>
-            <div className="inline-input"><input value={rule} onChange={(e) => setRule(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addRule(); }} placeholder="e.g. Never use exclamation marks"/><button onClick={addRule}><Plus size={16}/> Add rule</button></div>
-          </div>
+          <div className="memory-rail-note"><ShieldCheck size={14}/><span>Only enabled, relevant files are added to a reply.</span></div>
+        </aside>
+
+        <section className="memory-document-pane">
+          {activeDocument ? (
+            <>
+              <header className="memory-document-header">
+                <div className="memory-filename"><FileText size={17}/><input ref={documentFilenameInputRef} value={activeDocument.filename} onChange={(event) => updateDocument({ filename: event.target.value })} onBlur={() => { if (!activeDocument.filename.trim()) updateDocument({ filename: "untitled.md" }); }} aria-label="Memory filename" spellCheck={false}/></div>
+                <div className="memory-editor-actions">
+                  <div className="memory-view-switch" role="group" aria-label="Document view">
+                    <button className={mode === "write" ? "is-active" : ""} onClick={() => setMode("write")} aria-pressed={mode === "write"}>Write</button>
+                    <button className={mode === "preview" ? "is-active" : ""} onClick={() => setMode("preview")} aria-pressed={mode === "preview"}><Eye size={13}/> Preview</button>
+                  </div>
+                  <span className={`memory-save-state memory-save-state--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner"/> : saveState === "saved" ? <Check size={13}/> : <i/>}{saveState === "pending" ? "Unsaved" : saveState === "saving" ? "Saving" : saveState === "error" ? "Couldn’t save" : "Saved"}</span>
+                </div>
+              </header>
+              <AnimatePresence mode="wait" initial={false}>
+                {mode === "write" ? (
+                  <motion.div key="write" className="memory-editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <textarea value={activeDocument.content} onChange={(event) => updateDocument({ content: event.target.value })} aria-label={`Edit ${activeDocument.filename}`} placeholder="# What should ContextCue know?" spellCheck/>
+                    <footer><span>Markdown supported</span><span>{activeDocument.content.length.toLocaleString()} characters</span></footer>
+                  </motion.div>
+                ) : (
+                  <motion.div key="preview" className="memory-preview-scroll" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><MarkdownPreview content={activeDocument.content}/></motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          ) : (
+            <div className="memory-no-document"><FileText size={28}/><h2>Create your first memory file</h2><p>Keep background, preferences, people, or project context in plain Markdown.</p><button className="button button--primary" onClick={() => void addDocument()}><Plus size={15}/> New file</button></div>
+          )}
         </section>
 
-        <aside className="memory-sidebar">
-          <section>
-            <div className="aside-title"><div><Users size={16}/><h3>Relationships</h3></div><button onClick={() => setEditingContact({ id: crypto.randomUUID(), name: "", relation: "", channel: "other", tone: "", notes: "", customRules: [], lastUsedAt: new Date().toISOString() })}><Plus size={15}/></button></div>
-            <p className="aside-help">Different voice for different people.</p>
-            <div className="contact-list">
-              {memory.contacts.map((contact) => <button key={contact.id} onClick={() => setEditingContact(contact)}><span>{contact.name.slice(0, 1).toUpperCase()}</span><div><strong>{contact.name}</strong><small>{contact.relation || CHANNEL_LABELS[contact.channel]}</small></div><ChevronRight size={14}/></button>)}
-              {memory.contacts.length === 0 && <div className="list-empty">Add a manager, teammate, client, or friend.</div>}
-            </div>
-          </section>
-          <section>
-            <div className="aside-title"><div><MemoryStick size={16}/><h3>Facts & follow-ups</h3></div><span>{memory.facts.length}</span></div>
-            <div className="inline-input compact"><input value={fact} onChange={(e) => setFact(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void addFact(); }} placeholder="Something worth remembering"/><button onClick={() => void addFact()}><Plus size={15}/></button></div>
-            <div className="fact-list">
-              {memory.facts.slice(0, 12).map((item) => <div key={item.id}><em>{item.category}</em><span>{item.content}</span><button onClick={async () => onChange(await contextCueApi.deleteFact(item.id))}><Trash2 size={13}/></button></div>)}
-              {memory.facts.length === 0 && <div className="list-empty">Saved insights appear here.</div>}
-            </div>
-          </section>
-          <div className="learned-count"><strong>{memory.acceptedReplies.length}</strong><span>accepted replies available as style examples</span></div>
+        <aside className="memory-inspector">
+          {activeDocument ? (
+            <>
+              <section>
+                <span className="memory-inspector-label">INCLUDE WHEN</span>
+                <div className="memory-scope-options">
+                  {scopeOptions.map((option) => <button key={option.value} className={activeDocument.scope === option.value ? "is-active" : ""} onClick={() => updateDocument({ scope: option.value, scopeValue: option.value === "global" ? undefined : activeDocument.scope === option.value ? activeDocument.scopeValue : option.value === "channel" ? "other" : "" })} aria-pressed={activeDocument.scope === option.value}>{option.icon}{option.label}</button>)}
+                </div>
+                {activeDocument.scope === "channel" && <label className="memory-scope-value"><span>Channel</span><select value={activeDocument.scopeValue ?? "other"} onChange={(event) => updateDocument({ scopeValue: event.target.value })}>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
+                {activeDocument.scope === "person" && <label className="memory-scope-value"><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Exact contact name"/></label>}
+                <p>{activeDocument.scope === "global" ? "This file is considered for every reply." : activeDocument.scope === "channel" ? "Used only when replying in this channel." : "Used only when this contact is detected."}</p>
+              </section>
+
+              <section>
+                <span className="memory-inspector-label">STATUS</span>
+                <button className={`memory-enable-row ${activeDocument.enabled ? "is-active" : ""}`} onClick={() => updateDocument({ enabled: !activeDocument.enabled })} role="switch" aria-checked={activeDocument.enabled}>
+                  <span><strong>{activeDocument.enabled ? "Active" : "Paused"}</strong><small>{activeDocument.enabled ? "Available to ContextCue" : "Never added to replies"}</small></span><i/>
+                </button>
+                <dl className="memory-metrics"><div><dt>Context size</dt><dd>~{tokenEstimate.toLocaleString()} tokens</dd></div><div><dt>Format</dt><dd>Markdown</dd></div><div><dt>Updated</dt><dd>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(activeDocument.updatedAt))}</dd></div></dl>
+              </section>
+
+              <section className="memory-learned-section">
+                <div className="memory-inspector-title"><span className="memory-inspector-label">LEARNED</span><strong>{memory.facts.length}</strong></div>
+                <p>Facts accepted from reply suggestions stay separate and removable.</p>
+                <div className="memory-learned-list">{memory.facts.slice(0, 4).map((fact) => <div key={fact.id}><span><em>{fact.category}</em>{fact.content}</span><button aria-label={`Delete ${fact.content}`} onClick={async () => onChange(await contextCueApi.deleteFact(fact.id))}><X size={13}/></button></div>)}{memory.facts.length === 0 && <div className="memory-learned-empty">No learned facts yet.</div>}</div>
+              </section>
+
+              <button className="memory-delete-file" onClick={() => void deleteDocument()}><Trash2 size={14}/> Delete file</button>
+            </>
+          ) : <p className="memory-inspector-empty">Select a file to manage when it should be used.</p>}
         </aside>
       </div>
-      {editingContact && <ContactDialog contact={editingContact} onClose={() => setEditingContact(null)} onSave={saveContact} onDelete={async (id) => { onChange(await contextCueApi.deleteContact(id)); setEditingContact(null); }} />}
     </div>
   );
 }
-
-function ContactDialog({ contact, onClose, onSave, onDelete }: { contact: ContactMemory; onClose: () => void; onSave: (contact: ContactMemory) => void; onDelete: (id: string) => void }) {
-  const [value, setValue] = useState(contact);
-  return <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><motion.div className="dialog" initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}>
-    <header><div><span className="avatar-large">{value.name.slice(0, 1).toUpperCase() || "?"}</span><div><span>RELATIONSHIP CARD</span><h2>{value.name || "New person"}</h2></div></div><button onClick={onClose}><X size={17}/></button></header>
-    <div className="form-grid"><label><span>Name</span><input autoFocus value={value.name} onChange={(e) => setValue({ ...value, name: e.target.value })}/></label><label><span>Relationship</span><input value={value.relation} onChange={(e) => setValue({ ...value, relation: e.target.value })} placeholder="Manager, client, friend…"/></label><label><span>Channel</span><select value={value.channel} onChange={(e) => setValue({ ...value, channel: e.target.value as ChannelId })}>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><label><span>Tone</span><input value={value.tone} onChange={(e) => setValue({ ...value, tone: e.target.value })} placeholder="Respectful but concise"/></label></div>
-    <label className="full-field"><span>Notes and communication preferences</span><textarea value={value.notes} onChange={(e) => setValue({ ...value, notes: e.target.value })} placeholder="Lead with the conclusion. Offer two time slots. Avoid weekend messages…"/></label>
-    <footer>{memorySafeExisting(contact) && <button className="danger-button" onClick={() => onDelete(value.id)}><Trash2 size={15}/> Delete</button>}<span/><button className="button button--quiet" onClick={onClose}>Cancel</button><button className="button button--primary" disabled={!value.name.trim()} onClick={() => onSave({ ...value, lastUsedAt: new Date().toISOString() })}>Save relationship</button></footer>
-  </motion.div></div>;
-}
-
-function memorySafeExisting(contact: ContactMemory) { return Boolean(contact.name); }
 
 function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh: () => Promise<void> }) {
   const supported: Array<{ id: ChannelId; detail: string; level: string }> = [

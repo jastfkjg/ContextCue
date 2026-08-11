@@ -19,6 +19,7 @@ import {
 import type {
   ContactMemory,
   GenerateRequest,
+  MemoryDocument,
   MemoryFact,
   OverlayStatus,
   SaveSettingsRequest,
@@ -536,6 +537,8 @@ function registerIpc(): void {
   ipcMain.handle("overlay:hide", () => hideQuickOverlay());
 
   ipcMain.handle("memory:get", () => store.snapshot());
+  ipcMain.handle("memory:document-save", (_event, document: MemoryDocument) => store.saveMemoryDocument(document));
+  ipcMain.handle("memory:document-delete", (_event, id: string) => store.deleteMemoryDocument(id));
   ipcMain.handle("memory:profile", (_event, profile: UserProfile) => store.saveProfile(profile));
   ipcMain.handle("memory:contact-save", (_event, contact: ContactMemory) => store.saveContact(contact));
   ipcMain.handle("memory:contact-delete", (_event, id: string) => store.deleteContact(id));

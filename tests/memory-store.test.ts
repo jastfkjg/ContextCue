@@ -40,6 +40,69 @@ describe("MemoryStore", () => {
     expect(store.snapshot().facts).toHaveLength(1);
   });
 
+  it("persists, updates, and removes Markdown memory files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-documents-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    const now = new Date().toISOString();
+    await store.saveMemoryDocument({
+      id: "project-context",
+      filename: "project-context",
+      content: "# Project\r\n\r\nBuild ContextCue",
+      scope: "person",
+      scopeValue: " Lin Yue ",
+      enabled: true,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const reloaded = new MemoryStore(path);
+    await reloaded.load();
+    const document = reloaded.snapshot().documents.find((item) => item.id === "project-context");
+    expect(document).toMatchObject({ filename: "project-context.md", scopeValue: "Lin Yue" });
+    expect(document?.content).toBe("# Project\n\nBuild ContextCue");
+
+    await reloaded.deleteMemoryDocument("project-context");
+    expect(reloaded.snapshot().documents.some((item) => item.id === "project-context")).toBe(false);
+  });
+
+  it("serializes overlapping Markdown autosaves without losing a file", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-autosave-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    const now = new Date().toISOString();
+    const base = { filename: "note.md", content: "# Note", scope: "global" as const, enabled: true, createdAt: now, updatedAt: now };
+
+    await Promise.all([
+      store.saveMemoryDocument({ ...base, id: "one", filename: "one.md" }),
+      store.saveMemoryDocument({ ...base, id: "two", filename: "two.md" })
+    ]);
+
+    const documents = (await new MemoryStore(path).load()).documents;
+    expect(documents.some((item) => item.id === "one")).toBe(true);
+    expect(documents.some((item) => item.id === "two")).toBe(true);
+  });
+
+  it("turns legacy profiles and relationships into Markdown memory files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-documents-migration-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(path, JSON.stringify({
+      version: 1,
+      profile: { displayName: "Alex", writingStyle: "Brief and calm" },
+      contacts: [{ id: "lin", name: "Lin Yue", relation: "Manager", channel: "lark", tone: "Direct", notes: "", customRules: [], lastUsedAt: "2026-01-01T00:00:00.000Z" }]
+    })));
+
+    const loaded = await new MemoryStore(path).load();
+    expect(loaded.documents.find((item) => item.filename === "profile.md")?.content).toContain("Alex");
+    expect(loaded.documents.find((item) => item.filename === "preferences.md")?.content).toContain("Brief and calm");
+    expect(loaded.documents.find((item) => item.filename === "lin-yue.md")).toMatchObject({ scope: "person", scopeValue: "Lin Yue" });
+  });
+
   it("migrates the legacy single-model settings without losing its encrypted key", async () => {
     const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
     temporaryDirectories.push(directory);

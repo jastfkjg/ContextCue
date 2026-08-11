@@ -32,6 +32,27 @@ describe("model memory and parsing", () => {
     expect(context).toContain("Thursday works");
   });
 
+  it("includes only enabled Markdown files whose scope matches the reply", () => {
+    const configured = data();
+    const timestamp = "2026-01-01T00:00:00.000Z";
+    configured.documents = [
+      { id: "global", filename: "global.md", content: "Global context", scope: "global", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "lark", filename: "lark.md", content: "Lark context", scope: "channel", scopeValue: "lark", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "slack", filename: "slack.md", content: "Slack context", scope: "channel", scopeValue: "slack", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "lin", filename: "lin.md", content: "Lin context", scope: "person", scopeValue: "Lin Yue", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "other", filename: "other.md", content: "Other person context", scope: "person", scopeValue: "Someone Else", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "paused", filename: "paused.md", content: "Paused context", scope: "global", enabled: false, createdAt: timestamp, updatedAt: timestamp }
+    ];
+
+    const context = buildMemoryContext(configured, request);
+    expect(context).toContain("Global context");
+    expect(context).toContain("Lark context");
+    expect(context).toContain("Lin context");
+    expect(context).not.toContain("Slack context");
+    expect(context).not.toContain("Other person context");
+    expect(context).not.toContain("Paused context");
+  });
+
   it("parses fenced JSON and limits candidates", () => {
     const result = parseModelJson(`\`\`\`json\n${JSON.stringify({
       candidates: [

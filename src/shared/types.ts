@@ -52,6 +52,19 @@ export interface UserProfile {
   customRules: string[];
 }
 
+export type MemoryDocumentScope = "global" | "channel" | "person";
+
+export interface MemoryDocument {
+  id: string;
+  filename: string;
+  content: string;
+  scope: MemoryDocumentScope;
+  scopeValue?: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ContactMemory {
   id: string;
   name: string;
@@ -121,6 +134,7 @@ export interface TestModelConnectionResult {
 export interface AppData {
   version: 1;
   profile: UserProfile;
+  documents: MemoryDocument[];
   contacts: ContactMemory[];
   facts: MemoryFact[];
   acceptedReplies: AcceptedReply[];
@@ -130,6 +144,7 @@ export interface AppData {
 
 export interface MemorySnapshot {
   profile: UserProfile;
+  documents: MemoryDocument[];
   contacts: ContactMemory[];
   facts: MemoryFact[];
   acceptedReplies: AcceptedReply[];
@@ -164,6 +179,8 @@ export interface ContextCueApi {
   captureSource: (sourceId: string) => Promise<string>;
   generateReplies: (request: GenerateRequest) => Promise<GenerationResult>;
   getMemory: () => Promise<MemorySnapshot>;
+  saveMemoryDocument: (document: MemoryDocument) => Promise<MemorySnapshot>;
+  deleteMemoryDocument: (id: string) => Promise<MemorySnapshot>;
   saveProfile: (profile: UserProfile) => Promise<MemorySnapshot>;
   saveContact: (contact: ContactMemory) => Promise<MemorySnapshot>;
   deleteContact: (id: string) => Promise<MemorySnapshot>;

@@ -6,25 +6,76 @@ import type {
   AppData,
   AppSettings,
   ContactMemory,
+  MemoryDocument,
   MemoryFact,
   MemorySnapshot,
   UserProfile
 } from "../../src/shared/types";
 import { inferImageInputSupport } from "../../src/shared/model-capabilities";
 
+const DEFAULT_PROFILE: UserProfile = {
+  displayName: "",
+  pronouns: "",
+  role: "",
+  company: "",
+  about: "",
+  preferredLanguage: "Match the conversation",
+  writingStyle: "Warm, concise, natural, and direct",
+  avoid: "Generic AI phrasing, unnecessary exclamation marks, and invented facts",
+  customRules: []
+};
+
+function legacyDocuments(profile: UserProfile, contacts: ContactMemory[] = [], createdAt = new Date().toISOString()): MemoryDocument[] {
+  const now = createdAt;
+  const aboutLines = [
+    profile.displayName && `- Name: ${profile.displayName}`,
+    profile.pronouns && `- Pronouns: ${profile.pronouns}`,
+    profile.role && `- Role: ${profile.role}`,
+    profile.company && `- Company / context: ${profile.company}`
+  ].filter(Boolean);
+  const profileContent = [
+    "# About me",
+    "",
+    ...(aboutLines.length ? aboutLines : ["<!-- Add stable background that helps ContextCue understand you. -->"]),
+    ...(profile.about ? ["", "## Background", "", profile.about] : [])
+  ].join("\n");
+  const preferenceContent = [
+    "# Communication preferences",
+    "",
+    `- Language: ${profile.preferredLanguage}`,
+    `- Writing style: ${profile.writingStyle}`,
+    `- Avoid: ${profile.avoid}`,
+    ...(profile.customRules.length ? ["", "## Rules that always apply", "", ...profile.customRules.map((rule) => `- ${rule}`)] : [])
+  ].join("\n");
+  const people = contacts.map((contact) => ({
+    id: `person-${contact.id}`,
+    filename: `${contact.name.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-").replace(/^-|-$/g, "") || "person"}.md`,
+    content: [
+      `# ${contact.name}`,
+      "",
+      ...(contact.relation ? [`- Relationship: ${contact.relation}`] : []),
+      ...(contact.channel ? [`- Channel: ${contact.channel}`] : []),
+      ...(contact.tone ? [`- Tone: ${contact.tone}`] : []),
+      ...(contact.notes ? ["", "## Notes", "", contact.notes] : []),
+      ...(contact.customRules.length ? ["", "## Communication rules", "", ...contact.customRules.map((rule) => `- ${rule}`)] : [])
+    ].join("\n"),
+    scope: "person" as const,
+    scopeValue: contact.name,
+    enabled: true,
+    createdAt: now,
+    updatedAt: contact.lastUsedAt || now
+  }));
+  return [
+    { id: "profile", filename: "profile.md", content: profileContent, scope: "global", enabled: true, createdAt: now, updatedAt: now },
+    { id: "preferences", filename: "preferences.md", content: preferenceContent, scope: "global", enabled: true, createdAt: now, updatedAt: now },
+    ...people
+  ];
+}
+
 export const DEFAULT_DATA: AppData = {
   version: 1,
-  profile: {
-    displayName: "",
-    pronouns: "",
-    role: "",
-    company: "",
-    about: "",
-    preferredLanguage: "Match the conversation",
-    writingStyle: "Warm, concise, natural, and direct",
-    avoid: "Generic AI phrasing, unnecessary exclamation marks, and invented facts",
-    customRules: []
-  },
+  profile: DEFAULT_PROFILE,
+  documents: legacyDocuments(DEFAULT_PROFILE),
   contacts: [],
   facts: [],
   acceptedReplies: [],
@@ -60,6 +111,8 @@ type LegacyAppData = Partial<AppData> & {
 
 function migrate(input: LegacyAppData): AppData {
   const defaults = cloneDefaults();
+  const profile = { ...defaults.profile, ...(input.profile ?? {}) };
+  const contacts = Array.isArray(input.contacts) ? input.contacts : [];
   const legacySettings = input.settings;
   const configuredModelsSource = Array.isArray(legacySettings?.models) && legacySettings.models.length
     ? legacySettings.models
@@ -82,7 +135,19 @@ function migrate(input: LegacyAppData): AppData {
     : configuredModels[0].id;
   return {
     version: 1,
-    profile: { ...defaults.profile, ...(input.profile ?? {}) },
+    profile,
+    documents: Array.isArray(input.documents)
+      ? input.documents.map((document) => ({
+          ...document,
+          id: document.id || randomUUID(),
+          filename: document.filename?.trim() || "untitled.md",
+          content: typeof document.content === "string" ? document.content : "",
+          scope: ["global", "channel", "person"].includes(document.scope) ? document.scope : "global",
+          enabled: document.enabled !== false,
+          createdAt: document.createdAt || new Date().toISOString(),
+          updatedAt: document.updatedAt || document.createdAt || new Date().toISOString()
+        }))
+      : legacyDocuments(profile, contacts),
     settings: {
       ...defaults.settings,
       ...(legacySettings ?? {}),
@@ -90,7 +155,7 @@ function migrate(input: LegacyAppData): AppData {
       activeModelId
     },
     encryptedApiKeys: input.encryptedApiKeys ?? (input.encryptedApiKey ? { [activeModelId]: input.encryptedApiKey } : undefined),
-    contacts: Array.isArray(input.contacts) ? input.contacts : [],
+    contacts,
     facts: Array.isArray(input.facts) ? input.facts : [],
     acceptedReplies: Array.isArray(input.acceptedReplies) ? input.acceptedReplies.slice(-100) : []
   };
@@ -104,6 +169,8 @@ function isPristineInstall(data: AppData): boolean {
     && data.facts.length === 0
     && data.acceptedReplies.length === 0
     && JSON.stringify(data.profile) === JSON.stringify(defaults.profile)
+    && JSON.stringify(data.documents.map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...document }) => document))
+      === JSON.stringify(defaults.documents.map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...document }) => document))
     && Object.keys(data.encryptedApiKeys ?? {}).length === 0
     && data.settings.models.length === 1
     && model.id === defaultModel.id
@@ -168,6 +235,7 @@ export async function importLegacyBrandData(currentFilePath: string, legacyFileP
       ...(current.encryptedApiKeys ?? {})
     },
     contacts: mergeById(current.contacts, legacy.contacts),
+    documents: mergeById(current.documents, legacy.documents),
     facts: mergeById(current.facts, legacy.facts),
     acceptedReplies: mergeById(current.acceptedReplies, legacy.acceptedReplies).slice(-100)
   };
@@ -180,6 +248,7 @@ export async function importLegacyBrandData(currentFilePath: string, legacyFileP
 export class MemoryStore {
   private data: AppData = cloneDefaults();
   private loaded = false;
+  private persistenceQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly filePath: string) {}
 
@@ -203,6 +272,7 @@ export class MemoryStore {
   snapshot(): MemorySnapshot {
     return {
       profile: structuredClone(this.data.profile),
+      documents: structuredClone(this.data.documents),
       contacts: structuredClone(this.data.contacts),
       facts: structuredClone(this.data.facts),
       acceptedReplies: structuredClone(this.data.acceptedReplies)
@@ -221,6 +291,31 @@ export class MemoryStore {
 
   async saveProfile(profile: UserProfile): Promise<MemorySnapshot> {
     this.data.profile = structuredClone(profile);
+    await this.persist();
+    return this.snapshot();
+  }
+
+  async saveMemoryDocument(document: MemoryDocument): Promise<MemorySnapshot> {
+    const now = new Date().toISOString();
+    const filename = `${document.filename.trim().replace(/\.md$/i, "") || "untitled"}.md`;
+    const normalized: MemoryDocument = {
+      ...structuredClone(document),
+      id: document.id || randomUUID(),
+      filename,
+      content: document.content.replace(/\r\n/g, "\n"),
+      scopeValue: document.scope === "global" ? undefined : document.scopeValue?.trim(),
+      createdAt: document.createdAt || now,
+      updatedAt: now
+    };
+    const index = this.data.documents.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) this.data.documents[index] = normalized;
+    else this.data.documents.push(normalized);
+    await this.persist();
+    return this.snapshot();
+  }
+
+  async deleteMemoryDocument(id: string): Promise<MemorySnapshot> {
+    this.data.documents = this.data.documents.filter((item) => item.id !== id);
     await this.persist();
     return this.snapshot();
   }
@@ -278,6 +373,9 @@ export class MemoryStore {
   }
 
   private async persist(): Promise<void> {
-    await writeDataFile(this.filePath, this.data);
+    const snapshot = structuredClone(this.data);
+    const write = this.persistenceQueue.then(() => writeDataFile(this.filePath, snapshot));
+    this.persistenceQueue = write.catch(() => undefined);
+    await write;
   }
 }
