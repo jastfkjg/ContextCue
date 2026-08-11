@@ -16,6 +16,7 @@
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-width: 0; min-height: 100%; margin: 0; }
+html.overlay-document, html.overlay-document body, html.overlay-document #root { background: transparent; }
 body { overflow: hidden; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
@@ -427,8 +428,8 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .workspace-loading { min-height: 70vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 11px; }.workspace-loading .spinner { border-color: #d0d1c9; border-top-color: #44463f; }
 
 /* Floating overlay */
-.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(255 255 255 / 72%); border-radius: 20px; background: rgb(248 248 244 / 95%); box-shadow: 0 15px 34px rgb(37 39 32 / 16%), inset 0 1px 0 rgb(255 255 255 / 72%); backdrop-filter: blur(22px) saturate(1.08); }
-.overlay-root--loading { border-color: transparent; background: linear-gradient(rgb(248 248 244 / 97%), rgb(248 248 244 / 97%)) padding-box, linear-gradient(105deg, #eef8d3 4%, #c9e887 32%, #efffd1 54%, #b9db6b 76%, #eef8d3 96%) border-box; background-size: auto, 220% 100%; box-shadow: 0 12px 30px rgb(37 39 32 / 13%), 0 0 22px rgb(198 232 119 / 25%), inset 0 1px 0 rgb(255 255 255 / 78%); animation: processing-border 2.8s linear infinite; }
+.overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(207 208 201 / 82%); border-radius: 20px; background: rgb(248 248 244 / 95%); backdrop-filter: blur(22px) saturate(1.08); -electron-corner-smoothing: system-ui; }
+.overlay-root--loading { border-color: transparent; background: linear-gradient(rgb(248 248 244 / 97%), rgb(248 248 244 / 97%)) padding-box, linear-gradient(105deg, #eef8d3 4%, #c9e887 32%, #efffd1 54%, #b9db6b 76%, #eef8d3 96%) border-box; background-size: auto, 220% 100%; animation: processing-border 2.8s linear infinite; }
 .overlay-hover-close { position: fixed; z-index: 6; top: 10px; right: 10px; width: 29px; height: 29px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #6f716a; background: rgb(215 216 211 / 88%); opacity: 0; pointer-events: none; transform: scale(.88); transition: opacity .16s ease, color .16s ease, background .16s ease, transform .16s ease; }
 .overlay-root:hover .overlay-hover-close, .overlay-hover-close:focus-visible { opacity: 1; pointer-events: auto; transform: scale(1); }
 .overlay-hover-close:hover { color: #3d3f39; background: #ced0ca; }

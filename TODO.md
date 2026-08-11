@@ -5,14 +5,12 @@ This file tracks work that is intentionally not presented as complete in the cur
 ## P0 — production correctness and privacy
 
 - [ ] Add selectable screenshot regions and multi-monitor-aware cropping; preserve enough resolution for small chat text without sending unrelated screen areas.
-- [ ] Add a local OCR preview and redaction pass so users can remove secrets, account numbers, or unrelated names before upload.
 - [ ] Encrypt the full memory database at rest, add a key rotation path, and keep a recoverable migration from the current JSON format.
 - [ ] Add memory export, import, per-item retention, and a “delete all local data” flow.
 - [ ] Add request cancellation, retry with backoff, provider timeouts, and clearer handling for permission errors and rate limits.
 - [ ] Add strict runtime validation for every IPC payload and model response (for example with Zod).
 - [ ] Ensure the screenshot data URL is released immediately after generation and never included in crash reports or analytics.
 - [ ] Add opt-in diagnostics with aggressive redaction; keep diagnostics disabled by default.
-- [ ] Add end-to-end tests for capture → model → carousel → copy/insert on macOS and Windows.
 - [ ] Resolve dependency audit findings by upgrading/replacing transitive Electron Builder dependencies without using forced breaking upgrades.
 
 ## P0 — cross-application reliability

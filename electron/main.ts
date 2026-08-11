@@ -149,11 +149,13 @@ function createOverlayWindow(): BrowserWindow {
     minHeight: 96,
     frame: false,
     transparent: true,
+    backgroundColor: "#00000000",
+    roundedCorners: true,
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
-    hasShadow: true,
+    hasShadow: false,
     webPreferences: {
       preload: join(__dirname, "../preload/preload.mjs"),
       contextIsolation: true,
@@ -161,6 +163,7 @@ function createOverlayWindow(): BrowserWindow {
       sandbox: false
     }
   });
+  window.setHasShadow(false);
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   void loadRenderer(window, "overlay");
   window.on("closed", () => {
