@@ -34,6 +34,7 @@ import {
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { contextCueApi, isBrowserDemo } from "./lib/api";
 import { inferImageInputSupport } from "./shared/model-capabilities";
+import contextCueIcon from "../build/icon.svg";
 import type {
   AppSettings,
   CaptureSource,
@@ -752,7 +753,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span><i/><b/></span><strong>ContextCue</strong></div>
+        <div className="brand"><img src={contextCueIcon} alt=""/><strong>ContextCue</strong></div>
         <nav>{views.map((item) => <NavItem key={item.id} active={view === item.id} icon={item.icon} label={item.label} onClick={() => setView(item.id)}/>)}</nav>
         <div className="sidebar-foot">
           {isBrowserDemo && <span className="demo-badge">Browser preview</span>}

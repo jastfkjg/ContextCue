@@ -27,10 +27,7 @@ input:focus, textarea:focus, select:focus { border-color: #9ea191 !important; bo
 .app-shell { display: grid; grid-template-columns: 218px minmax(0, 1fr); height: 100vh; background: var(--surface); }
 .sidebar { padding: 28px 17px 17px; border-right: 1px solid var(--line); display: flex; flex-direction: column; background: #efeee8; -webkit-app-region: drag; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 12px 32px; font-size: 20px; letter-spacing: -.04em; }
-.brand > span { position: relative; width: 29px; height: 29px; border-radius: 8px; background: var(--accent); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 5%); }
-.brand > span i, .brand > span b { position: absolute; background: var(--ink); width: 8px; height: 8px; border-radius: 2px; }
-.brand > span i { left: 6px; top: 6px; box-shadow: 10px 10px 0 var(--ink); }
-.brand > span b { right: 6px; top: 6px; box-shadow: -10px 10px 0 var(--ink); }
+.brand > img { width: 29px; height: 29px; display: block; object-fit: contain; }
 .sidebar nav { display: flex; flex-direction: column; gap: 5px; -webkit-app-region: no-drag; }
 .nav-item { position: relative; display: flex; align-items: center; gap: 11px; width: 100%; border: 0; padding: 10px 12px; border-radius: 9px; background: transparent; color: #777970; text-align: left; }
 .nav-item:hover { color: var(--ink); background: rgb(255 255 255 / 45%); }
@@ -182,7 +179,7 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .candidate-meta { height: 37px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e4e4de; color: #71736a; font-size: 9px; font-weight: 620; text-transform: uppercase; letter-spacing: .06em; }
 .candidate-stage { min-height: 190px; display: flex; overflow: hidden; cursor: grab; touch-action: pan-y; }
 .candidate-stage:active { cursor: grabbing; }
-.candidate-copy { width: 100%; padding: 29px 27px 20px; display: flex; flex-direction: column; }
+.candidate-copy { width: 100%; padding: 29px 27px 20px; display: flex; flex-direction: column; pointer-events: none; }
 .candidate-copy p { margin: 0; font-size: 18px; line-height: 1.5; letter-spacing: -.025em; }
 .tone-label { margin-top: auto; padding-top: 22px; color: #82847b; font-size: 9px; }
 .candidate-dots { display: flex; justify-content: center; gap: 5px; padding: 4px 0 11px; }
