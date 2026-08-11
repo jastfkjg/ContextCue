@@ -1,161 +1,185 @@
-# ContextCue
+<div align="center">
+  <img src="./build/icon.png" width="96" height="96" alt="ContextCue app icon" />
+  <h1>ContextCue</h1>
+  <p><strong>Replies that stay with the conversation.</strong></p>
+  <p>A local-first desktop assistant that turns the chat in front of you into a few natural, send-ready replies.</p>
 
-ContextCue is a local-first desktop reply assistant inspired by OKEight. It captures a conversation window that you explicitly select, sends that screenshot together with relevant long-term memory to a vision-capable language model, and returns multiple send-ready replies that you can swipe through, copy, or insert.
+  <p>
+    <img alt="Electron" src="https://img.shields.io/badge/Electron-41-47848F?logo=electron&logoColor=white" />
+    <img alt="React" src="https://img.shields.io/badge/React-18-20232A?logo=react&logoColor=61DAFB" />
+    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
+    <img alt="Local first" src="https://img.shields.io/badge/local--first-by%20default-C8FF3D?labelColor=24251F&color=C8FF3D" />
+  </p>
 
-[中文说明](./README.zh-CN.md)
+  <p>
+    <a href="./README.zh-CN.md">简体中文</a>
+    · <a href="#quick-start">Quick start</a>
+    · <a href="#privacy-boundaries">Privacy</a>
+    · <a href="./TODO.md">Roadmap</a>
+  </p>
+</div>
 
-## What works today
+---
 
-- Capture visible application windows and screens with Electron's screen capture API.
-- Detect and prioritize WeChat, Slack, Lark/Feishu, Gmail, Teams, and WhatsApp windows.
-- Send a fresh screenshot to either the OpenAI Responses API or a compatible Chat Completions endpoint.
-- Generate 2–5 structurally validated reply candidates with distinct strategies.
-- Switch candidates with buttons, `←` / `→`, dots, or horizontal swipe gestures.
-- Copy a reply or perform best-effort insertion into WeChat, Slack, Lark, and other apps.
-- Open a compact always-on-top candidate panel after generation.
-- Invoke ContextCue globally with `CommandOrControl+Shift+Space`.
-- Save a local user profile, writing rules, relationship cards, durable facts, and follow-ups.
-- Learn from replies the user explicitly accepts; accepted replies become future style examples.
-- Review model-suggested memories before saving them. Nothing is added automatically.
-- Store API keys using Electron `safeStorage` (the operating-system keychain).
+ContextCue reads a screenshot of the active conversation only when you invoke it. It combines that screenshot with a small, relevant slice of local memory, asks your configured vision model for several distinct replies, and shows them in a compact panel beside the chat input.
 
-The desktop client is functional. The browser build includes a non-networked preview dataset so the interface can be reviewed without Electron; real screenshots, global shortcuts, secure key storage, and insertion require the Electron app.
+> [!IMPORTANT]
+> ContextCue requires a model that supports **image input**. Text-only models may accept an OpenAI-compatible request while silently ignoring its image; ContextCue detects known text-only models and blocks context-free generation.
 
-## Product flow
+## At a glance
+
+| | Capability | What it does |
+|---|---|---|
+| ⚡ | **Quick reply** | Press one global shortcut from the active chat—no jump to the main window. |
+| 💬 | **Context-aware drafts** | Generate 2–5 structurally validated replies with meaningfully different strategies. |
+| ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
+| ↵ | **Insert without sending** | Put the selected reply into the original chat input, ready for review. |
+| 🧠 | **Explicit local memory** | Reuse profile, relationship, preference, and accepted-reply context without automatic memory writes. |
+| ◉ | **Multiple model providers** | Configure several Responses or Chat Completions endpoints and choose the default model. |
+| 🔒 | **OS-protected keys** | Encrypt each API key with Electron `safeStorage` and the operating-system keychain. |
+
+Supported window detection includes **WeChat**, **Slack**, **Lark / Feishu**, **Gmail**, **Microsoft Teams**, **WhatsApp**, and other visible applications.
+
+## How it works
 
 ```text
-Global shortcut
-  → choose a WeChat / Slack / Lark / other visible window
-  → capture a fresh screenshot
-  → combine it with explicit user intent and relevant local memory
-  → send one multimodal request to the configured model
-  → validate 2–5 candidates
-  → swipe, copy, or insert one candidate
-  → remember only the reply the user actually chose
+Active conversation
+  └─ global shortcut
+      └─ capture that window once
+          └─ select relevant local memory
+              └─ call the configured vision model
+                  └─ validate 2–5 reply candidates
+                      └─ swipe · copy · insert
 ```
+
+The floating panel is bound to the originating application and window. Switching to another channel or browser tab hides it; returning to the original conversation restores it.
 
 ## Quick start
 
-Requirements:
+### Requirements
 
 - Node.js 22.12+
 - npm 10+
 - macOS, Windows, or Linux
-- A vision-capable model API key
+- An API key for a model that accepts image input
+
+### Run locally
 
 ```bash
+git clone https://github.com/jastfkjg/ContextCue.git
+cd ContextCue
 npm install
 npm run dev
 ```
 
-Then:
+### First reply
 
-1. Open **Settings**.
-2. Enter an API base URL, model name, protocol, and API key.
-3. On macOS, allow Screen Recording when prompted, then restart ContextCue.
-4. Open a conversation in WeChat, Slack, Lark, or another app.
-5. From the active chat, press `CommandOrControl+Shift+Space`. ContextCue reads that conversation and shows candidates beside the input area without opening the main window.
-6. Swipe, use the arrow keys, or click the arrows to switch candidates. Choose **Insert into WeChat** or press Enter to put the selected reply in the chat input without sending it.
+1. Open **Settings → Models** and add a provider, API base URL, model ID, API format, and API key.
+2. Confirm that **Image input** is marked as supported, then set that model as the default.
+3. Grant Screen Recording permission when your operating system asks. Insertion also needs Accessibility / automation permission on macOS.
+4. Open the conversation you want to answer and keep its input area visible.
+5. Press `⌘ ⇧ Space` on macOS or `Ctrl ⇧ Space` on Windows / Linux.
+6. Swipe between candidates and select the insert icon. ContextCue fills the chat input but never sends automatically.
 
-The default endpoint is `https://api.openai.com/v1`, using the Responses API and `gpt-5.6-luna`. The model can be changed in Settings. OpenAI's current model catalog states that the latest model family accepts image input through the Responses API: [OpenAI models](https://developers.openai.com/api/docs/models).
+The shortcut can be changed in Settings. If registration fails because another application already uses it, ContextCue keeps the previous shortcut.
 
-Environment variables can be used instead of entering a key in the interface:
+### Environment variables
+
+You can provide the default model connection through the environment instead of entering it in the interface:
 
 ```bash
 cp .env.example .env
 export CONTEXTCUE_API_KEY="your-key"
 export CONTEXTCUE_API_BASE_URL="https://api.openai.com/v1"
-export CONTEXTCUE_MODEL="gpt-5.6-luna"
+export CONTEXTCUE_MODEL="your-vision-model"
 npm run dev
 ```
 
 Do not commit `.env` files.
 
-## Building
+## Model providers
 
-```bash
-# Type-check and build Electron main, preload, and renderer bundles
-npm run build
+Each saved model has its own endpoint, protocol, image-input capability, and securely stored API key.
 
-# Build an unpacked application directory
-npm run package
+| API format | Use it when |
+|---|---|
+| **Responses API** | The provider explicitly supports an OpenAI-style `/responses` endpoint. |
+| **Chat Completions** | The provider exposes a compatible `/chat/completions` endpoint, including many hosted and local services. |
 
-# Create platform installers
-npm run dist
-```
+The connection test verifies endpoint access and credentials. Image capability is recorded separately because some compatible providers accept multimodal-shaped JSON but discard unsupported image parts without returning an error. Known DeepSeek text models are marked text-only during settings migration; unknown providers can be corrected in Settings.
 
-Code signing and notarization are not configured in this repository yet.
+## Local memory
 
-## Memory model
+ContextCue stores its data in Electron's platform-specific `userData/contextcue-data.json`:
 
-ContextCue stores memory at Electron's platform-specific `userData` location in `contextcue-data.json`.
+| Data | Purpose |
+|---|---|
+| `profile` | Stable personal context, language, writing style, and global rules |
+| `contacts` | Relationship-specific tone, notes, and channel |
+| `facts` | Explicitly saved preferences, durable facts, and follow-ups |
+| `acceptedReplies` | Up to 100 replies the user actually selected |
+| `settings` | Model, candidate, language, shortcut, and overlay preferences |
 
-The local memory contains:
+For each generation, ContextCue selects only the matching relationship, relevant facts, and recent accepted replies from the same channel or contact. Model-suggested memories are always opt-in.
 
-- `profile`: stable personal context, language, writing style, and global rules;
-- `contacts`: relationship-specific tone, notes, and channel;
-- `facts`: explicitly saved personal facts, preferences, and follow-ups;
-- `acceptedReplies`: up to 100 replies the user actually selected;
-- `settings`: model and interaction preferences.
+## Privacy boundaries
 
-For every generation, ContextCue selects the matching relationship, relevant facts, and up to six accepted replies from the same channel/contact. The full memory database is not sent blindly. API keys are stored separately as an encrypted `safeStorage` payload or read from `CONTEXTCUE_API_KEY`.
+- A screenshot is captured only after the user invokes ContextCue from a conversation.
+- Screenshots are sent to the configured model provider but are not written to the long-term memory file.
+- Text inside screenshots is treated as untrusted conversation data, not as instructions.
+- Long-term memory remains local except for the small relevant subset included in a generation request.
+- Saved API keys are not exposed back to the renderer process.
+- Insertion begins by copying the reply; if OS automation fails, manual paste remains available.
+- ContextCue does not record the screen in the background and does not send messages automatically.
 
-Model-generated memory suggestions are deliberately opt-in. The UI explains that nothing is saved automatically.
-
-## Security and privacy boundaries
-
-- ContextCue captures only after the user presses the global shortcut from an active conversation.
-- Screenshots are sent to the configured model provider; they do not remain in the local memory file.
-- Text inside screenshots is treated as untrusted data. The system prompt explicitly rejects instructions found inside the screenshot.
-- Long-term memory stays on the device, except for the small relevant subset included in a generation request.
-- API keys are never exposed through the renderer API after saving.
-- Direct insertion always starts by copying to the clipboard; if OS automation fails, the reply remains available to paste manually.
-
-This is an application architecture, not a guarantee about a third-party model provider. Review the provider's data retention policy before sending sensitive conversations.
+> [!NOTE]
+> These are ContextCue's application boundaries, not a guarantee about a third-party provider. Review that provider's retention policy before processing sensitive conversations.
 
 ## Architecture
 
 ```text
-electron/main.ts
-  ├─ desktopCapturer          window/screen screenshots
-  ├─ globalShortcut           system-wide invocation
-  ├─ safeStorage              encrypted API key
-  ├─ clipboard + OS scripts   copy / best-effort insertion
-  ├─ MemoryStore              local JSON memory
-  └─ Model adapter            Responses + Chat Completions
+Electron main process
+  ├─ desktopCapturer / screencapture   visible-window capture
+  ├─ globalShortcut                    system-wide invocation
+  ├─ safeStorage                       per-model API-key encryption
+  ├─ clipboard + OS automation         copy and best-effort insertion
+  ├─ MemoryStore                       local JSON memory and migration
+  └─ Model adapter                     Responses + Chat Completions
 
-electron/preload.ts
-  └─ narrow, typed IPC bridge
+Typed preload bridge
+  └─ narrow IPC surface
 
-src/
-  ├─ Home                     shortcut guide and readiness checks
-  ├─ Candidate carousel       swipe / keys / insert
-  ├─ Memory workspace         profile, relationships, facts
-  ├─ Channels workspace       WeChat / Slack / Lark discovery
-  ├─ Settings                 provider, model, shortcut
-  └─ Floating overlay         always-on-top candidates
+React renderer
+  ├─ reply and capture workspace
+  ├─ swipeable candidate carousel
+  ├─ profile, relationships, and facts
+  ├─ channel discovery
+  ├─ multi-model settings
+  └─ conversation-bound floating panel
 ```
 
-## Development commands
+The browser build uses a non-networked preview dataset for UI review. Real screenshots, global shortcuts, secure key storage, and cross-application insertion require Electron.
 
-```bash
-npm run dev          # Electron development mode
-npm run lint         # TypeScript validation
-npm test             # Unit tests
-npm run build        # Production bundles
-npm run test:watch   # Watch-mode tests
-```
+## Development
 
-Tests cover channel detection, memory persistence/deduplication, relevant-memory selection, structured model parsing, and multimodal request construction.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start Electron in development mode |
+| `npm run lint` | Run TypeScript validation |
+| `npm test` | Run unit tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run build` | Build main, preload, and renderer bundles |
+| `npm run package` | Create an unpacked desktop application |
+| `npm run dist` | Create platform installers |
+
+Code signing and notarization are not configured yet.
 
 ## Current limitations
 
-- Window screenshots are currently resized to 1440×900; selectable crop regions are planned.
-- Insertion is best-effort OS automation. Copy always remains available as a fallback.
-- Slack, Lark, and WeChat are supported through their visible windows, not historical OAuth sync.
-- Voice dictation, local OCR/redaction, calendar actions, and double-tap/hold Option interactions are planned in [TODO.md](./TODO.md).
-- The complete memory file is permission-restricted but not yet encrypted at rest; the API key is encrypted separately.
+- Screenshots are resized rather than cropped to a user-selected region.
+- Cross-application insertion remains best-effort OS automation.
+- Channel support is based on visible windows, not historical OAuth message sync.
+- Local OCR/redaction, voice input, calendar actions, and native app-specific accessibility adapters are planned.
+- The memory file is permission-restricted but not fully encrypted at rest; API keys are encrypted separately.
 
-## Project status
-
-This repository is an early desktop MVP. See [TODO.md](./TODO.md) for the production roadmap and known engineering work.
+ContextCue is an early desktop MVP, inspired by OKEight's in-conversation reply workflow. See the [roadmap](./TODO.md) for production work and planned features.
