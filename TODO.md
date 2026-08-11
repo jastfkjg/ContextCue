@@ -1,84 +1,36 @@
 # ContextCue roadmap
 
-This file tracks work that is intentionally not presented as complete in the current MVP.
+This roadmap only lists unfinished, outcome-oriented work. Keep P0 small; move a new item into P0 only after another one ships.
 
-## P0 — production correctness and privacy
+## P0 — make the core loop trustworthy
 
-- [ ] Add selectable screenshot regions and multi-monitor-aware cropping; preserve enough resolution for small chat text without sending unrelated screen areas.
-- [ ] Encrypt the full memory database at rest, add a key rotation path, and keep a recoverable migration from the current JSON format.
-- [ ] Add memory export, import, per-item retention, and a “delete all local data” flow.
-- [ ] Add request cancellation, retry with backoff, provider timeouts, and clearer handling for permission errors and rate limits.
-- [ ] Add strict runtime validation for every IPC payload and model response (for example with Zod).
-- [ ] Ensure the screenshot data URL is released immediately after generation and never included in crash reports or analytics.
-- [ ] Add opt-in diagnostics with aggressive redaction; keep diagnostics disabled by default.
-- [ ] Resolve dependency audit findings by upgrading/replacing transitive Electron Builder dependencies without using forced breaking upgrades.
+- [ ] **Bound every request:** add cancellation, generation timeouts, safe retry/backoff, and actionable permission, network, and rate-limit errors; release screenshot data in `finally` paths.
+- [ ] **Validate trust boundaries:** runtime-validate IPC payloads and model output, redact logs by default, and add regression cases for screenshot prompt injection and malformed providers.
+- [ ] **Give users control of local data:** encrypt the memory store with a recoverable migration, then add export/import, retention controls, and “delete all local data”.
+- [ ] **Capture only what is needed:** support region selection, multi-display coordinates, and adaptive crop/resolution so small text stays readable without uploading unrelated pixels.
+- [ ] **Insert into the right field:** preserve the originating app and focused control, use a macOS accessibility adapter, restore the clipboard when requested, and provide live permission re-checks.
+- [ ] **Prove the packaged flow:** add Electron smoke tests plus a manual compatibility matrix for WeChat, Slack, Lark/Feishu, Gmail, Teams, and WhatsApp.
 
-## P0 — cross-application reliability
+## P1 — improve quality, speed, and learning
 
-- [ ] Replace best-effort AppleScript/SendKeys insertion with native accessibility adapters that restore focus and insert at the exact active text field.
-- [ ] Add app-specific adapters for WeChat, Slack, Lark/Feishu, Gmail, Microsoft Teams, and WhatsApp.
-- [ ] Add a safe clipboard restore option after insertion.
-- [ ] Detect the frontmost application before ContextCue opens and target that exact process when inserting.
-- [ ] Improve channel/contact detection from window titles and visible UI; expose corrections that can be remembered.
-- [ ] Handle self-drawn WeChat UI, browser zoom, dark mode, compact sidebars, and group conversations in screenshot prompts/evals.
-- [ ] Add macOS screen-recording and accessibility permission onboarding with live re-checks after returning from System Settings.
+- [ ] **Add a correction loop:** let users revise a candidate with “From now on…”, regenerate immediately, and save the rule at global, channel, person, or conversation scope.
+- [ ] **Make memory explainable:** add provenance, confidence, freshness/expiry, conflict handling, per-contact learning controls, and a “do not remember this conversation” mode.
+- [ ] **Upgrade retrieval:** combine scoped rules with local keyword/embedding reranking; show which memories influenced a reply and let users exclude them before retrying.
+- [ ] **Learn only from evidence:** calibrate style from user-selected sent messages and accepted replies, never from received text or unchosen model drafts.
+- [ ] **Build a reply-quality eval set:** measure context grounding, voice similarity, strategy diversity, unsafe invention, insertion success, latency, and token cost across channels and UI variants.
+- [ ] **Reduce data and latency:** add optional on-device OCR/redaction, live provider capability probes, adaptive model routing, prompt-prefix caching, and time-to-first-usable-reply metrics.
 
-## P1 — interaction parity with OKEight
+## P2 — differentiated workflows
 
-- [ ] Implement native double-tap Option to capture/draft without conflicting with normal modifier use.
-- [ ] Implement hold Option for push-to-talk dictation and a single-tap toggle between verbatim and intent modes.
-- [ ] Add local speech recognition (Apple Speech/Whisper.cpp) with punctuation and filler cleanup.
-- [ ] Position the floating candidate window next to the active text field using accessibility bounds.
-- [ ] Support `Esc` to close without side effects and reliable `Enter` insertion while the original app remains focused.
-- [ ] Add a one-line “From now on…” correction field that rewrites the current candidate and saves a scoped preference.
-- [ ] Add a lightweight translation gloss for foreign-language replies without changing the reply text.
-- [ ] Add an on-device, opt-in mood label that never stores or uploads camera frames.
+- [ ] **Turn conversations into state:** track “needs reply”, “waiting on them”, “follow up later”, and “resolved” in a local relationship view.
+- [ ] **Offer confirm-before-action cards:** detect scheduling intent and draft editable calendar/follow-up actions; never execute an external action without confirmation.
+- [ ] **Add privacy-preserving voice:** support push-to-talk with local speech recognition and separate verbatim from intent mode.
+- [ ] **Expand context deliberately:** add opt-in OAuth history for priority channels and optional local vision/language models, each with explicit scopes and retention.
+- [ ] **Finish distribution:** signed/notarized builds, staged updates with rollback, release CI, launch-at-login, localization, keyboard/screen-reader audits, and Windows/Linux insertion support.
 
-## P1 — richer channels and actions
+## Roadmap guardrails
 
-- [ ] Add OAuth history sync for Slack, Lark/Feishu, and Gmail with least-privilege scopes and explicit retention controls.
-- [ ] Learn style only from messages confirmed to be sent by the user; never learn from received messages.
-- [ ] Add deterministic thread/contact identity across desktop and browser versions of each channel.
-- [ ] Integrate EventKit, Google Calendar, and Lark Calendar availability.
-- [ ] Detect proposed meetings and show an editable event card before creating anything.
-- [ ] Extract follow-ups into explicit states: needs your reply, waiting on them, follow up later, and resolved.
-- [ ] Add a local relationship-card view with tone history and open follow-ups per person.
-
-## P1 — memory quality
-
-- [ ] Replace basic keyword/contact filtering with local embeddings or a compact local reranker.
-- [ ] Add memory conflict detection, freshness/expiry, provenance, and confidence.
-- [ ] Separate global writing rules, channel rules, relationship rules, and one-conversation instructions with clear precedence.
-- [ ] Let users edit or reject inferred contact names before generation.
-- [ ] Build a style calibration flow from several user-selected sent messages and produce an inspectable style report.
-- [ ] Add evaluations that measure voice similarity, factual grounding, strategy diversity, and invented personal details.
-- [ ] Add a “do not remember this conversation” mode and per-contact learning toggle.
-
-## P2 — model and performance
-
-- [ ] Downscale/crop screenshots adaptively based on text size and model image-token limits.
-- [ ] Add a provider capability check for vision, structured output, context length, and model availability.
-- [ ] Add optional local vision/OCR and local language models for privacy-sensitive use.
-- [ ] Cache stable prompt prefixes without caching raw screenshots or transient conversation content.
-- [ ] Stream candidate status where supported and measure time-to-first-usable-reply.
-- [ ] Add per-request cost estimates and a local usage dashboard.
-- [ ] Add prompt/version telemetry only as anonymous counters, never raw content.
-
-## P2 — distribution and platform polish
-
-- [ ] Add application icons, signed installers, macOS hardened runtime/notarization, and Windows code signing.
-- [ ] Add automatic updates with staged rollout and rollback.
-- [ ] Add a tray/menu-bar mode and launch-at-login controls.
-- [ ] Add a Windows-native accessibility insertion implementation and Linux Wayland support.
-- [ ] Localize the full UI in English and Simplified Chinese.
-- [ ] Add keyboard navigation and screen-reader audits for all dialogs and carousel controls.
-- [ ] Add a first-run privacy tour explaining exactly what is captured, stored, and sent.
-
-## P2 — engineering quality
-
-- [ ] Add React component tests for swipe gestures, keyboard switching, and memory confirmation.
-- [ ] Add Playwright/Electron smoke tests on packaged builds.
-- [ ] Add release CI for macOS arm64/x64, Windows x64, and Linux.
-- [ ] Add crash recovery for interrupted atomic memory writes and retain one encrypted backup.
-- [ ] Add a formal threat model covering screenshot prompt injection, malicious providers, IPC abuse, clipboard exposure, and local memory theft.
-- [ ] Benchmark large memory stores and introduce pagination/compaction before the 250-fact limit becomes user-visible.
+- Never auto-send a message or silently create an external event.
+- Never learn from received messages, rejected drafts, or background capture.
+- Prefer a smaller, inspectable context over collecting more history.
+- Every feature that sends or stores conversation data must expose its scope, destination, and deletion path.
