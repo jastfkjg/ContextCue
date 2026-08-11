@@ -12,19 +12,25 @@
     <title>ContextCue — 回复始终跟着当前对话</title>
   </head>
   <body>
-    <a class="skip-link" href="#main">跳到主要内容</a>
+    <a class="skip-link" href="#main" data-i18n="skip">跳到主要内容</a>
 
     <header class="site-header" data-header>
-      <a class="wordmark" href="#top" aria-label="ContextCue 首页">
+      <a class="wordmark" href="#top" aria-label="ContextCue 首页" data-i18n-aria="home.aria">
         <img src="/contextcue-icon.svg" alt="" width="38" height="38" />
         <span>ContextCue</span>
       </a>
-      <nav aria-label="主要导航">
-        <a href="#how">如何工作</a>
-        <a href="#privacy">隐私</a>
-        <a href="#install">安装</a>
+      <nav aria-label="主要导航" data-i18n-aria="nav.aria">
+        <a href="#how" data-i18n="nav.how">如何工作</a>
+        <a href="#privacy" data-i18n="nav.privacy">隐私</a>
+        <a href="#install" data-i18n="nav.install">安装</a>
       </nav>
-      <a class="header-download" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download>下载测试版 <span aria-hidden="true">↘</span></a>
+      <div class="header-actions">
+        <div class="language-switch" role="group" aria-label="Language / 语言">
+          <button type="button" data-lang="zh" aria-label="中文" aria-pressed="true">中</button>
+          <button type="button" data-lang="en" aria-label="English" aria-pressed="false">EN</button>
+        </div>
+        <a class="header-download" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download><span data-i18n="download.short">下载测试版</span> <i aria-hidden="true">↘</i></a>
+      </div>
     </header>
 
     <main id="main">
@@ -32,31 +38,31 @@
         <div class="hero-grain" aria-hidden="true"></div>
         <div class="hero-copy">
           <p class="hero-kicker reveal">LOCAL-FIRST REPLY ASSISTANT · MAC</p>
-          <h1 class="reveal">回复始终跟着<br />当前对话。</h1>
-          <p class="hero-lede reveal">停留在微信、Slack、飞书或任何聊天窗口。按一下快捷键，ContextCue 就在输入框旁给出几条真正贴合上下文的回复。</p>
+          <h1 class="reveal" data-i18n-html="hero.title">回复始终跟着<br />当前对话。</h1>
+          <p class="hero-lede reveal" data-i18n="hero.lede">停留在微信、Slack、飞书或任何聊天窗口。按一下快捷键，ContextCue 就在输入框旁给出几条真正贴合上下文的回复。</p>
           <div class="hero-actions reveal">
             <a class="button button--lime" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" /></svg>
-              下载 Mac 测试版
+              <span data-i18n="hero.download">下载 Mac 测试版</span>
             </a>
-            <a class="text-link" href="#how">看看它如何工作 <span aria-hidden="true">↓</span></a>
+            <a class="text-link" href="#how"><span data-i18n="hero.how">看看它如何工作</span> <i aria-hidden="true">↓</i></a>
           </div>
-          <p class="release-note reveal"><span></span> 当前为未签名 DMG 内测版 · Apple Silicon / Intel</p>
+          <p class="release-note reveal"><span></span><span data-i18n="hero.release">当前为未签名 DMG 内测版 · Apple Silicon / Intel</span></p>
         </div>
 
-        <div class="hero-visual" data-depth-scene aria-label="ContextCue 在聊天窗口旁生成候选回复的产品界面演示">
+        <div class="hero-visual" data-depth-scene aria-label="ContextCue 在聊天窗口旁生成候选回复的产品界面演示" data-i18n-aria="demo.aria">
           <div class="conversation-window" data-depth="0.45">
             <div class="window-bar">
               <span class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></span>
               <strong>Lin Yue</strong>
-              <span class="window-status">在线</span>
+              <span class="window-status" data-i18n="demo.online">在线</span>
             </div>
             <div class="conversation-body">
-              <div class="day-label">今天 15:42</div>
-              <div class="message message--in">周四同一时间可以吗？</div>
-              <div class="message message--out">没问题，我看一下日程。</div>
-              <div class="message message--in message--wide">另外，可以在开会前把更新后的方案发给我吗？</div>
-              <div class="composer"><span>输入消息…</span><i>⌘ ↵</i></div>
+              <div class="day-label" data-i18n="demo.today">今天 15:42</div>
+              <div class="message message--in" data-i18n="demo.incoming1">周四同一时间可以吗？</div>
+              <div class="message message--out" data-i18n="demo.outgoing">没问题，我看一下日程。</div>
+              <div class="message message--in message--wide" data-i18n="demo.incoming2">另外，可以在开会前把更新后的方案发给我吗？</div>
+              <div class="composer"><span data-i18n="demo.composer">输入消息…</span><i>⌘ ↵</i></div>
             </div>
           </div>
 
@@ -64,39 +70,39 @@
             <header><span><i></i> ContextCue</span><small data-candidate-count>1 / 3</small></header>
             <div class="cue-strategy"><span data-reply-tone>清晰 · 周到</span><small data-reply-strategy>同时确认两件事</small></div>
             <p data-reply>周四同一时间可以。我会更新日程，并在会前把新版方案发给你。</p>
-            <footer><span><kbd>←</kbd><kbd>→</kbd> 切换</span><strong><kbd>↵</kbd> 插入</strong></footer>
+            <footer><span><kbd>←</kbd><kbd>→</kbd> <i data-i18n="demo.switch">切换</i></span><strong><kbd>↵</kbd> <i data-i18n="demo.insert">插入</i></strong></footer>
           </div>
 
           <div class="shortcut-orbit" data-depth="1.4" aria-hidden="true"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd></div>
-          <p class="visual-caption">只有主动按下快捷键后，ContextCue 才会读取当前窗口。</p>
+          <p class="visual-caption" data-i18n="demo.caption">只有主动按下快捷键后，ContextCue 才会读取当前窗口。</p>
         </div>
       </section>
 
-      <section class="signal-strip" aria-label="产品特点">
-        <p>一次唤起</p><span></span><p>多条候选</p><span></span><p>插入但不发送</p><span></span><p>记忆留在本机</p>
+      <section class="signal-strip" aria-label="产品特点" data-i18n-aria="signals.aria">
+        <p data-i18n="signals.invoke">一次唤起</p><span></span><p data-i18n="signals.candidates">多条候选</p><span></span><p data-i18n="signals.insert">插入但不发送</p><span></span><p data-i18n="signals.local">记忆留在本机</p>
       </section>
 
       <section class="workflow section" id="how">
         <div class="section-heading reveal">
           <p class="eyebrow">HOW IT WORKS</p>
-          <h2>少一次切换，<br />多一点上下文。</h2>
-          <p>ContextCue 不需要接管你的聊天工具。它只在需要时出现，完成后安静退回后台。</p>
+          <h2 data-i18n-html="workflow.title">少一次切换，<br />多一点上下文。</h2>
+          <p data-i18n="workflow.body">ContextCue 不需要接管你的聊天工具。它只在需要时出现，完成后安静退回后台。</p>
         </div>
 
         <ol class="workflow-steps">
           <li class="reveal">
             <span>01</span>
-            <div><h3>留在当前对话</h3><p>把需要回复的聊天窗口放在最前面，不用复制粘贴，也不用跳去另一个 AI 页面。</p></div>
+            <div><h3 data-i18n="workflow.one.title">留在当前对话</h3><p data-i18n="workflow.one.body">把需要回复的聊天窗口放在最前面，不用复制粘贴，也不用跳去另一个 AI 页面。</p></div>
             <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="9" width="34" height="27" rx="5"/><path d="m15 42 7-6h12"/></svg>
           </li>
           <li class="reveal">
             <span>02</span>
-            <div><h3>按下全局快捷键</h3><p>ContextCue 截取一次可见窗口，并组合与你、联系人和当前渠道相关的本地记忆。</p></div>
+            <div><h3 data-i18n="workflow.two.title">按下全局快捷键</h3><p data-i18n="workflow.two.body">ContextCue 截取一次可见窗口，并组合与你、联系人和当前渠道相关的本地记忆。</p></div>
             <div class="mini-shortcut" aria-label="Command Shift Space"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd></div>
           </li>
           <li class="reveal">
             <span>03</span>
-            <div><h3>选择，然后插入</h3><p>在不同策略之间切换，把选中的回复放进输入框。发送之前，决定权始终在你手里。</p></div>
+            <div><h3 data-i18n="workflow.three.title">选择，然后插入</h3><p data-i18n="workflow.three.body">在不同策略之间切换，把选中的回复放进输入框。发送之前，决定权始终在你手里。</p></div>
             <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 24h27m-8-8 8 8-8 8"/><path d="M13 12H7v24h6"/></svg>
           </li>
         </ol>
@@ -105,29 +111,29 @@
       <section class="context-section section">
         <div class="context-copy reveal">
           <p class="eyebrow">REPLIES WITH A POINT OF VIEW</p>
-          <h2>不只改写一句话。<br />而是理解你在和谁说话。</h2>
-          <p>ContextCue 会参考你明确保存的写作偏好、联系人关系和真正采用过的回复，让候选语气逐渐接近你。</p>
+          <h2 data-i18n-html="context.title">不只改写一句话。<br />而是理解你在和谁说话。</h2>
+          <p data-i18n="context.body">ContextCue 会参考你明确保存的写作偏好、联系人关系和真正采用过的回复，让候选语气逐渐接近你。</p>
           <ul>
-            <li><span>01</span> 匹配当前对话语言</li>
-            <li><span>02</span> 区分不同回复策略</li>
-            <li><span>03</span> 不把模型建议自动写进记忆</li>
+            <li><span>01</span><i data-i18n="context.one">匹配当前对话语言</i></li>
+            <li><span>02</span><i data-i18n="context.two">区分不同回复策略</i></li>
+            <li><span>03</span><i data-i18n="context.three">不把模型建议自动写进记忆</i></li>
           </ul>
         </div>
-        <div class="reply-stack reveal" aria-label="三条不同回复策略的示例">
+        <div class="reply-stack reveal" aria-label="三条不同回复策略的示例" data-i18n-aria="context.aria">
           <article class="reply-card reply-card--active">
-            <header><span>清晰 · 周到</span><small>同时确认两件事</small></header>
-            <p>周四同一时间可以。我会更新日程，并在会前把新版方案发给你。</p>
-            <footer><span>01</span><strong>采用这条回复 ↗</strong></footer>
+            <header><span data-i18n="card.one.tone">清晰 · 周到</span><small data-i18n="card.one.strategy">同时确认两件事</small></header>
+            <p data-i18n="card.one.reply">周四同一时间可以。我会更新日程，并在会前把新版方案发给你。</p>
+            <footer><span>01</span><strong data-i18n="card.one.action">采用这条回复 ↗</strong></footer>
           </article>
           <article class="reply-card">
-            <header><span>温和 · 简洁</span><small>简短确认</small></header>
-            <p>周四可以。我会调整邀请，并在见面前把更新后的方案发给你。</p>
-            <footer><span>02</span><strong>候选回复</strong></footer>
+            <header><span data-i18n="card.two.tone">温和 · 简洁</span><small data-i18n="card.two.strategy">简短确认</small></header>
+            <p data-i18n="card.two.reply">周四可以。我会调整邀请，并在见面前把更新后的方案发给你。</p>
+            <footer><span>02</span><strong data-i18n="card.candidate">候选回复</strong></footer>
           </article>
           <article class="reply-card">
-            <header><span>平静 · 有条理</span><small>说明行动顺序</small></header>
-            <p>周四同一时间没问题。我会先发新版方案，再更新日历邀请。</p>
-            <footer><span>03</span><strong>候选回复</strong></footer>
+            <header><span data-i18n="card.three.tone">平静 · 有条理</span><small data-i18n="card.three.strategy">说明行动顺序</small></header>
+            <p data-i18n="card.three.reply">周四同一时间没问题。我会先发新版方案，再更新日历邀请。</p>
+            <footer><span>03</span><strong data-i18n="card.candidate">候选回复</strong></footer>
           </article>
         </div>
       </section>
@@ -135,46 +141,46 @@
       <section class="privacy" id="privacy">
         <div class="privacy-intro reveal">
           <p class="eyebrow">PRIVACY, WITH BOUNDARIES</p>
-          <h2>它只在你叫它时出现。</h2>
-          <p>不是后台录屏，也不会自动发送。ContextCue 把边界做成产品行为，而不只是一段承诺。</p>
+          <h2 data-i18n="privacy.title">它只在你叫它时出现。</h2>
+          <p data-i18n="privacy.body">不是后台录屏，也不会自动发送。ContextCue 把边界做成产品行为，而不只是一段承诺。</p>
         </div>
         <div class="privacy-lines">
-          <div class="reveal"><span>01</span><strong>主动触发</strong><p>只有按下快捷键后才读取当前可见会话的一张截图。</p></div>
-          <div class="reveal"><span>02</span><strong>本地记忆</strong><p>个人资料、关系和偏好保存在本机，只选择本次需要的少量内容。</p></div>
-          <div class="reveal"><span>03</span><strong>自选模型</strong><p>截图会发送给你配置的视觉模型服务商，API Key 由系统钥匙串加密。</p></div>
-          <div class="reveal"><span>04</span><strong>从不代发</strong><p>候选回复只会插入输入框，最后的检查和发送永远由你完成。</p></div>
+          <div class="reveal"><span>01</span><strong data-i18n="privacy.one.title">主动触发</strong><p data-i18n="privacy.one.body">只有按下快捷键后才读取当前可见会话的一张截图。</p></div>
+          <div class="reveal"><span>02</span><strong data-i18n="privacy.two.title">本地记忆</strong><p data-i18n="privacy.two.body">个人资料、关系和偏好保存在本机，只选择本次需要的少量内容。</p></div>
+          <div class="reveal"><span>03</span><strong data-i18n="privacy.three.title">自选模型</strong><p data-i18n="privacy.three.body">截图会发送给你配置的视觉模型服务商，API Key 由系统钥匙串加密。</p></div>
+          <div class="reveal"><span>04</span><strong data-i18n="privacy.four.title">从不代发</strong><p data-i18n="privacy.four.body">候选回复只会插入输入框，最后的检查和发送永远由你完成。</p></div>
         </div>
       </section>
 
       <section class="install section" id="install">
         <div class="install-heading reveal">
           <p class="eyebrow">EARLY ACCESS</p>
-          <h2>先从 Mac 测试版开始。</h2>
-          <p>当前下载为未签名 DMG，适合早期体验。首次打开需要在 macOS 中手动确认。</p>
+          <h2 data-i18n="install.title">先从 Mac 测试版开始。</h2>
+          <p data-i18n="install.body">当前下载为未签名 DMG，适合早期体验。首次打开需要在 macOS 中手动确认。</p>
           <a class="button button--dark" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download>
-            前往下载 <span aria-hidden="true">↗</span>
+            <span data-i18n="install.download">前往下载</span> <i aria-hidden="true">↗</i>
           </a>
-          <small data-platform-note>正在识别这台 Mac…</small>
+          <small data-platform-note data-i18n="install.detecting">正在识别这台 Mac…</small>
         </div>
         <ol class="install-steps">
-          <li class="reveal"><span>1</span><div><strong>安装应用</strong><p>打开 DMG，把 ContextCue 拖入“应用程序”。</p></div></li>
-          <li class="reveal"><span>2</span><div><strong>首次打开</strong><p>按住 Control 点击应用，选择“打开”，然后再次确认。</p></div></li>
-          <li class="reveal"><span>3</span><div><strong>允许权限</strong><p>按引导开启屏幕录制与辅助功能权限，再回到 ContextCue。</p></div></li>
+          <li class="reveal"><span>1</span><div><strong data-i18n="install.one.title">安装应用</strong><p data-i18n="install.one.body">打开 DMG，把 ContextCue 拖入“应用程序”。</p></div></li>
+          <li class="reveal"><span>2</span><div><strong data-i18n="install.two.title">首次打开</strong><p data-i18n="install.two.body">按住 Control 点击应用，选择“打开”，然后再次确认。</p></div></li>
+          <li class="reveal"><span>3</span><div><strong data-i18n="install.three.title">允许权限</strong><p data-i18n="install.three.body">按引导开启屏幕录制与辅助功能权限，再回到 ContextCue。</p></div></li>
         </ol>
       </section>
 
       <section class="final-cta">
         <img src="/contextcue-icon.svg" alt="" width="104" height="104" class="reveal" />
         <p class="eyebrow reveal">CONTEXTCUE FOR MAC</p>
-        <h2 class="reveal">别离开对话。<br />直接回复。</h2>
-        <a class="button button--lime reveal" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download>下载测试版 <span aria-hidden="true">↓</span></a>
+        <h2 class="reveal" data-i18n-html="final.title">别离开对话。<br />直接回复。</h2>
+        <a class="button button--lime reveal" href="https://github.com/jastfkjg/ContextCue/releases/latest" data-download><span data-i18n="download.short">下载测试版</span> <i aria-hidden="true">↓</i></a>
       </section>
     </main>
 
     <footer>
       <a class="wordmark" href="#top"><img src="/contextcue-icon.svg" alt="" width="32" height="32" /><span>ContextCue</span></a>
-      <p>回复始终跟着当前对话。</p>
-      <div><a href="https://github.com/jastfkjg/ContextCue">GitHub</a><a href="#privacy">隐私说明</a><a href="#install">安装指南</a></div>
+      <p data-i18n="footer.tagline">回复始终跟着当前对话。</p>
+      <div><a href="https://github.com/jastfkjg/ContextCue">GitHub</a><a href="#privacy" data-i18n="footer.privacy">隐私说明</a><a href="#install" data-i18n="footer.install">安装指南</a></div>
       <small>© 2026 ContextCue</small>
     </footer>
 

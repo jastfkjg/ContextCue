@@ -27,3 +27,13 @@ https://github.com/jastfkjg/ContextCue/releases/latest
 ```
 
 After an unsigned DMG is uploaded to a GitHub Release, the website needs no URL change. If direct architecture-specific downloads are added later, update every element marked with `data-download` in `index.html` through `main.js`.
+
+## Languages
+
+The site supports Simplified Chinese and English. It chooses a language in this order:
+
+1. The `?lang=zh` or `?lang=en` query parameter
+2. The visitor's last selection in local storage
+3. The browser language
+
+The header switch updates the document language, page metadata, product demo, and all visible copy without reloading the page.
