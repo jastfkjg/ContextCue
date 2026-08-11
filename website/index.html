@@ -184,6 +184,35 @@
       <small>© 2026 ContextCue</small>
     </footer>
 
+    <dialog class="download-dialog" data-download-dialog aria-labelledby="download-title" aria-describedby="download-description">
+      <div class="download-dialog__surface">
+        <header>
+          <div>
+            <p class="eyebrow">CONTEXTCUE FOR MAC</p>
+            <h2 id="download-title" data-i18n="download.title">选择你的 Mac</h2>
+          </div>
+          <button class="download-dialog__close" type="button" data-download-close aria-label="关闭下载选项" data-i18n-aria="download.close">×</button>
+        </header>
+        <p class="download-dialog__intro" id="download-description" data-i18n="download.description">选择与你的 Mac 芯片对应的版本，下载将立即开始。</p>
+        <div class="download-options">
+          <a href="https://github.com/jastfkjg/ContextCue/releases/latest/download/ContextCue-mac-arm64.dmg" data-direct-download>
+            <span class="download-options__icon" aria-hidden="true">M</span>
+            <span><strong data-i18n="download.arm.title">Apple Silicon</strong><small data-i18n="download.arm.body">适用于搭载 M 系列芯片的 Mac</small></span>
+            <i aria-hidden="true">↓</i>
+          </a>
+          <a href="https://github.com/jastfkjg/ContextCue/releases/latest/download/ContextCue-mac-x64.dmg" data-direct-download>
+            <span class="download-options__icon" aria-hidden="true">i</span>
+            <span><strong data-i18n="download.intel.title">Intel</strong><small data-i18n="download.intel.body">适用于搭载 Intel 处理器的 Mac</small></span>
+            <i aria-hidden="true">↓</i>
+          </a>
+        </div>
+        <div class="download-dialog__footer">
+          <p><span aria-hidden="true">!</span><span data-i18n="download.unsigned">当前为未签名测试版，首次启动请按住 Control 点击应用并选择“打开”。</span></p>
+          <a href="https://github.com/jastfkjg/ContextCue/releases/latest" target="_blank" rel="noreferrer" data-i18n="download.all">查看所有版本 ↗</a>
+        </div>
+      </div>
+    </dialog>
+
     <script type="module" src="/main.js"></script>
   </body>
 </html>

@@ -26,7 +26,7 @@ Download links currently point to the latest GitHub Release:
 https://github.com/jastfkjg/ContextCue/releases/latest
 ```
 
-After an unsigned DMG is uploaded to a GitHub Release, the website needs no URL change. If direct architecture-specific downloads are added later, update every element marked with `data-download` in `index.html` through `main.js`.
+Download buttons open an architecture picker. Its direct links use the stable release asset names `ContextCue-mac-arm64.dmg` and `ContextCue-mac-x64.dmg`, so publishing a new latest GitHub Release requires no website URL change.
 
 ## Languages
 

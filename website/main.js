@@ -71,8 +71,8 @@ const translations = {
     "install.body": "当前下载为未签名 DMG，适合早期体验。首次打开需要在 macOS 中手动确认。",
     "install.download": "前往下载",
     "install.detecting": "正在识别这台 Mac…",
-    "install.mac": "已识别为 Mac · 下载页提供 Apple Silicon 与 Intel 版本",
-    "install.other": "当前版本仅支持 macOS · 下载页提供 Apple Silicon 与 Intel 版本",
+    "install.mac": "已识别为 Mac · 点击下载后选择 Apple Silicon 或 Intel",
+    "install.other": "当前版本仅支持 macOS · 下载选项提供 Apple Silicon 与 Intel 版本",
     "install.one.title": "安装应用",
     "install.one.body": "打开 DMG，把 ContextCue 拖入“应用程序”。",
     "install.two.title": "首次打开",
@@ -82,7 +82,16 @@ const translations = {
     "final.title": "别离开对话。<br />直接回复。",
     "footer.tagline": "回复始终跟着当前对话。",
     "footer.privacy": "隐私说明",
-    "footer.install": "安装指南"
+    "footer.install": "安装指南",
+    "download.title": "选择你的 Mac",
+    "download.description": "选择与你的 Mac 芯片对应的版本，下载将立即开始。",
+    "download.close": "关闭下载选项",
+    "download.arm.title": "Apple Silicon",
+    "download.arm.body": "适用于搭载 M 系列芯片的 Mac",
+    "download.intel.title": "Intel",
+    "download.intel.body": "适用于搭载 Intel 处理器的 Mac",
+    "download.unsigned": "当前为未签名测试版，首次启动请按住 Control 点击应用并选择“打开”。",
+    "download.all": "查看所有版本 ↗"
   },
   en: {
     "meta.title": "ContextCue — replies that stay with the conversation",
@@ -154,8 +163,8 @@ const translations = {
     "install.body": "The current download is an unsigned DMG for early access. macOS will ask you to confirm the first launch manually.",
     "install.download": "Go to download",
     "install.detecting": "Detecting this device…",
-    "install.mac": "Mac detected · Apple Silicon and Intel builds are available on the download page",
-    "install.other": "Currently available for macOS · Apple Silicon and Intel builds are on the download page",
+    "install.mac": "Mac detected · choose Apple Silicon or Intel after clicking download",
+    "install.other": "Currently available for macOS · Apple Silicon and Intel downloads are available",
     "install.one.title": "Install the app",
     "install.one.body": "Open the DMG and drag ContextCue into Applications.",
     "install.two.title": "Open it once",
@@ -165,7 +174,16 @@ const translations = {
     "final.title": "Stay in the conversation.<br />Reply right there.",
     "footer.tagline": "Replies that stay with the conversation.",
     "footer.privacy": "Privacy",
-    "footer.install": "Install guide"
+    "footer.install": "Install guide",
+    "download.title": "Choose your Mac",
+    "download.description": "Select the build that matches your Mac. The download will start immediately.",
+    "download.close": "Close download options",
+    "download.arm.title": "Apple Silicon",
+    "download.arm.body": "For Macs with an M-series chip",
+    "download.intel.title": "Intel",
+    "download.intel.body": "For Macs with an Intel processor",
+    "download.unsigned": "This beta is unsigned. On first launch, Control-click the app and choose Open.",
+    "download.all": "View all releases ↗"
   }
 };
 
@@ -188,9 +206,11 @@ const toneElement = document.querySelector("[data-reply-tone]");
 const strategyElement = document.querySelector("[data-reply-strategy]");
 const countElement = document.querySelector("[data-candidate-count]");
 const platformNote = document.querySelector("[data-platform-note]");
+const downloadDialog = document.querySelector("[data-download-dialog]");
 const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
 let activeLanguage = "zh";
 let replyIndex = 0;
+let downloadTrigger = null;
 
 const translation = (key) => translations[activeLanguage][key] ?? key;
 
@@ -252,6 +272,34 @@ setLanguage(urlLanguage || savedLanguage || browserLanguage);
 
 document.querySelectorAll("[data-lang]").forEach((button) => {
   button.addEventListener("click", () => setLanguage(button.dataset.lang, { persist: true, updateUrl: true }));
+});
+
+const closeDownloadDialog = () => {
+  if (!downloadDialog?.open) return;
+  downloadDialog.close();
+};
+
+document.querySelectorAll("[data-download]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    if (!downloadDialog?.showModal) return;
+    event.preventDefault();
+    downloadTrigger = event.currentTarget;
+    downloadDialog.showModal();
+    document.body.classList.add("has-open-dialog");
+  });
+});
+
+document.querySelector("[data-download-close]")?.addEventListener("click", closeDownloadDialog);
+document.querySelectorAll("[data-direct-download]").forEach((link) => {
+  link.addEventListener("click", closeDownloadDialog);
+});
+downloadDialog?.addEventListener("click", (event) => {
+  if (event.target === downloadDialog) closeDownloadDialog();
+});
+downloadDialog?.addEventListener("close", () => {
+  document.body.classList.remove("has-open-dialog");
+  downloadTrigger?.focus();
+  downloadTrigger = null;
 });
 
 const revealItems = document.querySelectorAll(".reveal");

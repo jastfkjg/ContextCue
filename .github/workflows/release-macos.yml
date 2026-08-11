@@ -67,11 +67,23 @@ jobs:
             -c.mac.identity=null \
             -c.mac.hardenedRuntime=false
 
+      - name: Give DMG a stable download name
+        shell: bash
+        run: |
+          dmg_path="$(find dist -maxdepth 1 -type f -name 'ContextCue-*.dmg' -print -quit)"
+
+          if [[ -z "${dmg_path}" ]]; then
+            echo "No packaged DMG was found."
+            exit 1
+          fi
+
+          mv "${dmg_path}" "dist/ContextCue-mac-${{ matrix.arch }}.dmg"
+
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: contextcue-macos-${{ matrix.arch }}
-          path: dist/ContextCue-*.dmg
+          path: dist/ContextCue-mac-${{ matrix.arch }}.dmg
           if-no-files-found: error
           retention-days: 14
 
