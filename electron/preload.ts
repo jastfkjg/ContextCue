@@ -4,6 +4,7 @@ import type {
   GenerateRequest,
   GenerationResult,
   ContextCueApi,
+  InputTarget,
   MemoryDocument,
   MemoryFact,
   OverlayStatus,
@@ -17,6 +18,7 @@ const api: ContextCueApi = {
   getCaptureSources: () => ipcRenderer.invoke("capture:list"),
   captureSource: (sourceId: string) => ipcRenderer.invoke("capture:source", sourceId),
   generateReplies: (request: GenerateRequest) => ipcRenderer.invoke("reply:generate", request),
+  generateAssistance: (request: GenerateRequest) => ipcRenderer.invoke("assist:generate", request),
   getMemory: () => ipcRenderer.invoke("memory:get"),
   saveMemoryDocument: (document: MemoryDocument) => ipcRenderer.invoke("memory:document-save", document),
   deleteMemoryDocument: (id: string) => ipcRenderer.invoke("memory:document-delete", id),
@@ -33,10 +35,11 @@ const api: ContextCueApi = {
   testModelConnection: (request: TestModelConnectionRequest) =>
     ipcRenderer.invoke("settings:test-model", request),
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
+  useSuggestion: (request: UseReplyRequest) => ipcRenderer.invoke("assist:use", request),
   openScreenSettings: () => ipcRenderer.invoke("permissions:open-screen"),
   getPermissions: () => ipcRenderer.invoke("permissions:get"),
-  onOverlayResult: (callback: (result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string }) => callback(result);
+  onOverlayResult: (callback: (result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string; target?: InputTarget }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string; target?: InputTarget }) => callback(result);
     ipcRenderer.on("overlay:result", listener);
     return () => ipcRenderer.removeListener("overlay:result", listener);
   },

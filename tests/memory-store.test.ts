@@ -19,7 +19,14 @@ describe("MemoryStore", () => {
     await store.saveProfile({ ...store.snapshot().profile, displayName: "Alex" });
     await store.saveContact({ id: "contact", name: "Lin Yue", relation: "Manager", channel: "lark", tone: "Concise", notes: "", customRules: [], lastUsedAt: new Date().toISOString() });
     await store.addFact({ category: "preference", content: "No emoji", contactId: "contact", source: "manual" });
-    await store.rememberAcceptedReply({ text: "Thursday works.", channel: "lark", contact: "Lin Yue" });
+    await store.rememberAcceptedSuggestion({
+      text: "Thursday works.",
+      channel: "lark",
+      contact: "Lin Yue",
+      scenario: "reply",
+      applicationName: "Lark",
+      controlId: "message-box"
+    });
 
     const reloaded = new MemoryStore(path);
     await reloaded.load();
@@ -27,6 +34,8 @@ describe("MemoryStore", () => {
     expect(reloaded.snapshot().contacts[0].tone).toBe("Concise");
     expect(reloaded.snapshot().facts[0].content).toBe("No emoji");
     expect(reloaded.snapshot().acceptedReplies[0].text).toBe("Thursday works.");
+    expect(reloaded.snapshot().acceptedReplies[0]).toMatchObject({ scenario: "reply", applicationName: "Lark", controlId: "message-box" });
+    expect(reloaded.getData().version).toBe(2);
     expect((await readFile(path, "utf8"))).not.toContain("secret-api-key");
   });
 

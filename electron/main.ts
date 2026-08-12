@@ -19,6 +19,7 @@ import {
 import type {
   ContactMemory,
   GenerateRequest,
+  InputTarget,
   MemoryDocument,
   MemoryFact,
   OverlayStatus,
@@ -43,6 +44,7 @@ import {
 } from "./services/channel";
 import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
 import { generateWithModel, testModelConnection } from "./services/model";
+import { getFocusedInputTarget, sameInputTarget, writeMacInputTarget } from "./services/input-target";
 
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
@@ -53,13 +55,14 @@ let quickReplyInFlight = false;
 let quickSourceRefs: CaptureSourceRef[] = [];
 let quickReplyAnchor: { x: number; y: number } | null = null;
 let quickReplyTargetApplication = "";
+let quickInputTarget: InputTarget | null = null;
 let quickOverlayActive = false;
 let quickReplyContext: QuickReplyContext | null = null;
 let quickOverlayHiddenForContext = false;
 let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
 
-const OVERLAY_RESULT_SIZE = { width: 420, height: 112 };
+const OVERLAY_RESULT_SIZE = { width: 420, height: 124 };
 const OVERLAY_LOADING_SIZE = { width: 420, height: 96 };
 const OVERLAY_ERROR_SIZE = { width: 420, height: 150 };
 
@@ -133,7 +136,7 @@ function createTray(): Tray {
   nextTray.on("right-click", () => {
     nextTray.popUpContextMenu(Menu.buildFromTemplate([
       { label: "Open ContextCue", click: showMainWindow },
-      { label: "Quick reply", click: () => void showQuickReply() },
+      { label: "Smart suggestions", click: () => void showQuickReply() },
       { type: "separator" },
       { label: "Quit ContextCue", role: "quit" }
     ]));
@@ -267,6 +270,7 @@ function bindQuickReplyContext(source: CaptureSourceRef, frontmost: FrontmostWin
 function clearQuickReplySession(): void {
   quickOverlayActive = false;
   quickReplyTargetApplication = "";
+  quickInputTarget = null;
   quickReplyContext = null;
   quickOverlayHiddenForContext = false;
 }
@@ -289,14 +293,18 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
   quickContextCheckInFlight = true;
   const context = quickReplyContext;
   try {
-    const current = await frontmostWindow();
+    const [current, currentTarget] = await Promise.all([
+      frontmostWindow(),
+      quickInputTarget ? getFocusedInputTarget() : Promise.resolve(null)
+    ]);
     if (!quickOverlayActive || quickReplyContext !== context) return;
     const matches = frontmostMatchesQuickReplyContext(
       context,
       current.applicationName,
       current.windowTitle
     );
-    if (matches) {
+    const targetMatches = !quickInputTarget || sameInputTarget(quickInputTarget, currentTarget);
+    if (matches && targetMatches) {
       if (quickOverlayHiddenForContext) {
         quickOverlayHiddenForContext = false;
         positionOverlayNearInput();
@@ -320,16 +328,28 @@ async function showQuickReply(): Promise<void> {
   try {
     quickOverlayActive = true;
     quickReplyTargetApplication = "";
+    quickInputTarget = null;
     quickReplyContext = null;
     quickOverlayHiddenForContext = false;
     quickReplyAnchor = screen.getCursorScreenPoint();
     mainWindow?.hide();
+    const focusedTarget = await getFocusedInputTarget();
+    if (focusedTarget?.sensitive) {
+      throw new Error("ContextCue is disabled for passwords, verification codes, and other sensitive fields.");
+    }
+    quickInputTarget = focusedTarget;
+    if (focusedTarget?.bounds) {
+      quickReplyAnchor = {
+        x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
+        y: focusedTarget.bounds.y + focusedTarget.bounds.height
+      };
+    }
     const initialSnapshot = store.getData();
     const initialModel = initialSnapshot.settings.models.find((item) => item.id === initialSnapshot.settings.activeModelId)
       ?? initialSnapshot.settings.models[0];
     showOverlayStatus({
       state: "loading",
-      message: "Reading the current conversation…",
+      message: focusedTarget ? "Reading the focused field and current page…" : "Reading the current page…",
       modelName: initialModel?.model || initialModel?.name || "Configured model"
     });
     const [frontmost, availableSources] = await Promise.all([
@@ -343,9 +363,9 @@ async function showQuickReply(): Promise<void> {
       source = selectQuickReplySource(await refreshQuickSourceRefs(), frontmost.applicationName, frontmost.windowTitle);
     }
     if (!source) {
-      throw new Error("No active conversation window was found. Keep the page or app window visible and try again.");
+      throw new Error("No active page or app window was found. Keep the target window visible and try again.");
     }
-    quickReplyTargetApplication = frontmost.applicationName;
+    quickReplyTargetApplication = focusedTarget?.applicationName || frontmost.applicationName;
     bindQuickReplyContext(source, frontmost);
     discoveryFinishedAt = performance.now();
 
@@ -368,21 +388,28 @@ async function showQuickReply(): Promise<void> {
       ?? snapshot.settings.models[0];
     showOverlayStatus({
       state: "loading",
-      message: `Generating ${snapshot.settings.candidateCount} replies…`,
+      message: `Generating ${snapshot.settings.candidateCount} suggestions…`,
       modelName: model?.model || model?.name || "Configured model"
     });
     const request: GenerateRequest = {
       sourceId: source.id,
       channel: source.channel,
       locale: snapshot.settings.locale,
-      quick: true
+      quick: true,
+      scenario: focusedTarget ? "auto" : "reply",
+      target: focusedTarget ?? undefined,
+      pageContext: {
+        applicationName: focusedTarget?.applicationName || frontmost.applicationName,
+        windowTitle: focusedTarget?.windowTitle || frontmost.windowTitle,
+        nearbyText: [focusedTarget?.label, focusedTarget?.placeholder].filter((value): value is string => Boolean(value))
+      }
     };
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
     await rememberTokenUsage(request, result, snapshot);
     const contact = result.detectedContact;
     overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
     positionOverlayNearInput();
-    sendToOverlay("overlay:result", { ...result, channel: source.channel, contact });
+    sendToOverlay("overlay:result", { ...result, channel: source.channel, contact, target: focusedTarget ?? undefined });
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     const finishedAt = performance.now();
     console.info(
@@ -436,7 +463,9 @@ async function rememberTokenUsage(
     modelName: model.name,
     model: model.model,
     apiProtocol: model.apiProtocol,
-    requestType: request.quick ? "quick-reply" : "reply",
+    requestType: request.target
+      ? (request.quick ? "quick-assist" : "assist")
+      : (request.quick ? "quick-reply" : "reply"),
     channel: request.channel
   };
   await store.recordTokenUsage(record);
@@ -484,23 +513,43 @@ async function hideQuickOverlay(): Promise<void> {
   }
 }
 
-async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ pasted: boolean; error?: string }> {
+async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: boolean; error?: string }> {
   try {
     if (process.platform === "darwin") {
       if (!systemPreferences.isTrustedAccessibilityClient(true)) {
         await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
         return {
           pasted: false,
-          error: "Allow ContextCue (or Electron while developing) in Accessibility, then click Insert again. The reply was copied."
+          error: "Allow ContextCue (or Electron while developing) in Accessibility, then try again. The suggestion was copied."
         };
       }
       overlayWindow?.hide();
       mainWindow?.hide();
-      const target = quickReplyTargetApplication || targetApplicationName(channel);
-      const escapedTarget = target ? appleScriptString(target) : "";
+      const targetApplication = request.target?.applicationName || quickReplyTargetApplication || targetApplicationName(request.channel);
+      await activateApplication(targetApplication || "");
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      if (request.target) {
+        const currentTarget = await getFocusedInputTarget();
+        if (!sameInputTarget(request.target, currentTarget)) {
+          if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
+          return {
+            pasted: false,
+            error: "The focused field changed. The suggestion was copied, but nothing was inserted."
+          };
+        }
+        if (request.target.sensitive) {
+          return { pasted: false, error: "ContextCue does not insert into sensitive fields." };
+        }
+        if (await writeMacInputTarget(request.text, request.action ?? "insert")) {
+          clearQuickReplySession();
+          return { pasted: true };
+        }
+      }
+      const escapedTarget = targetApplication ? appleScriptString(targetApplication) : "";
+      const replaceAll = request.action === "replace-all" ? "keystroke \"a\" using command down\n" : "";
       const script = escapedTarget
-        ? `tell application "System Events"\nif not (exists process "${escapedTarget}") then error "Target application is not running"\nset frontmost of process "${escapedTarget}" to true\ndelay 0.15\nkeystroke "v" using command down\nend tell`
-        : "tell application \"System Events\"\ndelay 0.15\nkeystroke \"v\" using command down\nend tell";
+        ? `tell application "System Events"\nif not (exists process "${escapedTarget}") then error "Target application is not running"\nset frontmost of process "${escapedTarget}" to true\ndelay 0.15\n${replaceAll}keystroke "v" using command down\nend tell`
+        : `tell application "System Events"\ndelay 0.15\n${replaceAll}keystroke "v" using command down\nend tell`;
       await execFileAsync("osascript", ["-e", script]);
       clearQuickReplySession();
       return { pasted: true };
@@ -523,7 +572,7 @@ async function bestEffortPaste(channel: UseReplyRequest["channel"]): Promise<{ p
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     return {
       pasted: false,
-      error: `Could not focus the chat input. The reply was copied. ${error instanceof Error ? error.message : ""}`.trim()
+      error: `Could not restore the target input. The suggestion was copied. ${error instanceof Error ? error.message : ""}`.trim()
     };
   }
 }
@@ -541,7 +590,7 @@ function registerIpc(): void {
     }
   });
 
-  ipcMain.handle("reply:generate", async (_event, request: GenerateRequest) => {
+  const generateAssistance = async (request: GenerateRequest) => {
     const screenshot = request.imageDataUrl || (request.sourceId ? await captureSource(request.sourceId) : "");
     const snapshot = store.getData();
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
@@ -552,23 +601,30 @@ function registerIpc(): void {
       if (!overlayWindow) overlayWindow = createOverlayWindow();
       overlayWindow.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
       positionOverlayNearInput();
-      sendToOverlay("overlay:result", { ...result, channel: request.channel, contact });
+      sendToOverlay("overlay:result", { ...result, channel: request.channel, contact, target: request.target });
       overlayWindow.show();
       overlayWindow.focus();
     }
     return result;
-  });
+  };
+  ipcMain.handle("assist:generate", (_event, request: GenerateRequest) => generateAssistance(request));
+  ipcMain.handle("reply:generate", (_event, request: GenerateRequest) => generateAssistance({ scenario: "reply", ...request }));
 
-  ipcMain.handle("reply:use", async (_event, request: UseReplyRequest) => {
+  const useSuggestion = async (request: UseReplyRequest) => {
     clipboard.writeText(request.text);
-    const pasteResult = request.paste ? await bestEffortPaste(request.channel) : { pasted: false };
-    void store.rememberAcceptedReply({
+    const pasteResult = request.paste ? await bestEffortPaste(request) : { pasted: false };
+    void store.rememberAcceptedSuggestion({
       text: request.text,
       channel: request.channel,
-      contact: request.contact
-    }).catch((error) => console.warn("[memory] could not remember accepted reply", error));
+      contact: request.contact,
+      scenario: request.scenario,
+      applicationName: request.target?.applicationName,
+      controlId: request.target?.controlId
+    }).catch((error) => console.warn("[memory] could not remember accepted suggestion", error));
     return { copied: true, ...pasteResult };
-  });
+  };
+  ipcMain.handle("assist:use", (_event, request: UseReplyRequest) => useSuggestion(request));
+  ipcMain.handle("reply:use", (_event, request: UseReplyRequest) => useSuggestion({ scenario: "reply", ...request }));
   ipcMain.on("overlay:move-by", (event, deltaX: number, deltaY: number) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;

@@ -78,7 +78,7 @@ const CHANNEL_MARKS: Record<ChannelId, string> = {
 };
 
 function sourceLabel(source?: CaptureSource): string {
-  if (!source) return "Choose a conversation";
+  if (!source) return "Choose a window";
   return source.name.length > 46 ? `${source.name.slice(0, 43)}…` : source.name;
 }
 
@@ -119,9 +119,9 @@ function HomeView({
     <div className="workspace home-workspace">
       <header className="workspace-header home-header">
         <div>
-          <span className="eyebrow">QUICK START</span>
-          <h1>Reply from the conversation.</h1>
-          <p>Keep ContextCue in the background. Call it only when you need a draft.</p>
+          <span className="eyebrow">QUICK ASSIST</span>
+          <h1>Write from the page you’re on.</h1>
+          <p>Keep ContextCue in the background. Call it from any focused text field.</p>
         </div>
         <span className={`home-readiness ${readyCount === 3 ? "home-readiness--ready" : ""}`}><i />{readyCount === 3 ? "Ready to use" : `${readyCount} of 3 ready`}</span>
       </header>
@@ -130,12 +130,12 @@ function HomeView({
         <div className="home-command-copy">
           <span className="home-command-label"><Command size={14}/> Global shortcut</span>
           <h2>One shortcut.<br/>Right where you’re typing.</h2>
-          <p>Open a conversation in any app, then press:</p>
+          <p>Place the cursor in a text field, then press:</p>
           <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">
             {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
             <span>Change</span>
           </button>
-          <small>ContextCue reads the active conversation and opens a compact reply panel. It never sends automatically.</small>
+          <small>ContextCue reads the focused field and visible page, then opens compact suggestions. It never submits automatically.</small>
         </div>
 
         <div className="home-overlay-demo" aria-hidden="true">
@@ -152,15 +152,15 @@ function HomeView({
         <section className="home-workflow">
           <div className="home-section-heading"><span className="eyebrow">HOW IT WORKS</span><h2>Three steps, without switching context.</h2></div>
           <ol>
-            <li><span>01</span><div><strong>Stay in the conversation</strong><small>Place the chat you want to answer in front.</small></div><MessageSquareText size={18}/></li>
-            <li><span>02</span><div><strong>Call ContextCue</strong><small>Press your global shortcut to read the visible context.</small></div><Command size={18}/></li>
-            <li><span>03</span><div><strong>Choose and insert</strong><small>Use the arrow keys to switch, then Enter to insert.</small></div><CornerDownLeft size={18}/></li>
+            <li><span>01</span><div><strong>Focus a text field</strong><small>Reply, complete a form, compose, search, or select text to rewrite.</small></div><MessageSquareText size={18}/></li>
+            <li><span>02</span><div><strong>Call ContextCue</strong><small>Press your global shortcut to read the field and visible context.</small></div><Command size={18}/></li>
+            <li><span>03</span><div><strong>Choose and apply</strong><small>Use the arrow keys to switch, then Enter to write into the original field.</small></div><CornerDownLeft size={18}/></li>
           </ol>
-          <div className="home-key-note"><ArrowLeftRight size={15}/><span><kbd>←</kbd><kbd>→</kbd> switch replies</span><span><kbd>↵</kbd> insert selection</span><small>Sending is always up to you.</small></div>
+          <div className="home-key-note"><ArrowLeftRight size={15}/><span><kbd>←</kbd><kbd>→</kbd> switch suggestions</span><span><kbd>↵</kbd> apply selection</span><small>Submitting is always up to you.</small></div>
         </section>
 
         <aside className="home-checklist">
-          <div className="home-section-heading"><span className="eyebrow">READY CHECK</span><h2>Before your first reply.</h2></div>
+          <div className="home-section-heading"><span className="eyebrow">READY CHECK</span><h2>Before your first suggestion.</h2></div>
           <button onClick={onOpenSettings}>
             <span className={modelReady ? "is-ready" : ""}>{modelReady ? <Check size={15}/> : "1"}</span>
             <div><strong>Model & API key</strong><small>{modelReady ? `${activeModel?.name} is configured` : "Add a model connection"}</small></div>
@@ -168,15 +168,15 @@ function HomeView({
           </button>
           <button onClick={() => screenReady ? onOpenChannels() : void contextCueApi.openScreenSettings()}>
             <span className={screenReady ? "is-ready" : ""}>{screenReady ? <Check size={15}/> : "2"}</span>
-            <div><strong>Screen access</strong><small>{screenReady ? "Permission is available" : "Allow conversation capture"}</small></div>
+            <div><strong>Screen access</strong><small>{screenReady ? "Permission is available" : "Allow visible-page capture"}</small></div>
             {screenReady ? <ChevronRight size={15}/> : <ExternalLink size={14}/>}
           </button>
           <button onClick={() => void refreshSources()}>
             <span className={sources.length > 0 ? "is-ready" : ""}>{sources.length > 0 ? <Check size={15}/> : "3"}</span>
-            <div><strong>Visible conversation</strong><small>{sources.length > 0 ? `${sources.length} window${sources.length === 1 ? "" : "s"} found` : "Open a chat, then scan again"}</small></div>
+            <div><strong>Visible target window</strong><small>{sources.length > 0 ? `${sources.length} window${sources.length === 1 ? "" : "s"} found` : "Open an app, then scan again"}</small></div>
             <RefreshCw size={14}/>
           </button>
-          <p><ShieldCheck size={14}/> Memory stays local. Screenshots are sent only when you invoke a reply.</p>
+          <p><ShieldCheck size={14}/> Memory stays local. Screenshots are sent only when you invoke suggestions.</p>
         </aside>
       </div>
     </div>
@@ -532,7 +532,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   return (
     <div className="workspace memory-workspace">
       <header className="workspace-header memory-header">
-        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Memory files</h1><p>Write the background and preferences ContextCue should carry into your replies.</p></div>
+        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Memory files</h1><p>Write the background and preferences ContextCue should carry into suggestions.</p></div>
         <div className="privacy-note"><ShieldCheck size={17}/><span>Stored locally<br/><small>Inspectable and removable</small></span></div>
       </header>
 
@@ -552,18 +552,18 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
             <span>LEARNED</span>
             <button className={learnedSelected ? "memory-file--active" : ""} onClick={() => selectDocument("__learned__")} aria-pressed={learnedSelected}>
               <span className="memory-file-icon"><Brain size={16}/></span>
-              <span><strong>Learned facts</strong><small>Saved from reply suggestions</small></span>
+              <span><strong>Learned facts</strong><small>Saved from AI suggestions</small></span>
               <b>{memory.facts.length}</b>
             </button>
           </div>
-          <div className="memory-rail-note"><ShieldCheck size={14}/><span>Only enabled, relevant files are added to a reply.</span></div>
+          <div className="memory-rail-note"><ShieldCheck size={14}/><span>Only enabled, relevant files are added to a request.</span></div>
         </aside>
 
         <section className="memory-document-pane">
           {learnedSelected ? (
             <div className="learned-memory-pane">
               <header>
-                <div><span className="eyebrow">LEARNED MEMORY</span><h2>Facts saved from replies</h2><p>These are accepted suggestions, kept separate from the Markdown files you write.</p></div>
+                <div><span className="eyebrow">LEARNED MEMORY</span><h2>Facts saved from suggestions</h2><p>These are explicitly accepted facts, kept separate from the Markdown files you write.</p></div>
                 <span className="learned-total"><strong>{memory.facts.length}</strong> saved</span>
               </header>
               <div className="learned-memory-list">
@@ -576,7 +576,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                 ))}
                 {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>When ContextCue suggests something worth remembering, you decide whether to save it.</span></div>}
               </div>
-              <footer><span>{memory.acceptedReplies.length} accepted replies are also used as private style examples.</span></footer>
+              <footer><span>{memory.acceptedReplies.length} accepted suggestions are also used as private style examples.</span></footer>
             </div>
           ) : activeDocument ? (
             <>
@@ -637,10 +637,10 @@ function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh:
     { id: "whatsapp", detail: "Desktop or browser window screenshot", level: "Ready" },
     { id: "other", detail: "Any visible screen or application window", level: "Universal" }
   ];
-  return <div className="workspace channels-workspace"><header className="workspace-header"><div><span className="eyebrow">CHANNELS</span><h1>Works where the conversation is.</h1></div><button className="button button--quiet" onClick={() => void refresh()}><RefreshCw size={15}/> Scan windows</button></header>
-    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One visual pipeline, every app.</h2><p>ContextCue captures only the window you select. It does not require access to your full chat history, and the same reply flow works across native and browser apps.</p></div></div>
+  return <div className="workspace channels-workspace"><header className="workspace-header"><div><span className="eyebrow">SURFACES</span><h1>Works where you type.</h1></div><button className="button button--quiet" onClick={() => void refresh()}><RefreshCw size={15}/> Scan windows</button></header>
+    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One context pipeline, every app.</h2><p>ContextCue reads the focused field plus the visible window only after you invoke it. On macOS it returns to the exact field before applying text.</p></div></div>
     <section className="channel-table"><header><span>Channel</span><span>Context method</span><span>Status</span></header>{supported.map((item) => <div key={item.id}><span><i className={`channel-logo channel-logo--${item.id}`}>{CHANNEL_MARKS[item.id]}</i><strong>{CHANNEL_LABELS[item.id]}</strong></span><span>{item.detail}</span><span className="ready-mark"><i/>{item.level}</span></div>)}</section>
-    <section className="visible-windows"><div className="section-bar"><div><span className="step-number">LIVE</span><h2>Visible conversations</h2></div><span>{sources.length} windows found</span></div><div className="window-list">{sources.slice(0, 12).map((source) => <div key={source.id}><img src={source.thumbnail} alt=""/><span><strong>{source.name}</strong><small>{CHANNEL_LABELS[source.channel]}</small></span></div>)}{sources.length === 0 && <div className="list-empty">No capturable windows found. Open a conversation and scan again.</div>}</div></section>
+    <section className="visible-windows"><div className="section-bar"><div><span className="step-number">LIVE</span><h2>Visible windows</h2></div><span>{sources.length} windows found</span></div><div className="window-list">{sources.slice(0, 12).map((source) => <div key={source.id}><img src={source.thumbnail} alt=""/><span><strong>{source.name}</strong><small>{CHANNEL_LABELS[source.channel]}</small></span></div>)}{sources.length === 0 && <div className="list-empty">No capturable windows found. Open an app and scan again.</div>}</div></section>
   </div>;
 }
 
@@ -665,6 +665,14 @@ function compactTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
   if (value >= 10_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}K`;
   return value.toLocaleString();
+}
+
+function usageRequestLabel(requestType: TokenUsageRecord["requestType"]): string {
+  if (requestType === "quick-assist") return "Quick assist";
+  if (requestType === "assist") return "Workspace assist";
+  if (requestType === "quick-reply") return "Quick reply";
+  if (requestType === "connection-test") return "Connection test";
+  return "Workspace reply";
 }
 
 function usageDayKey(date: Date): string {
@@ -789,9 +797,9 @@ function UsageView({ settings }: { settings: AppSettings | null }) {
 
       <section className="usage-history">
         <div className="usage-section-heading"><div><Clock size={18}/><span><strong>Request history</strong><small>Most recent 50 calls in this view.</small></span></div></div>
-        <div className="usage-history-table"><header><span>When</span><span>Model</span><span>Request</span><span>Input</span><span>Output</span><span>Total</span></header>{rangedRecords.slice(0, 50).map((record) => <div key={record.id}><time dateTime={record.createdAt}>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(record.createdAt))}</time><span className="history-model"><i style={{ backgroundColor: usageColor(usageModelKey(record)) }}/><span><strong>{record.modelName}</strong><small>{record.model}</small></span></span><span><strong>{record.requestType === "quick-reply" ? "Quick reply" : record.requestType === "connection-test" ? "Connection test" : "Workspace reply"}</strong><small>{record.channel ? CHANNEL_LABELS[record.channel] : "Configuration"} · {(record.latencyMs / 1000).toFixed(1)}s</small></span><span>{record.reported ? record.inputTokens.toLocaleString() : "—"}</span><span>{record.reported ? record.outputTokens.toLocaleString() : "—"}</span><strong>{record.reported ? record.totalTokens.toLocaleString() : "Not reported"}</strong></div>)}</div>
+        <div className="usage-history-table"><header><span>When</span><span>Model</span><span>Request</span><span>Input</span><span>Output</span><span>Total</span></header>{rangedRecords.slice(0, 50).map((record) => <div key={record.id}><time dateTime={record.createdAt}>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(record.createdAt))}</time><span className="history-model"><i style={{ backgroundColor: usageColor(usageModelKey(record)) }}/><span><strong>{record.modelName}</strong><small>{record.model}</small></span></span><span><strong>{usageRequestLabel(record.requestType)}</strong><small>{record.channel ? CHANNEL_LABELS[record.channel] : "Configuration"} · {(record.latencyMs / 1000).toFixed(1)}s</small></span><span>{record.reported ? record.inputTokens.toLocaleString() : "—"}</span><span>{record.reported ? record.outputTokens.toLocaleString() : "—"}</span><strong>{record.reported ? record.totalTokens.toLocaleString() : "Not reported"}</strong></div>)}</div>
       </section>
-    </> : <section className="usage-empty"><BarChart3 size={28}/><h2>No usage in this view</h2><p>Generate a reply or widen the selected date range. Providers that do not report token counts will still appear in request history.</p></section>}
+    </> : <section className="usage-empty"><BarChart3 size={28}/><h2>No usage in this view</h2><p>Generate a suggestion or widen the selected date range. Providers that do not report token counts will still appear in request history.</p></section>}
   </div>;
 }
 
@@ -966,7 +974,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
   const hasModelKey = Boolean(selectedModel && (selectedModel.apiKeyConfigured || apiKeys[selectedModel.id]?.trim()));
 
   return <div className="workspace settings-workspace">
-    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how ContextCue replies.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel?.supportsImageInput && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
+    <header className="workspace-header settings-header"><div><span className="eyebrow">SETTINGS</span><h1>Models and preferences.</h1><p>Connect providers, test them, and choose how ContextCue writes.</p></div><div className="settings-header-status"><StatusPill configured={Boolean(activeModel?.supportsImageInput && (activeModel.apiKeyConfigured || apiKeys[activeModel.id]?.trim()))}/><span className={`autosave-status autosave-status--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner spinner--dark"/> : saveState === "saved" ? <CheckCircle2 size={14}/> : <i/>}{saveMessage}</span></div></header>
     <div className="model-settings-shell">
       <aside className="model-rail">
         <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} {form.models.length === 1 ? "model" : "models"}</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
@@ -996,7 +1004,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
               <label><span>Display name</span><input value={selectedModel.name} onChange={(event) => updateModel({ name: event.target.value })} placeholder="e.g. OpenAI work"/></label>
               <label><span>Model ID</span><input value={selectedModel.model} onChange={(event) => { const model = event.target.value; updateModel({ model, supportsImageInput: inferImageInputSupport(model) }); }} placeholder="e.g. gpt-5.6"/></label>
               <label className="model-url-field"><span>API base URL</span><input type="url" value={selectedModel.apiBaseUrl} onChange={(event) => updateModel({ apiBaseUrl: event.target.value })} placeholder="https://api.openai.com/v1"/></label>
-              <label className={`vision-capability ${selectedModel.supportsImageInput ? "vision-capability--enabled" : "vision-capability--warning"}`}><input type="checkbox" checked={selectedModel.supportsImageInput} onChange={(event) => updateModel({ supportsImageInput: event.target.checked })}/><Eye size={17}/><span><strong>Image input</strong><small>Required to read conversation screenshots</small></span><i>{selectedModel.supportsImageInput ? "Supported" : "Text only"}</i></label>
+              <label className={`vision-capability ${selectedModel.supportsImageInput ? "vision-capability--enabled" : "vision-capability--warning"}`}><input type="checkbox" checked={selectedModel.supportsImageInput} onChange={(event) => updateModel({ supportsImageInput: event.target.checked })}/><Eye size={17}/><span><strong>Image input</strong><small>Required to understand visible-page screenshots</small></span><i>{selectedModel.supportsImageInput ? "Supported" : "Text only"}</i></label>
               <fieldset className="protocol-field"><legend>API format <button type="button" aria-label="About API formats" title="This must match the endpoint format supported by your provider."><CircleHelp size={14}/></button></legend><div className="protocol-options"><button type="button" className={selectedModel.apiProtocol === "responses" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "responses" })}><span>Responses API<small>OpenAI current</small></span>{selectedModel.apiProtocol === "responses" && <Check size={15}/>}</button><button type="button" className={selectedModel.apiProtocol === "chat-completions" ? "protocol-option--active" : ""} onClick={() => updateModel({ apiProtocol: "chat-completions" })}><span>Chat Completions<small>Broadly compatible</small></span>{selectedModel.apiProtocol === "chat-completions" && <Check size={15}/>}</button></div><p>{selectedModel.apiProtocol === "responses" ? "Use for api.openai.com or a provider that explicitly supports /responses." : "Use for Ollama, DashScope, and most OpenAI-compatible /chat/completions providers."}</p></fieldset>
               <label><span>API key</span><input type="password" autoComplete="new-password" value={apiKeys[selectedModel.id] ?? ""} onChange={(event) => setApiKeys({ ...apiKeys, [selectedModel.id]: event.target.value })} placeholder={selectedModel.apiKeyConfigured ? "••••••••  Saved securely" : "Paste a key"}/></label>
             </div>
@@ -1008,7 +1016,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
       </div>
     </div>
     <div className="preference-grid">
-      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Reply behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Reply language</span><div className="choice-group choice-group--language" role="group" aria-label="Reply language">{([{ value: "auto", label: "Match conversation" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
+      <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Suggestion behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Writing language</span><div className="choice-group choice-group--language" role="group" aria-label="Writing language">{([{ value: "auto", label: "Match context" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
       <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, ContextCue keeps your previous shortcut.</p></section>
     </div>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
@@ -1051,7 +1059,7 @@ export function App() {
   const views: Array<{ id: ViewId; label: string; icon: React.ReactNode }> = [
     { id: "home", label: "Home", icon: <House size={18}/> },
     { id: "memory", label: "Memory", icon: <Brain size={18}/> },
-    { id: "channels", label: "Channels", icon: <MessageSquareText size={18}/> },
+    { id: "channels", label: "Surfaces", icon: <MessageSquareText size={18}/> },
     { id: "usage", label: "Token usage", icon: <BarChart3 size={18}/> },
     { id: "settings", label: "Settings", icon: <Settings size={18}/> }
   ];

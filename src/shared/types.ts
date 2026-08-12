@@ -1,5 +1,31 @@
 export type ChannelId = "wechat" | "slack" | "lark" | "gmail" | "teams" | "whatsapp" | "other";
 
+export type AssistScenario = "reply" | "form" | "compose" | "rewrite" | "search" | "generic";
+export type AssistAction = "insert" | "replace-selection" | "replace-all";
+
+export interface InputTarget {
+  platform: NodeJS.Platform | "browser";
+  appId: string;
+  applicationName: string;
+  windowTitle: string;
+  controlId: string;
+  role: "text-field" | "text-area" | "content-editable" | "combo-box" | "unknown";
+  nativeRole?: string;
+  label?: string;
+  placeholder?: string;
+  currentText?: string;
+  selectedText?: string;
+  multiline: boolean;
+  sensitive: boolean;
+  bounds?: { x: number; y: number; width: number; height: number };
+}
+
+export interface PageContext {
+  applicationName: string;
+  windowTitle: string;
+  nearbyText?: string[];
+}
+
 export type ApiProtocol = "responses" | "chat-completions";
 
 export interface CaptureSource {
@@ -14,6 +40,8 @@ export interface CandidateReply {
   text: string;
   tone: string;
   strategy: string;
+  label?: string;
+  action?: AssistAction;
 }
 
 export interface MemorySuggestion {
@@ -23,6 +51,8 @@ export interface MemorySuggestion {
 
 export interface GenerationResult {
   candidates: CandidateReply[];
+  scenario?: AssistScenario;
+  taskLabel?: string;
   conversationSummary: string;
   detectedContact: string;
   detectedLanguage: string;
@@ -47,7 +77,7 @@ export interface TokenUsageRecord extends GenerationTokenUsage {
   modelName: string;
   model: string;
   apiProtocol: ApiProtocol;
-  requestType: "reply" | "quick-reply" | "connection-test";
+  requestType: "reply" | "quick-reply" | "assist" | "quick-assist" | "connection-test";
   channel?: ChannelId;
   createdAt: string;
 }
@@ -64,6 +94,9 @@ export interface GenerateRequest {
   intent?: string;
   locale: "auto" | "en" | "zh-CN";
   quick?: boolean;
+  scenario?: AssistScenario | "auto";
+  target?: InputTarget;
+  pageContext?: PageContext;
 }
 
 export interface UserProfile {
@@ -111,13 +144,19 @@ export interface MemoryFact {
   source: "manual" | "model-suggestion";
 }
 
-export interface AcceptedReply {
+export interface AcceptedSuggestion {
   id: string;
   text: string;
   channel: ChannelId;
   contact: string;
+  scenario?: AssistScenario;
+  applicationName?: string;
+  controlId?: string;
   createdAt: string;
 }
+
+/** @deprecated Kept as a storage/API alias while v1 data migrates. */
+export type AcceptedReply = AcceptedSuggestion;
 
 export interface LlmConfig {
   id: string;
@@ -159,7 +198,7 @@ export interface TestModelConnectionResult {
 }
 
 export interface AppData {
-  version: 1;
+  version: 2;
   profile: UserProfile;
   documents: MemoryDocument[];
   contacts: ContactMemory[];
@@ -183,6 +222,9 @@ export interface UseReplyRequest {
   channel: ChannelId;
   contact: string;
   paste: boolean;
+  action?: AssistAction;
+  scenario?: AssistScenario;
+  target?: InputTarget;
 }
 
 export interface UseReplyResult {
@@ -207,6 +249,7 @@ export interface ContextCueApi {
   getCaptureSources: () => Promise<CaptureSource[]>;
   captureSource: (sourceId: string) => Promise<string>;
   generateReplies: (request: GenerateRequest) => Promise<GenerationResult>;
+  generateAssistance: (request: GenerateRequest) => Promise<GenerationResult>;
   getMemory: () => Promise<MemorySnapshot>;
   saveMemoryDocument: (document: MemoryDocument) => Promise<MemorySnapshot>;
   deleteMemoryDocument: (id: string) => Promise<MemorySnapshot>;
@@ -220,9 +263,10 @@ export interface ContextCueApi {
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
   testModelConnection: (request: TestModelConnectionRequest) => Promise<TestModelConnectionResult>;
   useReply: (request: UseReplyRequest) => Promise<UseReplyResult>;
+  useSuggestion: (request: UseReplyRequest) => Promise<UseReplyResult>;
   openScreenSettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;
-  onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string }) => void) => () => void;
+  onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget }) => void) => () => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   moveOverlay: (deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;

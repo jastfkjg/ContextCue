@@ -142,6 +142,8 @@ const demoTokenUsage: TokenUsageRecord[] = Array.from({ length: 24 }, (_, index)
 });
 
 const demoResult: GenerationResult = {
+  scenario: "reply",
+  taskLabel: "Reply to Lin Yue",
   candidates: [
     {
       text: "Thursday at the same time works for me. I’ll update the invite and send the revised deck beforehand.",
@@ -173,6 +175,10 @@ const browserDemoApi: ContextCueApi = {
   getCaptureSources: async () => demoSources,
   captureSource: async (id) => demoSources.find((source) => source.id === id)?.thumbnail ?? demoSources[0].thumbnail,
   generateReplies: async () => {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return demoResult;
+  },
+  generateAssistance: async () => {
     await new Promise((resolve) => setTimeout(resolve, 900));
     return demoResult;
   },
@@ -225,6 +231,7 @@ const browserDemoApi: ContextCueApi = {
     return { ok: true, latencyMs: 642, message: `${model.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.` };
   },
   useReply: async () => ({ copied: true, pasted: false }),
+  useSuggestion: async () => ({ copied: true, pasted: false }),
   openScreenSettings: async () => undefined,
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
   onOverlayResult: (callback) => {

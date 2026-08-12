@@ -439,8 +439,9 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .overlay-processing strong { font-size: 14px; font-weight: 590; letter-spacing: -.018em; }
 .overlay-processing span { overflow: hidden; color: #96988f; font-size: 10px; font-weight: 530; text-overflow: ellipsis; white-space: nowrap; }
 .overlay-root .candidate-shell { height: 100%; margin: 0; border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
-.candidate-shell--compact .candidate-stage { min-height: 66px; max-height: 66px; overflow-y: auto; overscroll-behavior: contain; }
-.candidate-shell--compact .candidate-copy { min-height: 66px; padding: 16px 52px 6px 22px; justify-content: center; }
+.candidate-shell--compact .candidate-stage { min-height: 78px; max-height: 78px; overflow-y: auto; overscroll-behavior: contain; }
+.candidate-shell--compact .candidate-copy { min-height: 78px; padding: 11px 52px 5px 22px; justify-content: center; }
+.candidate-context-label { margin-bottom: 4px; color: #85877f; font-size: 8px; font-weight: 680; letter-spacing: .04em; text-transform: uppercase; }
 .candidate-shell--compact .candidate-copy p { color: #252620; font-size: 14px; font-weight: 540; line-height: 1.42; letter-spacing: -.022em; }
 .candidate-shell--compact .candidate-actions { height: 45px; align-items: center; gap: 18px; padding: 2px 22px 10px; border-top: 0; color: #8a8c84; }
 .compact-text-action { min-height: 29px; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; color: inherit; background: transparent; font-size: 10px; font-weight: 620; transition: color .16s ease, transform .16s ease; }

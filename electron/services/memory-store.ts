@@ -75,7 +75,7 @@ function legacyDocuments(profile: UserProfile, contacts: ContactMemory[] = [], c
 }
 
 export const DEFAULT_DATA: AppData = {
-  version: 1,
+  version: 2,
   profile: DEFAULT_PROFILE,
   documents: legacyDocuments(DEFAULT_PROFILE),
   contacts: [],
@@ -137,7 +137,7 @@ function migrate(input: LegacyAppData): AppData {
     ? legacySettings!.activeModelId!
     : configuredModels[0].id;
   return {
-    version: 1,
+    version: 2,
     profile,
     documents: Array.isArray(input.documents)
       ? input.documents.map((document) => ({
@@ -264,7 +264,9 @@ export class MemoryStore {
     if (this.loaded) return this.data;
     try {
       const raw = await readFile(this.filePath, "utf8");
-      this.data = migrate(JSON.parse(raw) as Partial<AppData>);
+      const parsed = JSON.parse(raw) as Partial<AppData>;
+      this.data = migrate(parsed);
+      if (JSON.stringify(parsed) !== JSON.stringify(this.data)) await this.persist();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       await this.persist();
@@ -376,6 +378,10 @@ export class MemoryStore {
     this.data.acceptedReplies.push({ ...reply, id: randomUUID(), createdAt: new Date().toISOString() });
     this.data.acceptedReplies = this.data.acceptedReplies.slice(-100);
     await this.persist();
+  }
+
+  async rememberAcceptedSuggestion(reply: Omit<AcceptedReply, "id" | "createdAt">): Promise<void> {
+    await this.rememberAcceptedReply(reply);
   }
 
   async recordTokenUsage(record: Omit<TokenUsageRecord, "id" | "createdAt">): Promise<void> {

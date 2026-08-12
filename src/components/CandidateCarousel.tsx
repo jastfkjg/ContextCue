@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
-import type { CandidateReply, ChannelId } from "../shared/types";
+import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
 
@@ -9,10 +9,13 @@ interface Props {
   candidates: CandidateReply[];
   channel: ChannelId;
   contact: string;
+  scenario?: AssistScenario;
+  taskLabel?: string;
+  target?: InputTarget;
   compact?: boolean;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, compact = false }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", taskLabel, target, compact = false }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
@@ -29,8 +32,17 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
     setFeedback("");
   };
 
-  const useReply = async (paste: boolean) => {
-    const result = await contextCueApi.useReply({ text: candidates[index].text, channel, contact, paste });
+  const useCandidate = async (paste: boolean) => {
+    const candidate = candidates[index];
+    const result = await contextCueApi.useSuggestion({
+      text: candidate.text,
+      channel,
+      contact,
+      paste,
+      action: candidate.action ?? (target?.selectedText ? "replace-selection" : "insert"),
+      scenario,
+      target
+    });
     setStatus(result.pasted ? "pasted" : "copied");
     setFeedback(result.error ?? "");
   };
@@ -41,7 +53,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
       if (event.key === "ArrowRight") { event.preventDefault(); move(index + 1); }
       if (event.key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
         event.preventDefault();
-        void useReply(true);
+        void useCandidate(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -61,7 +73,8 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
   };
 
   const candidate = candidates[index];
-  const insertLabel = channel === "wechat" ? "Insert into WeChat" : "Insert";
+  const action = candidate.action ?? (target?.selectedText ? "replace-selection" : "insert");
+  const insertLabel = action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
   return (
     <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
       {!compact && (
@@ -118,6 +131,7 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="candidate-copy"
           >
+            {compact && <span className="candidate-context-label">{taskLabel || candidate.label || candidate.strategy}</span>}
             <p>{candidate.text}</p>
             {!compact && <span className="tone-label">{candidate.tone}</span>}
           </motion.div>
@@ -138,13 +152,13 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
       <div className="candidate-actions">
         {compact ? (
           <>
-            <button className="compact-text-action" onClick={() => move(index + 1)} aria-label="Show next reply">
+            <button className="compact-text-action" onClick={() => move(index + 1)} aria-label="Show next suggestion">
               <ArrowLeftRight size={16} />
               <span>Next</span>
             </button>
-            <button className="compact-text-action" onClick={() => void useReply(true)} aria-label={status === "pasted" ? "Inserted" : insertLabel}>
+            <button className="compact-text-action" onClick={() => void useCandidate(true)} aria-label={status === "pasted" ? "Applied" : insertLabel}>
               {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
-              <span>{status === "pasted" ? "Inserted" : "Insert"}</span>
+              <span>{status === "pasted" ? "Applied" : insertLabel}</span>
             </button>
             <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
               {candidates.map((_, dot) => (
@@ -167,16 +181,16 @@ export function CandidateCarousel({ candidates, channel, contact, compact = fals
           <>
             <button
               className="button button--quiet"
-              onClick={() => void useReply(false)}
-              aria-label={status === "copied" ? "Copied" : "Copy reply"}
-              title={status === "copied" ? "Copied" : "Copy reply"}
+              onClick={() => void useCandidate(false)}
+              aria-label={status === "copied" ? "Copied" : "Copy suggestion"}
+              title={status === "copied" ? "Copied" : "Copy suggestion"}
             >
               {status === "copied" ? <Check size={16} /> : <Copy size={16} />}
               {status === "copied" ? "Copied" : "Copy"}
             </button>
             <button
               className="button button--primary"
-              onClick={() => void useReply(true)}
+              onClick={() => void useCandidate(true)}
               aria-label={status === "pasted" ? "Inserted" : insertLabel}
               title={status === "pasted" ? "Inserted" : insertLabel}
             >

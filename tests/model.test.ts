@@ -53,6 +53,33 @@ describe("model memory and parsing", () => {
     expect(context).not.toContain("Paused context");
   });
 
+  it("keeps accepted examples scoped to the current writing scenario", () => {
+    const configured = data();
+    configured.acceptedReplies = [
+      { id: "reply", text: "Chat-style answer", channel: "other", contact: "", scenario: "reply", createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "form", text: "Product designer", channel: "other", contact: "", scenario: "form", applicationName: "Safari", createdAt: "2026-01-01T00:00:00.000Z" }
+    ];
+    const context = buildMemoryContext(configured, {
+      channel: "other",
+      locale: "auto",
+      scenario: "auto",
+      target: {
+        platform: "darwin",
+        appId: "com.apple.Safari",
+        applicationName: "Safari",
+        windowTitle: "Profile",
+        controlId: "role",
+        role: "text-field",
+        label: "Role",
+        multiline: false,
+        sensitive: false
+      }
+    });
+
+    expect(context).toContain("Product designer");
+    expect(context).not.toContain("Chat-style answer");
+  });
+
   it("parses fenced JSON and limits candidates", () => {
     const result = parseModelJson(`\`\`\`json\n${JSON.stringify({
       candidates: [
@@ -291,9 +318,27 @@ describe("model memory and parsing", () => {
     const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
     expect(body.max_output_tokens).toBe(1040);
     expect(body.text.format.schema.properties.candidates.maxItems).toBe(3);
-    expect(body.input[0].content[0].text).toContain("exactly 3 useful replies");
+    expect(body.input[0].content[0].text).toContain("up to 3 useful text candidates");
     expect(body.input[1].content[1].detail).toBe("auto");
     expect(body.text.format.schema.properties).not.toHaveProperty("memory_suggestions");
+  });
+
+  it("parses a form assistance result with an explicit write action", () => {
+    const result = parseModelJson(JSON.stringify({
+      scenario: "form",
+      task_label: "Complete company description",
+      candidates: [{
+        text: "ContextCue is a private desktop writing assistant.",
+        tone: "Clear",
+        strategy: "Concise description",
+        label: "Concise",
+        action: "replace-all"
+      }]
+    }));
+
+    expect(result.scenario).toBe("form");
+    expect(result.taskLabel).toBe("Complete company description");
+    expect(result.candidates[0]).toMatchObject({ action: "replace-all", label: "Concise" });
   });
 
   it("asks Qwen to skip thinking for quick replies", async () => {

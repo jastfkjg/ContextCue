@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CircleAlert, X } from "lucide-react";
-import type { ChannelId, GenerationResult, OverlayStatus } from "./shared/types";
+import type { ChannelId, GenerationResult, InputTarget, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 
-type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string };
+type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget };
 
 export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
-  const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Waiting for a conversation…" });
+  const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Waiting for an input field…" });
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
 
   const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -57,7 +57,7 @@ export function OverlayApp() {
       <button
         className="overlay-hover-close"
         onClick={() => void contextCueApi.hideOverlay()}
-        aria-label="Close quick reply"
+        aria-label="Close suggestions"
         title="Close"
       >
         <X size={17} />
@@ -67,6 +67,9 @@ export function OverlayApp() {
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}
+          scenario={payload.scenario}
+          taskLabel={payload.taskLabel}
+          target={payload.target}
           compact
         />
       ) : (
@@ -81,14 +84,14 @@ export function OverlayApp() {
             onPointerCancel={endWindowDrag}
           >
             <div>
-              <strong>Generating replies…</strong>
+              <strong>Generating suggestions…</strong>
               <span>Model · {status.modelName || "Configured model"}</span>
             </div>
           </div>
         ) : (
           <div className="overlay-empty overlay-empty--error">
             <span className="overlay-state-icon"><CircleAlert size={24}/></span>
-            <strong>Couldn’t open quick reply</strong>
+            <strong>Couldn’t open suggestions</strong>
             <p>{status.message}</p>
             <button onClick={() => void contextCueApi.hideOverlay()}>Close</button>
           </div>
