@@ -95,6 +95,7 @@ export const DEFAULT_DATA: AppData = {
     candidateCount: 3,
     locale: "auto",
     globalShortcut: "CommandOrControl+Shift+Space",
+    askShortcut: "CommandOrControl+Shift+Enter",
     autoShowOverlay: true
   }
 };
@@ -190,6 +191,7 @@ function isPristineInstall(data: AppData): boolean {
     && data.settings.candidateCount === defaults.settings.candidateCount
     && data.settings.locale === defaults.settings.locale
     && data.settings.globalShortcut === defaults.settings.globalShortcut
+    && data.settings.askShortcut === defaults.settings.askShortcut
     && data.settings.autoShowOverlay === defaults.settings.autoShowOverlay;
 }
 

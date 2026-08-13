@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -17,6 +18,10 @@ import {
   Tray
 } from "electron";
 import type {
+  AskOverlayContext,
+  AskRequest,
+  AskStreamEvent,
+  ChannelId,
   ContactMemory,
   GenerateRequest,
   InputTarget,
@@ -43,7 +48,7 @@ import {
   type QuickReplyContext
 } from "./services/channel";
 import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
-import { generateWithModel, testModelConnection } from "./services/model";
+import { generateWithModel, streamAnswerWithModel, testModelConnection } from "./services/model";
 import { getFocusedInputTarget, sameInputTarget, writeMacInputTarget } from "./services/input-target";
 
 const execFileAsync = promisify(execFile);
@@ -62,9 +67,24 @@ let quickOverlayHiddenForContext = false;
 let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
 
+interface QuickOverlaySession {
+  id: string;
+  source?: CaptureSourceRef;
+  frontmost: FrontmostWindow;
+  target: InputTarget | null;
+  screenshot?: string;
+  hasSuggestions: boolean;
+  createdAt: number;
+}
+
+let quickOverlaySession: QuickOverlaySession | null = null;
+let askInFlight: { requestId: string; controller: AbortController } | null = null;
+
 const OVERLAY_RESULT_SIZE = { width: 420, height: 124 };
 const OVERLAY_LOADING_SIZE = { width: 420, height: 96 };
 const OVERLAY_ERROR_SIZE = { width: 420, height: 150 };
+const OVERLAY_ASK_SIZE = { width: 420, height: 336 };
+const ASK_SESSION_TTL_MS = 5 * 60_000;
 
 function rendererUrl(mode?: "overlay"): string {
   const url = process.env.ELECTRON_RENDERER_URL;
@@ -137,6 +157,7 @@ function createTray(): Tray {
     nextTray.popUpContextMenu(Menu.buildFromTemplate([
       { label: "Open ContextCue", click: showMainWindow },
       { label: "Smart suggestions", click: () => void showQuickReply() },
+      { label: "Ask AI", click: () => requestQuickAsk() },
       { type: "separator" },
       { label: "Quit ContextCue", role: "quit" }
     ]));
@@ -171,11 +192,15 @@ function createOverlayWindow(): BrowserWindow {
   void loadRenderer(window, "overlay");
   window.on("closed", () => {
     overlayWindow = null;
+    clearQuickReplySession();
   });
   return window;
 }
 
-function sendToOverlay(channel: "overlay:status" | "overlay:result", payload: unknown): void {
+function sendToOverlay(
+  channel: "overlay:status" | "overlay:result" | "overlay:ask-open" | "overlay:ask-event",
+  payload: unknown
+): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
   const send = () => overlayWindow?.webContents.send(channel, payload);
   if (overlayWindow.webContents.isLoadingMainFrame()) overlayWindow.webContents.once("did-finish-load", send);
@@ -267,15 +292,42 @@ function bindQuickReplyContext(source: CaptureSourceRef, frontmost: FrontmostWin
   quickOverlayHiddenForContext = false;
 }
 
+function bindQuickOverlayContext(source: CaptureSourceRef | undefined, frontmost: FrontmostWindow): void {
+  if (source) {
+    bindQuickReplyContext(source, frontmost);
+    return;
+  }
+  quickReplyContext = {
+    applicationName: frontmost.applicationName,
+    windowTitle: frontmost.windowTitle,
+    sourceName: frontmost.windowTitle || frontmost.applicationName,
+    channel: "other"
+  };
+  quickOverlayHiddenForContext = false;
+}
+
+function cancelAskInFlight(requestId?: string): void {
+  if (!askInFlight || (requestId && askInFlight.requestId !== requestId)) return;
+  askInFlight.controller.abort();
+  askInFlight = null;
+}
+
 function clearQuickReplySession(): void {
+  cancelAskInFlight();
   quickOverlayActive = false;
   quickReplyTargetApplication = "";
   quickInputTarget = null;
   quickReplyContext = null;
+  quickOverlaySession = null;
   quickOverlayHiddenForContext = false;
 }
 
 async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
+  if (quickOverlaySession && Date.now() - quickOverlaySession.createdAt > ASK_SESSION_TTL_MS) {
+    overlayWindow?.hide();
+    clearQuickReplySession();
+    return;
+  }
   if (
     quickContextCheckInFlight
     || !quickOverlayActive
@@ -319,6 +371,90 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
   }
 }
 
+function askContextForSession(session: QuickOverlaySession): AskOverlayContext {
+  return {
+    sessionId: session.id,
+    applicationName: session.frontmost.applicationName,
+    windowTitle: session.frontmost.windowTitle,
+    channel: session.source?.channel ?? "other",
+    hasPageContext: Boolean(session.source),
+    canReturnToSuggestions: session.hasSuggestions
+  };
+}
+
+function usableQuickOverlaySession(): QuickOverlaySession | null {
+  const session = quickOverlaySession;
+  if (!session) return null;
+  if (Date.now() - session.createdAt <= ASK_SESSION_TTL_MS) return session;
+  clearQuickReplySession();
+  return null;
+}
+
+function showAskOverlay(session: QuickOverlaySession): AskOverlayContext {
+  if (!overlayWindow) overlayWindow = createOverlayWindow();
+  const context = askContextForSession(session);
+  overlayWindow.setSize(OVERLAY_ASK_SIZE.width, OVERLAY_ASK_SIZE.height, false);
+  positionOverlayNearInput();
+  sendToOverlay("overlay:ask-open", context);
+  overlayWindow.show();
+  overlayWindow.focus();
+  return context;
+}
+
+async function showQuickAsk(): Promise<AskOverlayContext> {
+  if (quickReplyInFlight) throw new Error("ContextCue is already preparing the current page.");
+
+  quickReplyInFlight = true;
+  try {
+    clearQuickReplySession();
+    quickOverlayActive = true;
+    quickReplyAnchor = screen.getCursorScreenPoint();
+    mainWindow?.hide();
+    const [focusedTarget, frontmost, availableSources] = await Promise.all([
+      getFocusedInputTarget(),
+      frontmostWindow(),
+      refreshQuickSourceRefs()
+    ]);
+    if (focusedTarget?.sensitive) {
+      throw new Error("ContextCue is disabled for passwords, verification codes, and other sensitive fields.");
+    }
+    quickInputTarget = focusedTarget;
+    quickReplyTargetApplication = focusedTarget?.applicationName || frontmost.applicationName;
+    if (focusedTarget?.bounds) {
+      quickReplyAnchor = {
+        x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
+        y: focusedTarget.bounds.y + focusedTarget.bounds.height
+      };
+    }
+    const source = selectQuickReplySource(availableSources, frontmost.applicationName, frontmost.windowTitle);
+    bindQuickOverlayContext(source, frontmost);
+    const session: QuickOverlaySession = {
+      id: randomUUID(),
+      source,
+      frontmost,
+      target: focusedTarget,
+      hasSuggestions: false,
+      createdAt: Date.now()
+    };
+    quickOverlaySession = session;
+    return showAskOverlay(session);
+  } catch (error) {
+    clearQuickReplySession();
+    throw error;
+  } finally {
+    quickReplyInFlight = false;
+  }
+}
+
+function requestQuickAsk(): void {
+  void showQuickAsk().catch((error) => {
+    showOverlayStatus({
+      state: "error",
+      message: error instanceof Error ? error.message : String(error)
+    });
+  });
+}
+
 async function showQuickReply(): Promise<void> {
   if (quickReplyInFlight) return;
   quickReplyInFlight = true;
@@ -326,6 +462,8 @@ async function showQuickReply(): Promise<void> {
   let discoveryFinishedAt = startedAt;
   let captureFinishedAt = startedAt;
   try {
+    cancelAskInFlight();
+    quickOverlaySession = null;
     quickOverlayActive = true;
     quickReplyTargetApplication = "";
     quickInputTarget = null;
@@ -383,6 +521,15 @@ async function showQuickReply(): Promise<void> {
       screenshot = await captureQuickSource(source.id);
     }
     captureFinishedAt = performance.now();
+    quickOverlaySession = {
+      id: randomUUID(),
+      source,
+      frontmost,
+      target: focusedTarget,
+      screenshot,
+      hasSuggestions: false,
+      createdAt: Date.now()
+    };
     const snapshot = store.getData();
     const model = snapshot.settings.models.find((item) => item.id === snapshot.settings.activeModelId)
       ?? snapshot.settings.models[0];
@@ -410,6 +557,7 @@ async function showQuickReply(): Promise<void> {
     overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
     positionOverlayNearInput();
     sendToOverlay("overlay:result", { ...result, channel: source.channel, contact, target: focusedTarget ?? undefined });
+    if (quickOverlaySession) quickOverlaySession.hasSuggestions = true;
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     const finishedAt = performance.now();
     console.info(
@@ -429,9 +577,17 @@ async function showQuickReply(): Promise<void> {
   }
 }
 
-function registerShortcut(accelerator: string): boolean {
+function registerShortcuts(replyShortcut: string, askShortcut: string): { ok: true } | { ok: false; shortcut: string } {
   globalShortcut.unregisterAll();
-  return globalShortcut.register(accelerator, () => void showQuickReply());
+  if (replyShortcut === askShortcut) return { ok: false, shortcut: askShortcut };
+  if (!globalShortcut.register(replyShortcut, () => void showQuickReply())) {
+    return { ok: false, shortcut: replyShortcut };
+  }
+  if (!globalShortcut.register(askShortcut, requestQuickAsk)) {
+    globalShortcut.unregisterAll();
+    return { ok: false, shortcut: askShortcut };
+  }
+  return { ok: true };
 }
 
 function readApiKey(modelId = store.getData().settings.activeModelId): string {
@@ -577,6 +733,122 @@ async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: bool
   }
 }
 
+function sendAskEvent(event: AskStreamEvent): void {
+  if (!overlayWindow || !quickOverlayActive) return;
+  sendToOverlay("overlay:ask-event", event);
+}
+
+async function screenshotForAsk(session: QuickOverlaySession): Promise<string> {
+  if (session.screenshot) return session.screenshot;
+  let source = session.source;
+  if (!source) throw new Error("No current-page context is available. Turn off page context and ask again.");
+  try {
+    session.screenshot = await captureQuickSource(source.id);
+  } catch {
+    source = selectQuickReplySource(
+      await refreshQuickSourceRefs(),
+      session.frontmost.applicationName,
+      session.frontmost.windowTitle
+    );
+    if (!source) throw new Error("The original page is no longer available. Turn off page context or reopen Ask AI there.");
+    session.source = source;
+    bindQuickOverlayContext(source, session.frontmost);
+    session.screenshot = await captureQuickSource(source.id);
+  }
+  return session.screenshot;
+}
+
+async function rememberAskTokenUsage(
+  tokenUsage: Awaited<ReturnType<typeof streamAnswerWithModel>>["tokenUsage"],
+  channel: ChannelId,
+  data = store.getData()
+): Promise<void> {
+  const model = data.settings.models.find((item) => item.id === data.settings.activeModelId) ?? data.settings.models[0];
+  if (!model) return;
+  await store.recordTokenUsage({
+    ...tokenUsage,
+    modelId: model.id,
+    modelName: model.name,
+    model: model.model,
+    apiProtocol: model.apiProtocol,
+    requestType: "ask",
+    channel
+  });
+}
+
+async function startAsk(request: AskRequest): Promise<void> {
+  const session = usableQuickOverlaySession();
+  if (!session || session.id !== request.sessionId) {
+    sendAskEvent({
+      type: "error",
+      sessionId: request.sessionId,
+      requestId: request.requestId,
+      message: "This page context expired. Open Ask AI again."
+    });
+    return;
+  }
+  const question = request.question.trim().slice(0, 2_000);
+  if (!question) {
+    sendAskEvent({ type: "error", sessionId: session.id, requestId: request.requestId, message: "Type a question first." });
+    return;
+  }
+
+  cancelAskInFlight();
+  const controller = new AbortController();
+  askInFlight = { requestId: request.requestId, controller };
+  const snapshot = store.getData();
+  try {
+    const screenshot = request.includeContext ? await screenshotForAsk(session) : "";
+    const result = await streamAnswerWithModel(
+      snapshot,
+      readApiKey(),
+      question,
+      screenshot,
+      (request.history ?? []).slice(-6),
+      request.includeContext
+        ? { applicationName: session.frontmost.applicationName, windowTitle: session.frontmost.windowTitle }
+        : undefined,
+      (delta) => {
+        if (askInFlight?.requestId !== request.requestId) return;
+        sendAskEvent({ type: "delta", sessionId: session.id, requestId: request.requestId, delta });
+      },
+      controller.signal
+    );
+    if (askInFlight?.requestId !== request.requestId) return;
+    await rememberAskTokenUsage(result.tokenUsage, session.source?.channel ?? "other", snapshot);
+    sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer });
+  } catch (error) {
+    const cancelled = controller.signal.aborted || (error instanceof Error && error.name === "AbortError");
+    sendAskEvent(cancelled
+      ? { type: "cancelled", sessionId: session.id, requestId: request.requestId }
+      : {
+          type: "error",
+          sessionId: session.id,
+          requestId: request.requestId,
+          message: error instanceof Error ? error.message : String(error)
+        });
+  } finally {
+    if (askInFlight?.requestId === request.requestId) askInFlight = null;
+  }
+}
+
+async function exitAsk(returnToSuggestions: boolean): Promise<void> {
+  cancelAskInFlight();
+  const session = usableQuickOverlaySession();
+  if (!returnToSuggestions || !session?.hasSuggestions) {
+    await hideQuickOverlay();
+    return;
+  }
+  overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
+  positionOverlayNearInput();
+  try {
+    await activateApplication(quickReplyTargetApplication);
+  } catch (error) {
+    console.warn("[ask] could not restore the originating application", error);
+  }
+  if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
+}
+
 function registerIpc(): void {
   ipcMain.handle("capture:list", () => listCaptureSources());
   ipcMain.handle("capture:source", (_event, sourceId: string) => captureSource(sourceId));
@@ -640,6 +912,27 @@ function registerIpc(): void {
     overlayWindow.setPosition(nextX, nextY, false);
   });
   ipcMain.handle("overlay:hide", () => hideQuickOverlay());
+  ipcMain.handle("ask:open", (event) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Ask AI is available from the floating panel.");
+    const session = usableQuickOverlaySession();
+    return session ? showAskOverlay(session) : showQuickAsk();
+  });
+  ipcMain.handle("ask:exit", (event, returnToSuggestions: boolean) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    return exitAsk(Boolean(returnToSuggestions));
+  });
+  ipcMain.on("ask:start", (event, request: AskRequest) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    void startAsk(request);
+  });
+  ipcMain.on("ask:cancel", (event, requestId: string) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    cancelAskInFlight(requestId);
+  });
+  ipcMain.handle("ask:copy", (event, text: string) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    clipboard.writeText(String(text).slice(0, 50_000));
+  });
 
   ipcMain.handle("memory:get", () => store.snapshot());
   ipcMain.handle("memory:document-save", (_event, document: MemoryDocument) => store.saveMemoryDocument(document));
@@ -692,15 +985,20 @@ function registerIpc(): void {
         if (modelIds.has(id) && apiKey.trim()) encryptedApiKeys[id] = encryptApiKey(apiKey)!;
       }
       const settings = { ...preferences, models: storedModels };
-      const previousShortcut = store.getData().settings.globalShortcut;
-      if (settings.globalShortcut !== previousShortcut && !registerShortcut(settings.globalShortcut)) {
-        registerShortcut(previousShortcut);
-        throw new Error(`The shortcut ${settings.globalShortcut} is already used by another application.`);
+      const previousSettings = store.getData().settings;
+      const shortcutsChanged = settings.globalShortcut !== previousSettings.globalShortcut
+        || settings.askShortcut !== previousSettings.askShortcut;
+      if (shortcutsChanged) {
+        const registration = registerShortcuts(settings.globalShortcut, settings.askShortcut);
+        if (!registration.ok) {
+          registerShortcuts(previousSettings.globalShortcut, previousSettings.askShortcut);
+          throw new Error(`The shortcut ${registration.shortcut} is already used by another application or ContextCue action.`);
+        }
       }
       try {
         await store.saveSettings(settings, encryptedApiKeys);
       } catch (error) {
-        if (settings.globalShortcut !== previousShortcut) registerShortcut(previousShortcut);
+        if (shortcutsChanged) registerShortcuts(previousSettings.globalShortcut, previousSettings.askShortcut);
         throw error;
       }
       return store.settings(configuredModelIds());
@@ -717,7 +1015,7 @@ app.whenReady().then(async () => {
   store = new MemoryStore(dataPath);
   await store.load();
   registerIpc();
-  registerShortcut(store.getData().settings.globalShortcut);
+  registerShortcuts(store.getData().settings.globalShortcut, store.getData().settings.askShortcut);
   mainWindow = createMainWindow();
   overlayWindow = createOverlayWindow();
   tray = createTray();

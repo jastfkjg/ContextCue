@@ -168,6 +168,7 @@ describe("MemoryStore", () => {
       apiProtocol: "chat-completions"
     });
     expect(loaded.settings.activeModelId).toBe(loaded.settings.models[0].id);
+    expect(loaded.settings.askShortcut).toBe("CommandOrControl+Shift+Enter");
     expect(loaded.encryptedApiKeys?.[loaded.settings.activeModelId]).toBe("encrypted-value");
   });
 

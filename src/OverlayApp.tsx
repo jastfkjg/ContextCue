@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CircleAlert, X } from "lucide-react";
-import type { ChannelId, GenerationResult, InputTarget, OverlayStatus } from "./shared/types";
+import type { AskOverlayContext, ChannelId, GenerationResult, InputTarget, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
+import { AskPanel } from "./components/AskPanel";
 
 type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget };
 
 export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Waiting for an input field…" });
+  const [askContext, setAskContext] = useState<AskOverlayContext | null>(null);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
 
   const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -35,42 +37,70 @@ export function OverlayApp() {
 
   useEffect(() => {
     const stopResult = contextCueApi.onOverlayResult((result) => {
+      setAskContext(null);
       setPayload(result);
     });
     const stopStatus = contextCueApi.onOverlayStatus((next) => {
+      setAskContext(null);
       setPayload(null);
       setStatus(next);
     });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") void contextCueApi.hideOverlay();
-    };
-    window.addEventListener("keydown", onKeyDown);
+    const stopAskOpen = contextCueApi.onAskOpen(setAskContext);
     return () => {
       stopResult();
       stopStatus();
-      window.removeEventListener("keydown", onKeyDown);
+      stopAskOpen();
     };
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (!askContext) {
+        void contextCueApi.hideOverlay();
+        return;
+      }
+      const returnToSuggestions = Boolean(payload && askContext.canReturnToSuggestions);
+      void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext(null));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [askContext, payload]);
+
+  const enterAsk = () => {
+    void contextCueApi.openAsk().then(setAskContext).catch((error) => {
+      setPayload(null);
+      setStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
+    });
+  };
+
+  const exitAsk = () => {
+    const returnToSuggestions = Boolean(payload && askContext?.canReturnToSuggestions);
+    void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext(null));
+  };
+
   return (
-    <main className={`overlay-root ${!payload ? `overlay-root--${status.state}` : ""}`}>
+    <main className={`overlay-root ${askContext ? "overlay-root--ask" : !payload ? `overlay-root--${status.state}` : ""}`}>
       <button
         className="overlay-hover-close"
         onClick={() => void contextCueApi.hideOverlay()}
-        aria-label="Close suggestions"
+        aria-label={askContext ? "Close Ask AI" : "Close suggestions"}
         title="Close"
       >
         <X size={17} />
       </button>
-      {payload ? (
+      {askContext ? (
+        <AskPanel context={askContext} onExit={exitAsk}/>
+      ) : payload ? (
         <CandidateCarousel
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}
           scenario={payload.scenario}
-          taskLabel={payload.taskLabel}
           target={payload.target}
           compact
+          onAsk={enterAsk}
         />
       ) : (
         status.state === "loading" ? (

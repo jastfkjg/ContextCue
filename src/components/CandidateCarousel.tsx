@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, Sparkles } from "lucide-react";
 import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
@@ -10,12 +10,12 @@ interface Props {
   channel: ChannelId;
   contact: string;
   scenario?: AssistScenario;
-  taskLabel?: string;
   target?: InputTarget;
   compact?: boolean;
+  onAsk?: () => void;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", taskLabel, target, compact = false }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", target, compact = false, onAsk }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
@@ -131,7 +131,6 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="candidate-copy"
           >
-            {compact && <span className="candidate-context-label">{taskLabel || candidate.label || candidate.strategy}</span>}
             <p>{candidate.text}</p>
             {!compact && <span className="tone-label">{candidate.tone}</span>}
           </motion.div>
@@ -160,6 +159,12 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
               {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
               <span>{status === "pasted" ? "Applied" : insertLabel}</span>
             </button>
+            {onAsk && (
+              <button className="compact-text-action" onClick={onAsk} aria-label="Ask AI about this page">
+                <Sparkles size={15}/>
+                <span>Ask AI</span>
+              </button>
+            )}
             <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
               {candidates.map((_, dot) => (
                 <button

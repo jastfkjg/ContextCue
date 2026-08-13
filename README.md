@@ -31,6 +31,7 @@ ContextCue reads a screenshot of the active window only when you invoke it. On m
 | | Capability | What it does |
 |---|---|---|
 | ⚡ | **Any-field invocation** | Press one global shortcut from a chat, form, editor, or search field. |
+| ✦ | **Streaming Ask AI** | Open a compact question panel with a second shortcut or continue from generated suggestions. |
 | ✦ | **Task-aware drafts** | Route between reply, form, compose, rewrite, search, and generic completion. |
 | ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
 | ↵ | **Apply without submitting** | On macOS, validate the original control before inserting or replacing text. |
@@ -53,6 +54,8 @@ Focused text control
 ```
 
 The floating panel is bound to the originating application, window, and—on macOS—focused control. Changing the target invalidates the panel.
+
+Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. Its optional current-page context stays only in the short-lived overlay session, answers stream into the panel, and closing the panel clears the screenshot and in-memory Q&A.
 
 ## Quick start
 
@@ -81,7 +84,7 @@ npm run dev
 5. Press `⌘ ⇧ Space` on macOS or `Ctrl ⇧ Space` on Windows / Linux.
 6. Swipe between candidates and apply one. ContextCue writes into the field but never submits automatically.
 
-The shortcut can be changed in Settings. If registration fails because another application already uses it, ContextCue keeps the previous shortcut.
+To ask a quick question instead, press `⌘ ⇧ Enter` / `Ctrl ⇧ Enter`, or choose **Ask AI** from the suggestion panel. Both shortcuts can be changed in Settings. If either registration fails, ContextCue keeps both previous shortcuts.
 
 ### Environment variables
 

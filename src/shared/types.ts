@@ -77,7 +77,7 @@ export interface TokenUsageRecord extends GenerationTokenUsage {
   modelName: string;
   model: string;
   apiProtocol: ApiProtocol;
-  requestType: "reply" | "quick-reply" | "assist" | "quick-assist" | "connection-test";
+  requestType: "reply" | "quick-reply" | "assist" | "quick-assist" | "ask" | "connection-test";
   channel?: ChannelId;
   createdAt: string;
 }
@@ -98,6 +98,34 @@ export interface GenerateRequest {
   target?: InputTarget;
   pageContext?: PageContext;
 }
+
+export interface AskHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AskRequest {
+  sessionId: string;
+  requestId: string;
+  question: string;
+  includeContext: boolean;
+  history?: AskHistoryMessage[];
+}
+
+export interface AskOverlayContext {
+  sessionId: string;
+  applicationName: string;
+  windowTitle: string;
+  channel: ChannelId;
+  hasPageContext: boolean;
+  canReturnToSuggestions: boolean;
+}
+
+export type AskStreamEvent =
+  | { type: "delta"; sessionId: string; requestId: string; delta: string }
+  | { type: "complete"; sessionId: string; requestId: string; answer: string }
+  | { type: "cancelled"; sessionId: string; requestId: string }
+  | { type: "error"; sessionId: string; requestId: string; message: string };
 
 export interface UserProfile {
   displayName: string;
@@ -174,6 +202,7 @@ export interface AppSettings {
   candidateCount: number;
   locale: "auto" | "en" | "zh-CN";
   globalShortcut: string;
+  askShortcut: string;
   autoShowOverlay: boolean;
 }
 
@@ -268,6 +297,13 @@ export interface ContextCueApi {
   getPermissions: () => Promise<PermissionStatus>;
   onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget }) => void) => () => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
+  openAsk: () => Promise<AskOverlayContext>;
+  exitAsk: (returnToSuggestions: boolean) => Promise<void>;
+  startAsk: (request: AskRequest) => void;
+  cancelAsk: (requestId: string) => void;
+  copyText: (text: string) => Promise<void>;
+  onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
+  onAskEvent: (callback: (event: AskStreamEvent) => void) => () => void;
   moveOverlay: (deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
 }

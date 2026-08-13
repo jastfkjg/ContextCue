@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AppData, GenerateRequest } from "../src/shared/types";
 import { DEFAULT_DATA } from "../electron/services/memory-store";
-import { buildMemoryContext, generateWithModel, parseModelJson, responseTokenUsage, testModelConnection } from "../electron/services/model";
+import {
+  askDeltaFromPayload,
+  buildMemoryContext,
+  generateWithModel,
+  parseModelJson,
+  responseTokenUsage,
+  streamAnswerWithModel,
+  testModelConnection
+} from "../electron/services/model";
 
 function data(): AppData {
   return {
@@ -134,6 +142,85 @@ describe("model memory and parsing", () => {
       reported: true
     });
     expect(responseTokenUsage({})).toMatchObject({ totalTokens: 0, reported: false });
+  });
+
+  it("extracts ask deltas from both supported streaming protocols", () => {
+    expect(askDeltaFromPayload({ type: "response.output_text.delta", delta: "Hello" }, "responses")).toBe("Hello");
+    expect(askDeltaFromPayload({ choices: [{ delta: { content: "你好" } }] }, "chat-completions")).toBe("你好");
+    expect(askDeltaFromPayload({ choices: [{ delta: { reasoning_content: "hidden" } }] }, "chat-completions")).toBe("");
+  });
+
+  it("streams compact contextual answers through the Responses API", async () => {
+    const encoder = new TextEncoder();
+    const events = [
+      `data: ${JSON.stringify({ type: "response.output_text.delta", delta: "It means " })}\n\n`,
+      `data: ${JSON.stringify({ type: "response.output_text.delta", delta: "Thursday." })}\n\n`,
+      `data: ${JSON.stringify({ type: "response.completed", response: { usage: { input_tokens: 120, output_tokens: 12, total_tokens: 132 } } })}\n\n`,
+      "data: [DONE]\n\n"
+    ].join("");
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(events.slice(0, 71)));
+        controller.enqueue(encoder.encode(events.slice(71)));
+        controller.close();
+      }
+    });
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" }
+    }));
+    const deltas: string[] = [];
+    const result = await streamAnswerWithModel(
+      data(),
+      "secret",
+      "What does this mean?",
+      "data:image/png;base64,abc",
+      [],
+      { applicationName: "Lark", windowTitle: "Lin Yue" },
+      (delta) => deltas.push(delta),
+      new AbortController().signal,
+      fetcher as typeof fetch
+    );
+
+    expect(deltas).toEqual(["It means ", "Thursday."]);
+    expect(result.answer).toBe("It means Thursday.");
+    expect(result.tokenUsage).toMatchObject({ totalTokens: 132, reported: true });
+    const [, options] = fetcher.mock.calls[0]!;
+    const body = JSON.parse(String(options?.body));
+    expect(body.stream).toBe(true);
+    expect(body.text).toBeUndefined();
+    expect(JSON.stringify(body)).toContain("data:image/png;base64,abc");
+  });
+
+  it("allows text-only Ask AI requests when page context is excluded", async () => {
+    const configured = data();
+    configured.settings.models[0].apiProtocol = "chat-completions";
+    configured.settings.models[0].supportsImageInput = false;
+    const payload = {
+      choices: [{ message: { content: "A concise answer." } }],
+      usage: { prompt_tokens: 20, completion_tokens: 4, total_tokens: 24 }
+    };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    const deltas: string[] = [];
+    const result = await streamAnswerWithModel(
+      configured,
+      "secret",
+      "A general question",
+      "",
+      [],
+      undefined,
+      (delta) => deltas.push(delta),
+      new AbortController().signal,
+      fetcher as typeof fetch
+    );
+
+    expect(result.answer).toBe("A concise answer.");
+    expect(deltas).toEqual(["A concise answer."]);
+    const [, options] = fetcher.mock.calls[0]!;
+    expect(String(options?.body)).not.toContain("image_url");
   });
 
   it("merges partial candidate objects and removes duplicate replies", () => {

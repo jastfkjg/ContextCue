@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AskOverlayContext,
+  AskRequest,
+  AskStreamEvent,
   ContactMemory,
   GenerateRequest,
   GenerationResult,
@@ -47,6 +50,21 @@ const api: ContextCueApi = {
     const listener = (_event: Electron.IpcRendererEvent, status: OverlayStatus) => callback(status);
     ipcRenderer.on("overlay:status", listener);
     return () => ipcRenderer.removeListener("overlay:status", listener);
+  },
+  openAsk: () => ipcRenderer.invoke("ask:open"),
+  exitAsk: (returnToSuggestions: boolean) => ipcRenderer.invoke("ask:exit", returnToSuggestions),
+  startAsk: (request: AskRequest) => ipcRenderer.send("ask:start", request),
+  cancelAsk: (requestId: string) => ipcRenderer.send("ask:cancel", requestId),
+  copyText: (text: string) => ipcRenderer.invoke("ask:copy", text),
+  onAskOpen: (callback: (context: AskOverlayContext) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, context: AskOverlayContext) => callback(context);
+    ipcRenderer.on("overlay:ask-open", listener);
+    return () => ipcRenderer.removeListener("overlay:ask-open", listener);
+  },
+  onAskEvent: (callback: (event: AskStreamEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, askEvent: AskStreamEvent) => callback(askEvent);
+    ipcRenderer.on("overlay:ask-event", listener);
+    return () => ipcRenderer.removeListener("overlay:ask-event", listener);
   },
   moveOverlay: (deltaX, deltaY) => ipcRenderer.send("overlay:move-by", deltaX, deltaY),
   hideOverlay: () => ipcRenderer.invoke("overlay:hide")

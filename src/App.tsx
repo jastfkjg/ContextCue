@@ -113,6 +113,7 @@ function HomeView({
   const modelReady = Boolean(activeModel?.apiKeyConfigured && activeModel.supportsImageInput && activeModel.model.trim());
   const screenReady = isBrowserDemo || permissions?.screen === "granted" || permissions?.screen === "unknown";
   const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Space";
+  const askShortcut = settings?.askShortcut || "CommandOrControl+Shift+Enter";
   const readyCount = [modelReady, screenReady, sources.length > 0].filter(Boolean).length;
 
   return (
@@ -128,12 +129,16 @@ function HomeView({
 
       <section className="home-command-stage">
         <div className="home-command-copy">
-          <span className="home-command-label"><Command size={14}/> Global shortcut</span>
-          <h2>One shortcut.<br/>Right where you’re typing.</h2>
-          <p>Place the cursor in a text field, then press:</p>
+          <span className="home-command-label"><Command size={14}/> Global shortcuts</span>
+          <h2>Choose or ask.<br/>Right where you’re typing.</h2>
+          <p>For instant writing suggestions, press:</p>
           <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">
             {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
             <span>Change</span>
+          </button>
+          <button className="home-ask-hint" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">
+            <Sparkles size={13}/><span>Ask AI</span>
+            {shortcutParts(askShortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
           </button>
           <small>ContextCue reads the focused field and visible page, then opens compact suggestions. It never submits automatically.</small>
         </div>
@@ -668,6 +673,7 @@ function compactTokens(value: number): string {
 }
 
 function usageRequestLabel(requestType: TokenUsageRecord["requestType"]): string {
+  if (requestType === "ask") return "Ask AI";
   if (requestType === "quick-assist") return "Quick assist";
   if (requestType === "assist") return "Workspace assist";
   if (requestType === "quick-reply") return "Quick reply";
@@ -823,7 +829,17 @@ function shortcutParts(value: string): string[] {
   });
 }
 
-function ShortcutRecorder({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function ShortcutRecorder({
+  value,
+  onChange,
+  label,
+  description
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+  description: string;
+}) {
   const [recording, setRecording] = useState(false);
   useEffect(() => {
     if (!recording) return;
@@ -852,7 +868,7 @@ function ShortcutRecorder({ value, onChange }: { value: string; onChange: (value
     setRecording(false);
   };
   return <button type="button" className={`shortcut-recorder ${recording ? "shortcut-recorder--recording" : ""}`} onClick={() => setRecording((current) => !current)} onKeyDown={record} onBlur={() => setRecording(false)} aria-pressed={recording}>
-    <span className="shortcut-recorder-copy"><Keyboard size={17}/><span><strong>{recording ? "Press your shortcut" : "Global shortcut"}</strong><small>{recording ? "Use a modifier · Esc, click again, or click outside to cancel" : "Click to record a new shortcut"}</small></span></span>
+    <span className="shortcut-recorder-copy"><Keyboard size={17}/><span><strong>{recording ? "Press your shortcut" : label}</strong><small>{recording ? "Use a modifier · Esc, click again, or click outside to cancel" : description}</small></span></span>
     <span className="shortcut-keys">{recording ? <i>Listening…</i> : shortcutParts(value).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}</span>
   </button>;
 }
@@ -1017,7 +1033,7 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
     </div>
     <div className="preference-grid">
       <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Suggestion behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Writing language</span><div className="choice-group choice-group--language" role="group" aria-label="Writing language">{([{ value: "auto", label: "Match context" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcut</h2><p>Works from WeChat or any other app.</p></div></div><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })}/><p className="shortcut-help">The shortcut must include a modifier. If another app already uses it, ContextCue keeps your previous shortcut.</p></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate text for the focused field"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a question box near the current field"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
     </div>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
   </div>;

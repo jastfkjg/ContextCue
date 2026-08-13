@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AskStreamEvent,
   CaptureSource,
   GenerationResult,
   ContextCueApi,
@@ -107,6 +108,7 @@ let demoSettings: AppSettings = {
   candidateCount: 3,
   locale: "auto",
   globalShortcut: "CommandOrControl+Shift+Space",
+  askShortcut: "CommandOrControl+Shift+Enter",
   autoShowOverlay: true
 };
 
@@ -170,6 +172,14 @@ const demoResult: GenerationResult = {
   ],
   generatedAt: new Date().toISOString()
 };
+
+let demoAskListener: ((event: AskStreamEvent) => void) | null = null;
+let demoAskTimers: number[] = [];
+
+function clearDemoAskTimers(): void {
+  demoAskTimers.forEach((timer) => window.clearTimeout(timer));
+  demoAskTimers = [];
+}
 
 const browserDemoApi: ContextCueApi = {
   getCaptureSources: async () => demoSources,
@@ -248,6 +258,52 @@ const browserDemoApi: ContextCueApi = {
       modelName: "qwen3.7-flash"
     }), 0);
     return () => window.clearTimeout(timeout);
+  },
+  openAsk: async () => ({
+    sessionId: "demo-ask-session",
+    applicationName: "WeChat",
+    windowTitle: "Lin Yue",
+    channel: "wechat",
+    hasPageContext: true,
+    canReturnToSuggestions: true
+  }),
+  exitAsk: async () => undefined,
+  startAsk: (request) => {
+    clearDemoAskTimers();
+    const answer = "They are asking to move the meeting to Thursday and receive the updated deck before it starts.";
+    const chunks = answer.match(/.{1,8}/g) ?? [answer];
+    chunks.forEach((delta, index) => {
+      demoAskTimers.push(window.setTimeout(() => {
+        demoAskListener?.({ type: "delta", sessionId: request.sessionId, requestId: request.requestId, delta });
+      }, 180 + index * 70));
+    });
+    demoAskTimers.push(window.setTimeout(() => {
+      demoAskListener?.({ type: "complete", sessionId: request.sessionId, requestId: request.requestId, answer });
+    }, 220 + chunks.length * 70));
+  },
+  cancelAsk: (requestId) => {
+    clearDemoAskTimers();
+    demoAskListener?.({ type: "cancelled", sessionId: "demo-ask-session", requestId });
+  },
+  copyText: async (text) => { await navigator.clipboard?.writeText(text); },
+  onAskOpen: (callback) => {
+    if (new URLSearchParams(window.location.search).get("preview") !== "ask") return () => undefined;
+    const timeout = window.setTimeout(() => callback({
+      sessionId: "demo-ask-session",
+      applicationName: "WeChat",
+      windowTitle: "Lin Yue",
+      channel: "wechat",
+      hasPageContext: true,
+      canReturnToSuggestions: false
+    }), 0);
+    return () => window.clearTimeout(timeout);
+  },
+  onAskEvent: (callback) => {
+    demoAskListener = callback;
+    return () => {
+      if (demoAskListener === callback) demoAskListener = null;
+      clearDemoAskTimers();
+    };
   },
   moveOverlay: () => undefined,
   hideOverlay: async () => undefined
