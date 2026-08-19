@@ -114,8 +114,8 @@ export function OverlayApp() {
             onPointerCancel={endWindowDrag}
           >
             <div>
-              <strong>Generating suggestions…</strong>
-              <span>Model · {status.modelName || "Configured model"}</span>
+              <strong>{status.message}</strong>
+              {status.modelName && <span>Model · {status.modelName}</span>}
             </div>
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, Sparkles } from "lucide-react";
 import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
@@ -72,11 +72,45 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
     if (direction) move(index + direction);
   };
 
+  const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
+  };
+
+  const continueWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = windowDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.screenX - drag.screenX;
+    const deltaY = event.screenY - drag.screenY;
+    if (!deltaX && !deltaY) return;
+    contextCueApi.moveOverlay(deltaX, deltaY);
+    drag.screenX = event.screenX;
+    drag.screenY = event.screenY;
+  };
+
+  const endWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   const candidate = candidates[index];
   const action = candidate.action ?? (target?.selectedText ? "replace-selection" : "insert");
   const insertLabel = action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
   return (
     <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
+      {compact && (
+        <div
+          className="candidate-drag-handle"
+          aria-hidden="true"
+          onPointerDown={beginWindowDrag}
+          onPointerMove={continueWindowDrag}
+          onPointerUp={endWindowDrag}
+          onPointerCancel={endWindowDrag}
+        >
+          <span/>
+        </div>
+      )}
       {!compact && (
         <div className="candidate-meta">
           <span>{candidate.strategy}</span>
@@ -87,37 +121,18 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
         className="candidate-stage"
         onWheel={handleTrackpadSwipe}
         onPointerDown={(event) => {
-          if (compact && event.button === 0) {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
-            return;
-          }
+          if (compact) return;
           pointerStart.current = event.clientX;
         }}
-        onPointerMove={(event) => {
-          const drag = windowDrag.current;
-          if (!compact || !drag || drag.pointerId !== event.pointerId) return;
-          const deltaX = event.screenX - drag.screenX;
-          const deltaY = event.screenY - drag.screenY;
-          if (deltaX || deltaY) {
-            contextCueApi.moveOverlay(deltaX, deltaY);
-            drag.screenX = event.screenX;
-            drag.screenY = event.screenY;
-          }
-        }}
         onPointerUp={(event) => {
-          if (compact) {
-            if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-            return;
-          }
+          if (compact) return;
           if (pointerStart.current === null) return;
           const delta = event.clientX - pointerStart.current;
           if (Math.abs(delta) > 48) move(index + (delta < 0 ? 1 : -1));
           pointerStart.current = null;
         }}
         onPointerCancel={(event) => {
-          if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
+          if (compact) return;
           pointerStart.current = null;
         }}
       >
@@ -137,13 +152,12 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
         </AnimatePresence>
       </div>
       {!compact && (
-        <div className="candidate-dots" aria-label="Candidate selector">
+        <div className="candidate-dots" role="status" aria-label={`Suggestion ${index + 1} of ${candidates.length}`}>
           {candidates.map((_, dot) => (
-            <button
+            <span
               key={dot}
               className={dot === index ? "active" : ""}
-              onClick={() => move(dot)}
-              aria-label={`Show candidate ${dot + 1}`}
+              aria-hidden="true"
             />
           ))}
         </div>
@@ -165,13 +179,12 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
                 <span>Ask AI</span>
               </button>
             )}
-            <div className="candidate-dots candidate-dots--inline" aria-label="Candidate selector">
+            <div className="candidate-dots candidate-dots--inline" role="status" aria-label={`Suggestion ${index + 1} of ${candidates.length}`}>
               {candidates.map((_, dot) => (
-                <button
+                <span
                   key={dot}
                   className={dot === index ? "active" : ""}
-                  onClick={() => move(dot)}
-                  aria-label={`Show candidate ${dot + 1}`}
+                  aria-hidden="true"
                 />
               ))}
             </div>

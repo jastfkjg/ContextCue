@@ -270,7 +270,12 @@ const browserDemoApi: ContextCueApi = {
   exitAsk: async () => undefined,
   startAsk: (request) => {
     clearDemoAskTimers();
-    const answer = "They are asking to move the meeting to Thursday and receive the updated deck before it starts.";
+    const answer = [
+      "**The meeting is moving to Thursday at the same time.**",
+      "",
+      "- Update the calendar invite",
+      "- Send the revised deck before the meeting"
+    ].join("\n");
     const chunks = answer.match(/.{1,8}/g) ?? [answer];
     chunks.forEach((delta, index) => {
       demoAskTimers.push(window.setTimeout(() => {

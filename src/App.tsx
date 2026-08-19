@@ -39,6 +39,7 @@ import {
   X
 } from "lucide-react";
 import { CandidateCarousel } from "./components/CandidateCarousel";
+import { MarkdownContent } from "./components/MarkdownContent";
 import { contextCueApi, isBrowserDemo } from "./lib/api";
 import { inferImageInputSupport } from "./shared/model-capabilities";
 import contextCueIcon from "../build/icon.svg";
@@ -379,36 +380,14 @@ function ReplyWorkspace({
   );
 }
 
-function renderInlineMarkdown(text: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("`") && part.endsWith("`")) return <code key={index}>{part.slice(1, -1)}</code>;
-    return part;
-  });
-}
-
 function MarkdownPreview({ content }: { content: string }) {
-  const lines = content.replace(/<!--[^]*?-->/g, "").split("\n");
-  const blocks: React.ReactNode[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim()) continue;
-    if (/^[-*] /.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^[-*] /.test(lines[index])) {
-        items.push(lines[index].replace(/^[-*] /, ""));
-        index += 1;
-      }
-      index -= 1;
-      blocks.push(<ul key={`list-${index}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item)}</li>)}</ul>);
-    } else if (line.startsWith("### ")) blocks.push(<h3 key={index}>{renderInlineMarkdown(line.slice(4))}</h3>);
-    else if (line.startsWith("## ")) blocks.push(<h2 key={index}>{renderInlineMarkdown(line.slice(3))}</h2>);
-    else if (line.startsWith("# ")) blocks.push(<h1 key={index}>{renderInlineMarkdown(line.slice(2))}</h1>);
-    else if (line.startsWith("> ")) blocks.push(<blockquote key={index}>{renderInlineMarkdown(line.slice(2))}</blockquote>);
-    else if (/^---+$/.test(line.trim())) blocks.push(<hr key={index}/>);
-    else blocks.push(<p key={index}>{renderInlineMarkdown(line)}</p>);
-  }
-  return <div className="markdown-preview">{blocks.length ? blocks : <div className="markdown-empty"><FileText size={25}/><strong>This file is empty</strong><span>Switch to Write and add the context you want ContextCue to use.</span></div>}</div>;
+  return (
+    <MarkdownContent
+      content={content}
+      className="markdown-preview"
+      emptyFallback={<div className="markdown-empty"><FileText size={25}/><strong>This file is empty</strong><span>Switch to Write and add the context you want ContextCue to use.</span></div>}
+    />
+  );
 }
 
 type MemorySaveState = "saved" | "pending" | "saving" | "error";

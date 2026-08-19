@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, Check, Copy, Eye, EyeOff, RefreshCw, Send, Sparkles, Square } from "lucide-react";
 import type { AskHistoryMessage, AskOverlayContext } from "../shared/types";
 import { contextCueApi } from "../lib/api";
+import { MarkdownContent } from "./MarkdownContent";
+
+const ASK_INPUT_MIN_HEIGHT = 44;
+const ASK_INPUT_MAX_HEIGHT = 96;
 
 type TurnStatus = "streaming" | "complete" | "stopped" | "error";
 
@@ -38,6 +42,15 @@ export function AskPanel({ context, onExit }: Props) {
   useEffect(() => {
     inputRef.current?.focus();
   }, [context.sessionId]);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    const nextHeight = Math.min(ASK_INPUT_MAX_HEIGHT, Math.max(ASK_INPUT_MIN_HEIGHT, input.scrollHeight));
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > ASK_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+  }, [question]);
 
   useEffect(() => contextCueApi.onAskEvent((event) => {
     if (event.sessionId !== context.sessionId || event.requestId !== activeRequest.current) return;
@@ -176,7 +189,7 @@ export function AskPanel({ context, onExit }: Props) {
             <p className="ask-question">{turn.question}</p>
             <div className={`ask-answer ask-answer--${turn.status}`}>
               {turn.answer
-                ? <p>{turn.answer}</p>
+                ? <MarkdownContent content={turn.answer} className="ask-markdown"/>
                 : turn.status === "streaming"
                   ? <span className="ask-thinking"><i/><i/><i/> Thinking</span>
                   : null}
@@ -204,7 +217,7 @@ export function AskPanel({ context, onExit }: Props) {
           id="ask-question"
           ref={inputRef}
           value={question}
-          rows={2}
+          rows={1}
           maxLength={2_000}
           placeholder={includeContext ? "Ask about this page…" : "Ask a quick question…"}
           onChange={(event) => setQuestion(event.target.value)}
