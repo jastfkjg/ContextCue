@@ -1,6 +1,6 @@
 {
   "name": "contextcue",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "A local-first desktop reply assistant for WeChat, Slack, Lark, and any visible conversation.",
   "author": "zilong",
