@@ -3,6 +3,7 @@ import type {
   AskOverlayContext,
   AskRequest,
   AskStreamEvent,
+  AppUpdateState,
   ContactMemory,
   GenerateRequest,
   GenerationResult,
@@ -18,6 +19,21 @@ import type {
 } from "../src/shared/types";
 
 const api: ContextCueApi = {
+  getUpdateState: () => ipcRenderer.invoke("updates:get"),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
+  downloadUpdate: () => ipcRenderer.invoke("updates:download"),
+  installUpdate: () => ipcRenderer.invoke("updates:install"),
+  onUpdateState: (callback: (state: AppUpdateState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: AppUpdateState) => callback(state);
+    ipcRenderer.on("updates:state", listener);
+    return () => ipcRenderer.removeListener("updates:state", listener);
+  },
+  onOpenUpdates: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("updates:open", listener);
+    ipcRenderer.send("updates:ready");
+    return () => ipcRenderer.removeListener("updates:open", listener);
+  },
   getCaptureSources: () => ipcRenderer.invoke("capture:list"),
   captureSource: (sourceId: string) => ipcRenderer.invoke("capture:source", sourceId),
   generateReplies: (request: GenerateRequest) => ipcRenderer.invoke("reply:generate", request),

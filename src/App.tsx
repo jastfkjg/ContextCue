@@ -40,11 +40,13 @@ import {
 } from "lucide-react";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { MarkdownContent } from "./components/MarkdownContent";
+import { AppUpdates } from "./components/AppUpdates";
 import { contextCueApi, isBrowserDemo } from "./lib/api";
 import { inferImageInputSupport } from "./shared/model-capabilities";
 import contextCueIcon from "../build/icon.svg";
 import type {
   AppSettings,
+  AppUpdateState,
   CaptureSource,
   ChannelId,
   GenerationResult,
@@ -852,7 +854,7 @@ function ShortcutRecorder({
   </button>;
 }
 
-function SettingsView({ settings, onChange }: { settings: AppSettings | null; onChange: (settings: AppSettings) => void }) {
+function SettingsView({ settings, onChange, updateState }: { settings: AppSettings | null; onChange: (settings: AppSettings) => void; updateState: AppUpdateState | null }) {
   const [form, setForm] = useState<AppSettings | null>(settings);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -1014,12 +1016,16 @@ function SettingsView({ settings, onChange }: { settings: AppSettings | null; on
       <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Suggestion behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Writing language</span><div className="choice-group choice-group--language" role="group" aria-label="Writing language">{([{ value: "auto", label: "Match context" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
       <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate text for the focused field"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a question box near the current field"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
     </div>
+    <AppUpdates state={updateState}/>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
   </div>;
 }
 
 export function App() {
   const [view, setView] = useState<ViewId>("home");
+  const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
+  const [updatesFocus, setUpdatesFocus] = useState(0);
+  const openUpdates = useCallback(() => { setView("settings"); setUpdatesFocus((value) => value + 1); }, []);
   const [sources, setSources] = useState<CaptureSource[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [memory, setMemory] = useState<MemorySnapshot | null>(null);
@@ -1051,6 +1057,26 @@ export function App() {
     document.querySelector(".main-surface")?.scrollTo({ top: 0, behavior: "auto" });
   }, [view]);
 
+  useEffect(() => {
+    const receive = (next: AppUpdateState) => setUpdateState((current) => !current || next.revision >= current.revision ? next : current);
+    const unsubscribe = contextCueApi.onUpdateState(receive);
+    const stopOpening = contextCueApi.onOpenUpdates(openUpdates);
+    void contextCueApi.getUpdateState().then(receive).catch(() => receive({
+      revision: 0, currentVersion: "Unknown", mode: "unavailable", status: "disabled", message: "Could not connect to the update service. Restart ContextCue to try again."
+    }));
+    return () => { unsubscribe(); stopOpening(); };
+  }, [openUpdates]);
+
+  useEffect(() => {
+    if (!updatesFocus || view !== "settings") return;
+    // Wait for the outgoing view's exit transition and Settings to mount.
+    const timer = window.setTimeout(() => {
+      const section = document.getElementById("app-updates");
+      if (section) { section.scrollIntoView({ block: "center" }); setUpdatesFocus(0); }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [view, updatesFocus, settings]);
+
   const views: Array<{ id: ViewId; label: string; icon: React.ReactNode }> = [
     { id: "home", label: "Home", icon: <House size={18}/> },
     { id: "memory", label: "Memory", icon: <Brain size={18}/> },
@@ -1065,6 +1091,7 @@ export function App() {
         <div className="brand"><img src={contextCueIcon} alt=""/><strong>ContextCue</strong></div>
         <nav>{views.map((item) => <NavItem key={item.id} active={view === item.id} icon={item.icon} label={item.label} onClick={() => setView(item.id)}/>)}</nav>
         <div className="sidebar-foot">
+          {updateState && (["available", "downloading", "downloaded", "installing"].includes(updateState.status) || (updateState.status === "error" && updateState.availableVersion)) && <button className="sidebar-update" onClick={openUpdates}><RefreshCw size={16} aria-hidden="true"/><span>{updateState.status === "downloaded" ? "Update ready" : updateState.status === "downloading" ? `Downloading · ${updateState.progress ?? 0}%` : updateState.status === "installing" ? "Installing update…" : updateState.status === "error" ? "Update needs attention" : `Update · ${updateState.availableVersion}`}</span></button>}
           {isBrowserDemo && <span className="demo-badge">Browser preview</span>}
           <div className={`model-status ${activeModel?.apiKeyConfigured && activeModel.supportsImageInput ? "" : "model-status--needed"}`}><i/><span><strong>{activeModel?.name || "Model not set"}</strong><small>{activeModel ? `${activeModel.model || "Model ID needed"} · ${!activeModel.supportsImageInput ? "image input required" : activeModel.apiKeyConfigured ? "ready" : "add key"}` : "Add a model"}</small></span></div>
           <button onClick={() => setView("settings")}><CircleHelp size={16}/> Setup guide</button>
@@ -1077,7 +1104,7 @@ export function App() {
             {view === "memory" && <MemoryView memory={memory} onChange={setMemory}/>} 
             {view === "channels" && <ChannelsView sources={sources} refresh={refreshSources}/>} 
             {view === "usage" && <UsageView settings={settings}/>}
-            {view === "settings" && <SettingsView settings={settings} onChange={setSettings}/>} 
+            {view === "settings" && <SettingsView settings={settings} onChange={setSettings} updateState={updateState}/>}
           </motion.div>
         </AnimatePresence>
       </main>

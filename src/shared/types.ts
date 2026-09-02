@@ -274,7 +274,25 @@ export interface OverlayStatus {
   channel?: ChannelId;
 }
 
+export interface AppUpdateState {
+  revision: number;
+  currentVersion: string;
+  mode: "automatic" | "installer" | "unavailable";
+  status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "error" | "disabled";
+  availableVersion?: string;
+  releaseNotes?: string;
+  progress?: number;
+  checkedAt?: string;
+  message: string;
+}
+
 export interface ContextCueApi {
+  getUpdateState: () => Promise<AppUpdateState>;
+  checkForUpdates: () => Promise<AppUpdateState>;
+  downloadUpdate: () => Promise<AppUpdateState>;
+  installUpdate: () => Promise<AppUpdateState>;
+  onUpdateState: (callback: (state: AppUpdateState) => void) => () => void;
+  onOpenUpdates: (callback: () => void) => () => void;
   getCaptureSources: () => Promise<CaptureSource[]>;
   captureSource: (sourceId: string) => Promise<string>;
   generateReplies: (request: GenerateRequest) => Promise<GenerationResult>;

@@ -24,9 +24,6 @@ jobs:
           - arch: x64
             runner: macos-15-intel
 
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -40,50 +37,65 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify tag matches package version
+      - name: Verify stable tag matches package version
         shell: bash
         run: |
           package_version="$(node -p "require('./package.json').version")"
-          expected_tag="v${package_version}"
-
-          if [[ "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package version ${package_version}."
-            echo "Expected tag: ${expected_tag}"
+          if [[ ! "${package_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "${GITHUB_REF_NAME}" != "v${package_version}" ]]; then
+            echo "This workflow requires a stable v<package-version> tag."
             exit 1
           fi
 
-      - name: Run checks
+      - name: Run checks and build
         run: |
           npm run lint
           npm test
-
-      - name: Build unsigned DMG
-        run: |
           npm run build
-          npx electron-builder \
-            --mac dmg \
-            --${{ matrix.arch }} \
-            --publish never \
-            -c.mac.identity=null \
-            -c.mac.hardenedRuntime=false
 
-      - name: Give DMG a stable download name
+      - name: Package unsigned builds with in-app installer downloads
+        if: vars.MACOS_SIGNING_ENABLED != 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never \
+            -c.mac.identity=null -c.mac.hardenedRuntime=false \
+            -c.extraMetadata.contextcueMacAutoUpdate=false
+
+      - name: Sign and notarize builds with automatic installation
+        if: vars.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          dmg_path="$(find dist -maxdepth 1 -type f -name 'ContextCue-*.dmg' -print -quit)"
+          for required in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!required}" ]]; then
+              echo "Missing required signing secret: ${required}"
+              exit 1
+            fi
+          done
+          npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never \
+            -c.forceCodeSigning=true -c.mac.hardenedRuntime=true -c.mac.notarize=true \
+            -c.extraMetadata.contextcueMacAutoUpdate=true
 
-          if [[ -z "${dmg_path}" ]]; then
-            echo "No packaged DMG was found."
-            exit 1
-          fi
+      - name: Verify packaged update configuration
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+          SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
+        run: node scripts/verify-macos-update-config.mjs
 
-          mv "${dmg_path}" "dist/ContextCue-mac-${{ matrix.arch }}.dmg"
-
-      - name: Upload DMG artifact
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: contextcue-macos-${{ matrix.arch }}
-          path: dist/ContextCue-mac-${{ matrix.arch }}.dmg
+          path: |
+            dist/ContextCue-*.dmg
+            dist/ContextCue-*.zip
+            dist/ContextCue-*.blockmap
+            dist/latest-mac.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -96,31 +108,35 @@ jobs:
       contents: write
 
     steps:
-      - name: Download packaged DMGs
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts
+
+      - name: Download architecture artifacts separately
         uses: actions/download-artifact@v4
         with:
           pattern: contextcue-macos-*
-          path: release-assets
-          merge-multiple: true
+          path: release-input
 
-      - name: Generate SHA-256 checksums
-        shell: bash
-        run: |
-          cd release-assets
-          sha256sum ContextCue-*.dmg > SHA256SUMS
-          cat SHA256SUMS
+      - name: Merge and verify update metadata
+        run: node scripts/prepare-macos-release.mjs release-input release-assets "${GITHUB_REF_NAME#v}"
 
-      - name: Create latest release
+      - name: Publish complete release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            release-assets/ContextCue-*.dmg \
-            release-assets/SHA256SUMS \
-            --verify-tag \
-            --latest \
-            --title "ContextCue ${GITHUB_REF_NAME} — macOS Beta" \
-            --notes "Unsigned early-access macOS build. On first launch, Control-click ContextCue, choose Open, and confirm the macOS prompt." \
-            --generate-notes
+          if [[ "${SIGNING_ENABLED}" == "true" ]]; then
+            echo "Signed and notarized macOS build. Future updates can be installed from Settings → App updates." > release-notes.md
+          else
+            echo "Unsigned early-access macOS build. Settings → App updates can check for releases and download the installer. Quit ContextCue and replace it in Applications to finish updating." > release-notes.md
+          fi
+          gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            release-assets/* --verify-tag --draft \
+            --title "ContextCue ${GITHUB_REF_NAME} — macOS" \
+            --notes-file release-notes.md --generate-notes
+          gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest

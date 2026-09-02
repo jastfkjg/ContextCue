@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AppUpdateState,
   AskStreamEvent,
   CaptureSource,
   GenerationResult,
@@ -181,7 +182,21 @@ function clearDemoAskTimers(): void {
   demoAskTimers = [];
 }
 
+const previewUpdateState = (): AppUpdateState => ({
+  revision: 0,
+  currentVersion: "Preview",
+  mode: "unavailable",
+  status: "disabled",
+  message: "Updates are available in installed desktop builds."
+});
+
 const browserDemoApi: ContextCueApi = {
+  getUpdateState: async () => previewUpdateState(),
+  checkForUpdates: async () => previewUpdateState(),
+  downloadUpdate: async () => previewUpdateState(),
+  installUpdate: async () => previewUpdateState(),
+  onUpdateState: () => () => undefined,
+  onOpenUpdates: () => () => undefined,
   getCaptureSources: async () => demoSources,
   captureSource: async (id) => demoSources.find((source) => source.id === id)?.thumbnail ?? demoSources[0].thumbnail,
   generateReplies: async () => {

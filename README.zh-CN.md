@@ -177,7 +177,11 @@ React 渲染进程
 | `npm run package` | 生成未打包的桌面应用目录 |
 | `npm run dist` | 生成平台安装包 |
 
-代码签名和 macOS 公证尚未配置。
+应用会在启动 15 秒后和运行期间每 6 小时检查一次更新。发现新版时通过系统通知和侧边栏提示，也可以打开 **Settings → App updates**，或右键点击托盘图标选择 **Check for Updates…**。
+
+下载由用户点击开始，并显示进度。签名构建可点击 **Restart and update** 完成更新；目前默认的未签名 macOS 构建会在应用内下载并校验 DMG，点击 **Open installer** 后退出 ContextCue，把新应用拖入 Applications 并替换旧版。本地记忆和设置保存在应用包之外。
+
+发布流程已支持可选签名、公证、双架构更新包和更新清单。启用签名所需的 GitHub 配置、发布步骤和验证方法见[更新发布指南](./docs/updates.md)。已有的无更新功能版本需要手动安装一次新版，之后才能在应用内获取更新。
 
 ## 当前限制
 

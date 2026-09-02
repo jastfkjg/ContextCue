@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import { join } from "node:path";
@@ -10,7 +11,9 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
+  net,
   nativeImage,
+  Notification,
   safeStorage,
   screen,
   shell,
@@ -50,12 +53,19 @@ import {
 import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
 import { generateWithModel, streamAnswerWithModel, testModelConnection } from "./services/model";
 import { getFocusedInputTarget, sameInputTarget, writeMacInputTarget } from "./services/input-target";
+import electronUpdater from "electron-updater";
+import { UpdateService } from "./services/updater";
+import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./services/installer-download";
+import type { AppUpdateState } from "../src/shared/types";
 
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let store: MemoryStore;
+let updates: UpdateService;
+let openUpdatesRequested = false;
+const installerAbort = new AbortController();
 let quickReplyInFlight = false;
 let quickSourceRefs: CaptureSourceRef[] = [];
 let quickReplyAnchor: { x: number; y: number } | null = null;
@@ -159,10 +169,56 @@ function createTray(): Tray {
       { label: "Smart suggestions", click: () => void showQuickReply() },
       { label: "Ask AI", click: () => requestQuickAsk() },
       { type: "separator" },
+      { label: "Check for Updates…", click: () => { showUpdates(); void updates.check(); } },
+      { type: "separator" },
       { label: "Quit ContextCue", role: "quit" }
     ]));
   });
   return nextTray;
+}
+
+function showUpdates(): void {
+  openUpdatesRequested = true;
+  showMainWindow();
+  if (mainWindow && !mainWindow.webContents.isLoadingMainFrame()) {
+    openUpdatesRequested = false;
+    mainWindow.webContents.send("updates:open");
+  }
+}
+
+function createUpdateService(): UpdateService {
+  const metadata = JSON.parse(readFileSync(join(app.getAppPath(), "package.json"), "utf8"));
+  const supported = process.platform === "darwin" || process.platform === "win32"
+    || (process.platform === "linux" && Boolean(process.env.APPIMAGE));
+  const mode: AppUpdateState["mode"] = !app.isPackaged || !supported ? "unavailable"
+    : process.platform === "darwin" && metadata.contextcueMacAutoUpdate !== true ? "installer" : "automatic";
+  return new UpdateService({
+    engine: electronUpdater.autoUpdater,
+    currentVersion: app.getVersion(),
+    mode,
+    onState: (state) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("updates:state", state);
+    },
+    notify: (state) => {
+      if (!Notification.isSupported()) return;
+      const notification = new Notification({
+        title: state.status === "downloaded" ? "ContextCue update ready" : "ContextCue update available",
+        body: state.status === "downloaded" ? "Open ContextCue to finish updating." : `Version ${state.availableVersion} is ready to download.`
+      });
+      notification.on("click", showUpdates);
+      try { notification.show(); }
+      catch (error) { console.warn("[updates] could not show notification", error); }
+    },
+    downloadInstaller: (info, progress) => downloadInstaller(
+      macInstallerAsset(info, process.arch), join(app.getPath("userData"), "updates"),
+      (url, init) => net.fetch(url instanceof URL ? url.toString() : url, init), progress, installerAbort.signal
+    ),
+    openInstaller: async (path, info) => {
+      await verifyInstaller(path, macInstallerAsset(info, process.arch));
+      const error = await shell.openPath(path);
+      if (error) throw new Error(error);
+    }
+  });
 }
 
 function createOverlayWindow(): BrowserWindow {
@@ -850,6 +906,20 @@ async function exitAsk(returnToSuggestions: boolean): Promise<void> {
 }
 
 function registerIpc(): void {
+  // The floating overlay has no authority to download or install software.
+  const requireMainWindow = (event: Electron.IpcMainInvokeEvent) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Open Settings to manage updates.");
+  };
+  ipcMain.handle("updates:get", (event) => { requireMainWindow(event); return updates.snapshot(); });
+  ipcMain.handle("updates:check", (event) => { requireMainWindow(event); return updates.check(); });
+  ipcMain.handle("updates:download", (event) => { requireMainWindow(event); return updates.download(); });
+  ipcMain.handle("updates:install", (event) => { requireMainWindow(event); return updates.install(); });
+  ipcMain.on("updates:ready", (event) => {
+    if (mainWindow && event.sender === mainWindow.webContents && openUpdatesRequested) {
+      openUpdatesRequested = false;
+      event.sender.send("updates:open");
+    }
+  });
   ipcMain.handle("capture:list", () => listCaptureSources());
   ipcMain.handle("capture:source", (_event, sourceId: string) => captureSource(sourceId));
   ipcMain.handle("permissions:get", () => ({
@@ -1014,11 +1084,13 @@ app.whenReady().then(async () => {
   }
   store = new MemoryStore(dataPath);
   await store.load();
+  updates = createUpdateService();
   registerIpc();
   registerShortcuts(store.getData().settings.globalShortcut, store.getData().settings.askShortcut);
   mainWindow = createMainWindow();
   overlayWindow = createOverlayWindow();
   tray = createTray();
+  updates.start();
   void refreshQuickSourceRefs().catch(() => undefined);
   quickContextTimer = setInterval(() => void syncQuickOverlayWithFrontmostWindow(), 600);
 
@@ -1033,6 +1105,8 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", () => {
+  updates?.dispose();
+  installerAbort.abort();
   if (quickContextTimer) clearInterval(quickContextTimer);
   quickContextTimer = null;
   globalShortcut.unregisterAll();
