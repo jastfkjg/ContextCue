@@ -27,8 +27,8 @@ function run(argv) {
     return w.kCGWindowOwnerPID !== excludedPid && w.kCGWindowLayer === 0
       && w.kCGWindowAlpha !== 0 && b && b.Width > 1 && b.Height > 1;
   });
-  // A tray/main-window invocation can leave ContextCue as the active process
-  // briefly after its windows are hidden. Only then use the frontmost external window.
+  // A tray/main-window invocation can leave ContextCue as the active process.
+  // Find the frontmost external window without hiding our own fullscreen window.
   const window = windows.find(function(w) { return pid === excludedPid || w.kCGWindowOwnerPID === pid; });
   if (!window) return JSON.stringify({ applicationName: ObjC.unwrap(front.localizedName) || "", windowTitle: "" });
   const owner = $.NSRunningApplication.runningApplicationWithProcessIdentifier(window.kCGWindowOwnerPID);
@@ -108,6 +108,7 @@ export async function getFrontmostWindow(excludedPid = process.pid): Promise<Fro
 export function sameFrontmostWindow(expected: FrontmostWindow, current: FrontmostWindow): boolean {
   if (!expected.windowId || expected.windowId !== current.windowId) return false;
   if (expected.processId && expected.processId !== current.processId) return false;
+  if (expected.appId && current.appId && expected.appId !== current.appId) return false;
   // Window identity survives a tab change; invalidate cached context when its title changes.
-  return !expected.windowTitle || !current.windowTitle || expected.windowTitle === current.windowTitle;
+  return expected.windowTitle === current.windowTitle;
 }

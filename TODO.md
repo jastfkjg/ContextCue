@@ -4,7 +4,7 @@ This roadmap only lists unfinished, outcome-oriented work. Keep P0 small; move a
 
 ## P0 — make the core loop trustworthy
 
-- [ ] **Bound every request:** add cancellation, generation timeouts, safe retry/backoff, and actionable permission, network, and rate-limit errors; release screenshot data in `finally` paths.
+- [ ] **Finish request recovery:** add safe network retry/backoff and actionable permission and rate-limit recovery. Page requests now have cancellation/timeout and stale-result guards; audit remaining legacy paths and screenshot cleanup.
 - [ ] **Validate trust boundaries:** runtime-validate IPC payloads and model output, redact logs by default, and add regression cases for screenshot prompt injection and malformed providers.
 - [ ] **Give users control of local data:** encrypt the memory store with a recoverable migration, then add export/import, retention controls, and “delete all local data”.
 - [ ] **Capture only what is needed:** support region selection, multi-display coordinates, and adaptive crop/resolution so small text stays readable without uploading unrelated pixels.
@@ -13,12 +13,12 @@ This roadmap only lists unfinished, outcome-oriented work. Keep P0 small; move a
 
 ## P1 — improve quality, speed, and learning
 
-- [ ] **Add a correction loop:** let users revise a candidate with “From now on…”, regenerate immediately, and save the rule at global, channel, person, or conversation scope.
+- [ ] **Make corrections reusable only by explicit choice:** in-place editing and one-sentence revision are available. If persistent rules are added later, expose explicit scope and consent; never silently bring old-window context into page-only sessions.
 - [ ] **Make memory explainable:** add provenance, confidence, freshness/expiry, conflict handling, per-contact learning controls, and a “do not remember this conversation” mode.
-- [ ] **Upgrade retrieval:** combine scoped rules with local keyword/embedding reranking; show which memories influenced a reply and let users exclude them before retrying.
+- [ ] **Revisit opt-in retrieval:** page-only sessions exclude stored memory. Any future retrieval must be user-invoked, preview its exact scope, and preserve the default window-isolation boundary.
 - [ ] **Learn only from evidence:** calibrate style from user-selected sent messages and accepted replies, never from received text or unchosen model drafts.
 - [ ] **Build a reply-quality eval set:** measure context grounding, voice similarity, strategy diversity, unsafe invention, insertion success, latency, and token cost across channels and UI variants.
-- [ ] **Reduce data and latency:** add optional on-device OCR/redaction, live provider capability probes, adaptive model routing, prompt-prefix caching, and time-to-first-usable-reply metrics.
+- [ ] **Reduce data and latency:** add optional on-device OCR/redaction, broader capability probes beyond the setup image test, adaptive model routing, prompt-prefix caching, and time-to-first-usable-reply metrics.
 
 ## P2 — differentiated workflows
 
@@ -33,4 +33,5 @@ This roadmap only lists unfinished, outcome-oriented work. Keep P0 small; move a
 - Never auto-send a message or silently create an external event.
 - Never learn from received messages, rejected drafts, or background capture.
 - Prefer a smaller, inspectable context over collecting more history.
+- Each invocation starts a fresh page-only session; old windows, saved memory and accepted drafts must not be carried into it implicitly.
 - Every feature that sends or stores conversation data must expose its scope, destination, and deletion path.

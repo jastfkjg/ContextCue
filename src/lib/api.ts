@@ -110,7 +110,8 @@ let demoSettings: AppSettings = {
   locale: "auto",
   globalShortcut: "CommandOrControl+Shift+Space",
   askShortcut: "CommandOrControl+Shift+Enter",
-  autoShowOverlay: true
+  autoShowOverlay: true,
+  onboardingComplete: false
 };
 
 const demoUsageModels = [
@@ -255,16 +256,27 @@ const browserDemoApi: ContextCueApi = {
     if (!apiKey && !model.apiKeyConfigured) throw new Error("Add an API key before testing this connection.");
     return { ok: true, latencyMs: 642, message: `${model.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.` };
   },
+  generateExample: async () => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    return { ...demoResult, candidates: [
+      { text: "Friday at 10 am works for me. See you at the design review!", tone: "Warm", strategy: "Confirm the new time" },
+      { text: "Confirmed — let's move the design review to Friday at 10 am.", tone: "Direct", strategy: "Brief confirmation" },
+      { text: "That works. I'll see you on Friday at 10 am for the design review.", tone: "Calm", strategy: "Acknowledge the change" }
+    ] };
+  },
+  completeSetup: async () => (demoSettings = { ...demoSettings, onboardingComplete: true }),
   useReply: async () => ({ copied: true, pasted: false }),
   useSuggestion: async () => ({ copied: true, pasted: false }),
   openScreenSettings: async () => undefined,
+  openAccessibilitySettings: async () => undefined,
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
   onOverlayResult: (callback) => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") !== "overlay" || params.get("preview") === "loading") return () => undefined;
-    const timeout = window.setTimeout(() => callback({ ...demoResult, channel: "wechat", contact: demoResult.detectedContact }), 650);
+    const timeout = window.setTimeout(() => callback({ ...demoResult, sessionId: "demo-ask-session", channel: "wechat", contact: demoResult.detectedContact }), 650);
     return () => window.clearTimeout(timeout);
   },
+  onOverlayReset: () => () => undefined,
   onOverlayStatus: (callback) => {
     if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
     const timeout = window.setTimeout(() => callback({
@@ -328,7 +340,12 @@ const browserDemoApi: ContextCueApi = {
   moveOverlay: () => undefined,
   resizeOverlay: () => undefined,
   resizeOverlayBy: () => undefined,
-  hideOverlay: async () => undefined
+  hideOverlay: async () => undefined,
+  reviseSuggestion: async ({ text, instruction }) => {
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    return /short|brief|短/i.test(instruction) ? "Thursday works. I'll send the deck before we meet." : `${text}\n[Preview revision: ${instruction}]`;
+  },
+  cancelRevision: () => undefined
 };
 
 export const contextCueApi: ContextCueApi = window.contextCue ?? browserDemoApi;

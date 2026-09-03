@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CircleAlert, X } from "lucide-react";
-import type { AskOverlayContext, ChannelId, GenerationResult, InputTarget, OverlayStatus } from "./shared/types";
+import type { AskOverlayContext, OverlayResult, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { AskPanel } from "./components/AskPanel";
 import { OverlayWindowControls } from "./components/OverlayWindowControls";
 
-type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget };
+type OverlayPayload = OverlayResult;
 
 export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Reading the current window…" });
   const [askContext, setAskContext] = useState<AskOverlayContext | null>(null);
+  const eventRevision = useRef(0);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
 
   const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -37,20 +38,33 @@ export function OverlayApp() {
   };
 
   useEffect(() => {
+    const stopReset = contextCueApi.onOverlayReset(() => {
+      eventRevision.current += 1;
+      setAskContext(null);
+      setPayload(null);
+      setStatus({ state: "loading", message: "Reading the current window…" });
+    });
     const stopResult = contextCueApi.onOverlayResult((result) => {
+      eventRevision.current += 1;
       setAskContext(null);
       setPayload(result);
     });
     const stopStatus = contextCueApi.onOverlayStatus((next) => {
+      eventRevision.current += 1;
       setAskContext(null);
       setPayload(null);
       setStatus(next);
     });
-    const stopAskOpen = contextCueApi.onAskOpen(setAskContext);
+    const stopAskOpen = contextCueApi.onAskOpen((context) => {
+      eventRevision.current += 1;
+      setPayload((current) => current?.sessionId === context.sessionId ? current : null);
+      setAskContext(context);
+    });
     return () => {
       stopResult();
       stopStatus();
       stopAskOpen();
+      stopReset();
     };
   }, []);
 
@@ -63,14 +77,16 @@ export function OverlayApp() {
         return;
       }
       const returnToSuggestions = Boolean(payload && askContext.canReturnToSuggestions);
-      void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext(null));
+      void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext((current) => current?.sessionId === askContext.sessionId ? null : current));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [askContext, payload]);
 
   const enterAsk = () => {
-    void contextCueApi.openAsk().then(setAskContext).catch((error) => {
+    const revision = eventRevision.current;
+    void contextCueApi.openAsk().then((context) => { if (revision === eventRevision.current) setAskContext(context); }).catch((error) => {
+      if (revision !== eventRevision.current) return;
       setPayload(null);
       setStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
     });
@@ -78,7 +94,7 @@ export function OverlayApp() {
 
   const exitAsk = () => {
     const returnToSuggestions = Boolean(payload && askContext?.canReturnToSuggestions);
-    void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext(null));
+    void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext((current) => current?.sessionId === askContext?.sessionId ? null : current));
   };
 
   return (
@@ -93,9 +109,12 @@ export function OverlayApp() {
         <X size={17} />
       </button>
       {askContext ? (
-        <AskPanel context={askContext} onExit={exitAsk}/>
+        <AskPanel key={askContext.sessionId} context={askContext} onExit={exitAsk}/>
       ) : payload ? (
         <CandidateCarousel
+          key={payload.sessionId ?? payload.generatedAt}
+          sessionId={payload.sessionId}
+          onEditCandidate={(index, text) => setPayload((current) => current ? { ...current, candidates: current.candidates.map((candidate, i) => i === index ? { ...candidate, text } : candidate) } : null)}
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}

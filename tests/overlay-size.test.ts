@@ -10,6 +10,13 @@ function fixture() {
 }
 
 describe("resizable suggestion and Ask AI windows", () => {
+  it("expands the editor, then fits the saved candidate again", () => {
+    const { window, sizer } = fixture();
+    sizer.fitContent(620, true, true);
+    expect(window.getBounds().height).toBe(540);
+    sizer.fitContent(180, true, false);
+    expect(window.getBounds().height).toBe(180);
+  });
   it("keeps manual height for the current candidate, then shrinks for a shorter candidate", () => {
     const { window, sizer } = fixture();
     sizer.fitContent(900);

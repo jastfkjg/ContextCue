@@ -54,13 +54,13 @@ export class OverlaySizer {
     } else this.apply(size);
   }
 
-  fitContent(height: number, newCandidate = false): boolean {
+  fitContent(height: number, newCandidate = false, editing = false): boolean {
     if (this.mode !== "suggestions" || !Number.isFinite(height) || height <= 0) return false;
     this.contentHeight = height;
     if (newCandidate) this.manualSuggestionHeight = false;
     if (this.manualSuggestionHeight) return false;
     const current = this.window.getBounds();
-    const next = this.constrain({ ...current, height: Math.min(360, height) });
+    const next = this.constrain({ ...current, height: Math.min(editing ? 540 : 360, height) });
     if (next.height === current.height) return false;
     this.window.setBounds(next, false);
     return true;

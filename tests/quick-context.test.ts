@@ -62,4 +62,10 @@ describe("quick suggestions and Ask AI page preparation", () => {
     await expect(prepareQuickContext(deps, false)).rejects.toThrow("changed");
     expect(deps.capture).toHaveBeenCalledExactlyOnceWith("window:7788:0");
   });
+
+  it("does not open Ask AI against the old window when the page changes during capture", async () => {
+    const deps = fixture();
+    deps.getWindow.mockResolvedValueOnce(front).mockResolvedValueOnce({ ...front, windowTitle: "Other tab" });
+    await expect(prepareQuickContext(deps, true)).rejects.toThrow("changed");
+  });
 });

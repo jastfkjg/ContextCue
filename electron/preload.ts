@@ -6,12 +6,11 @@ import type {
   AppUpdateState,
   ContactMemory,
   GenerateRequest,
-  GenerationResult,
   ContextCueApi,
-  InputTarget,
   MemoryDocument,
   MemoryFact,
   OverlayStatus,
+  OverlayResult,
   SaveSettingsRequest,
   TestModelConnectionRequest,
   UseReplyRequest,
@@ -53,14 +52,22 @@ const api: ContextCueApi = {
     ipcRenderer.invoke("settings:save", settings),
   testModelConnection: (request: TestModelConnectionRequest) =>
     ipcRenderer.invoke("settings:test-model", request),
+  generateExample: (imageDataUrl) => ipcRenderer.invoke("setup:example", imageDataUrl),
+  completeSetup: () => ipcRenderer.invoke("setup:complete"),
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
   useSuggestion: (request: UseReplyRequest) => ipcRenderer.invoke("assist:use", request),
   openScreenSettings: () => ipcRenderer.invoke("permissions:open-screen"),
+  openAccessibilitySettings: () => ipcRenderer.invoke("permissions:open-accessibility"),
   getPermissions: () => ipcRenderer.invoke("permissions:get"),
-  onOverlayResult: (callback: (result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string; target?: InputTarget }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, result: GenerationResult & { channel: UseReplyRequest["channel"]; contact: string; target?: InputTarget }) => callback(result);
+  onOverlayResult: (callback: (result: OverlayResult) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, result: OverlayResult) => callback(result);
     ipcRenderer.on("overlay:result", listener);
     return () => ipcRenderer.removeListener("overlay:result", listener);
+  },
+  onOverlayReset: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("overlay:reset", listener);
+    return () => ipcRenderer.removeListener("overlay:reset", listener);
   },
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: OverlayStatus) => callback(status);
@@ -83,9 +90,11 @@ const api: ContextCueApi = {
     return () => ipcRenderer.removeListener("overlay:ask-event", listener);
   },
   moveOverlay: (deltaX, deltaY) => ipcRenderer.send("overlay:move-by", deltaX, deltaY),
-  resizeOverlay: (height, newCandidate) => ipcRenderer.send("overlay:resize", height, newCandidate),
+  resizeOverlay: (height, newCandidate, editing) => ipcRenderer.send("overlay:resize", height, newCandidate, editing),
   resizeOverlayBy: (edge, deltaX, deltaY) => ipcRenderer.send("overlay:resize-by", edge, deltaX, deltaY),
-  hideOverlay: () => ipcRenderer.invoke("overlay:hide")
+  hideOverlay: () => ipcRenderer.invoke("overlay:hide"),
+  reviseSuggestion: (request) => ipcRenderer.invoke("assist:revise", request),
+  cancelRevision: () => ipcRenderer.send("assist:cancel-revision")
 };
 
 contextBridge.exposeInMainWorld("contextCue", api);

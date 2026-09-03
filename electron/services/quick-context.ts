@@ -9,6 +9,8 @@ interface ContextDependencies {
   capture: (sourceId: string) => Promise<string>;
 }
 
+class PageChangedError extends Error {}
+
 export interface QuickContext {
   frontmost: FrontmostWindow;
   target: InputTarget | null;
@@ -42,11 +44,11 @@ export async function prepareQuickContext(deps: ContextDependencies, allowWithou
     const screenshot = await deps.capture(source.id);
     // Capture only the original ID, and never silently retry on another window.
     if (!sameFrontmostWindow(frontmost, await deps.getWindow())) {
-      throw new Error("The active window or tab changed. Open ContextCue again on the page you want to use.");
+      throw new PageChangedError("The active window or tab changed. Open ContextCue again on the page you want to use.");
     }
     return { frontmost, target, source, screenshot };
   } catch (error) {
-    if (!allowWithoutScreenshot) throw error;
+    if (!allowWithoutScreenshot || error instanceof PageChangedError) throw error;
     return { frontmost, target, contextUnavailableReason: error instanceof Error ? error.message : "Page context is unavailable. You can still ask a question." };
   }
 }

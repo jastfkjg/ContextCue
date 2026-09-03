@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
@@ -31,6 +30,7 @@ import type {
   MemoryDocument,
   MemoryFact,
   OverlayStatus,
+  ReviseSuggestionRequest,
   SaveSettingsRequest,
   TestModelConnectionRequest,
   TokenUsageRecord,
@@ -40,8 +40,7 @@ import type {
 import {
   captureSource,
   captureQuickSource,
-  listCaptureSources,
-  type CaptureSourceRef
+  listCaptureSources
 } from "./services/capture";
 import {
   targetApplicationName
@@ -55,7 +54,10 @@ import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./service
 import type { AppUpdateState } from "../src/shared/types";
 import { getFrontmostWindow, sameFrontmostWindow, type FrontmostWindow } from "./services/front-window";
 import { prepareQuickContext } from "./services/quick-context";
+import { prepareQuickWindows } from "./services/quick-windows";
 import { OverlaySizer } from "./services/overlay-size";
+import { createPageSession, pageRequest, rememberPageTurn, type PageSession } from "./services/page-session";
+import { createVisionProbe } from "./services/vision-probe";
 import type { OverlayResizeEdge } from "../src/shared/types";
 
 const execFileAsync = promisify(execFile);
@@ -76,18 +78,11 @@ let quickOverlayHiddenForContext = false;
 let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
 
-interface QuickOverlaySession {
-  id: string;
-  source?: CaptureSourceRef;
-  frontmost: FrontmostWindow;
-  target: InputTarget | null;
-  screenshot?: string;
-  contextUnavailableReason?: string;
-  hasSuggestions: boolean;
-  createdAt: number;
-}
-
-let quickOverlaySession: QuickOverlaySession | null = null;
+type QuickOverlaySession = PageSession;
+let quickOverlaySession: PageSession | null = null;
+let quickInvocation = 0;
+let suggestionController: AbortController | null = null;
+let revisionController: AbortController | null = null;
 let askInFlight: { requestId: string; controller: AbortController } | null = null;
 
 let overlaySizer: OverlaySizer | null = null;
@@ -227,6 +222,9 @@ function createOverlayWindow(): BrowserWindow {
     minWidth: 340,
     minHeight: 96,
     frame: false,
+    // Native panels join fullscreen Spaces without transforming the entire app's
+    // process type (which can hide its main window and disrupt Split View).
+    type: process.platform === "darwin" ? "panel" : undefined,
     transparent: true,
     backgroundColor: "#00000000",
     roundedCorners: true,
@@ -245,7 +243,7 @@ function createOverlayWindow(): BrowserWindow {
   });
   window.setHasShadow(false);
   overlaySizer = new OverlaySizer(window, (bounds) => screen.getDisplayMatching(bounds).workArea);
-  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  if (process.platform !== "darwin") window.setVisibleOnAllWorkspaces(true);
   void loadRenderer(window, "overlay");
   window.on("closed", () => {
     overlayWindow = null;
@@ -256,7 +254,7 @@ function createOverlayWindow(): BrowserWindow {
 }
 
 function sendToOverlay(
-  channel: "overlay:status" | "overlay:result" | "overlay:ask-open" | "overlay:ask-event",
+  channel: "overlay:status" | "overlay:result" | "overlay:ask-open" | "overlay:ask-event" | "overlay:reset",
   payload: unknown
 ): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
@@ -265,8 +263,14 @@ function sendToOverlay(
     overlayManuallyPositioned = false;
   } else if (channel === "overlay:ask-open") overlaySizer?.show("ask");
   else if (channel === "overlay:status") overlaySizer?.show((payload as OverlayStatus).state === "error" ? "error" : "loading");
-  if (channel !== "overlay:ask-event") positionOverlayNearInput();
-  const send = () => overlayWindow?.webContents.send(channel, payload);
+  if (channel !== "overlay:ask-event" && channel !== "overlay:reset") positionOverlayNearInput();
+  const invocation = quickInvocation;
+  const destination = overlayWindow;
+  const send = () => {
+    if (invocation === quickInvocation && destination === overlayWindow && !destination.isDestroyed()) {
+      destination.webContents.send(channel, payload);
+    }
+  };
   if (overlayWindow.webContents.isLoadingMainFrame()) overlayWindow.webContents.once("did-finish-load", send);
   else send();
 }
@@ -301,10 +305,16 @@ function bindQuickOverlayContext(frontmost: FrontmostWindow): void {
 }
 
 async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
-  // Hide our own windows before asking the OS which external window is active.
-  // Do not show a loading overlay until the original screenshot has been saved.
-  overlayWindow?.hide();
-  mainWindow?.hide();
+  // Clear the old overlay before capture, preserving the main window's Space.
+  await prepareQuickWindows({
+    platform: process.platform,
+    main: mainWindow,
+    overlay: overlayWindow,
+    activateExternal: async () => {
+      const target = await getFrontmostWindow();
+      if (target.windowId && target.applicationName) await activateApplication(target.applicationName);
+    }
+  });
   return prepareQuickContext({
     getWindow: () => getFrontmostWindow(),
     getTarget: getFocusedInputTarget,
@@ -319,6 +329,12 @@ function cancelAskInFlight(requestId?: string): void {
 }
 
 function clearQuickReplySession(): void {
+  quickInvocation += 1;
+  suggestionController?.abort();
+  suggestionController = null;
+  revisionController?.abort();
+  revisionController = null;
+  quickReplyInFlight = false;
   cancelAskInFlight();
   quickOverlayActive = false;
   quickReplyTargetApplication = "";
@@ -326,6 +342,7 @@ function clearQuickReplySession(): void {
   quickReplyContext = null;
   quickOverlaySession = null;
   quickOverlayHiddenForContext = false;
+  if (overlayWindow && !overlayWindow.isDestroyed()) sendToOverlay("overlay:reset", null);
 }
 
 async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
@@ -357,6 +374,11 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
     ]);
     if (!quickOverlayActive || quickReplyContext !== context) return;
     const matches = sameFrontmostWindow(context, current);
+    if (!matches) {
+      overlayWindow.hide();
+      clearQuickReplySession();
+      return;
+    }
     const targetMatches = !quickInputTarget || sameInputTarget(quickInputTarget, currentTarget);
     if (matches && targetMatches) {
       if (quickOverlayHiddenForContext) {
@@ -393,6 +415,48 @@ function usableQuickOverlaySession(): QuickOverlaySession | null {
   return null;
 }
 
+async function assertSessionCurrent(session: PageSession): Promise<void> {
+  if (quickOverlaySession !== session) throw new Error("This page session has ended. Open ContextCue again.");
+  // macOS can inspect the external window underneath our panel. Other platforms
+  // report our own window while it is focused, so their background watcher checks it.
+  if (session.frontmost.windowId && (process.platform === "darwin" || !overlayWindow?.isFocused())) {
+    const current = await getFrontmostWindow();
+    if (quickOverlaySession !== session) throw new Error("This page session has ended. Open ContextCue again.");
+    if (!sameFrontmostWindow(session.frontmost, current)) {
+      overlayWindow?.hide();
+      clearQuickReplySession();
+      throw new Error("The window or page changed. Open ContextCue again on the current page.");
+    }
+  }
+}
+
+async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<string> {
+  const session = usableQuickOverlaySession();
+  if (!session || request.sessionId !== session.id || !session.result || !session.screenshot) {
+    throw new Error("This suggestion has expired. Open ContextCue again on the current page.");
+  }
+  if (typeof request.text !== "string" || !request.text.trim() || request.text.length > 16_000
+    || typeof request.instruction !== "string" || !request.instruction.trim() || request.instruction.length > 2_000) {
+    throw new Error("Enter a draft and a revision instruction (up to 2,000 characters).");
+  }
+  await assertSessionCurrent(session);
+  revisionController?.abort();
+  const controller = new AbortController();
+  revisionController = controller;
+  const snapshot = store.getData();
+  const generation = { ...pageRequest(session, snapshot.settings.locale), revision: { text: request.text, instruction: request.instruction } };
+  try {
+    const result = await generateWithModel(snapshot, readApiKey(), generation, session.screenshot, fetch, controller.signal);
+    if (controller.signal.aborted || quickOverlaySession !== session) throw new Error("Revision cancelled.");
+    await assertSessionCurrent(session);
+    await rememberTokenUsage(generation, result, snapshot);
+    if (controller.signal.aborted || quickOverlaySession !== session) throw new Error("Revision cancelled.");
+    return result.candidates[0].text;
+  } finally {
+    if (revisionController === controller) revisionController = null;
+  }
+}
+
 function showAskOverlay(session: QuickOverlaySession): AskOverlayContext {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
   const context = askContextForSession(session);
@@ -405,12 +469,14 @@ function showAskOverlay(session: QuickOverlaySession): AskOverlayContext {
 async function showQuickAsk(): Promise<AskOverlayContext> {
   if (quickReplyInFlight) throw new Error("ContextCue is already preparing the current page.");
 
+  clearQuickReplySession();
+  const invocation = quickInvocation;
   quickReplyInFlight = true;
   try {
-    clearQuickReplySession();
     quickOverlayActive = true;
     quickReplyAnchor = screen.getCursorScreenPoint();
     const context = await prepareCurrentWindow(true);
+    if (invocation !== quickInvocation) throw new Error("This invocation was replaced. Open Ask AI again.");
     const { target: focusedTarget, frontmost } = context;
     quickInputTarget = focusedTarget;
     quickReplyTargetApplication = frontmost.applicationName;
@@ -421,19 +487,14 @@ async function showQuickAsk(): Promise<AskOverlayContext> {
       };
     }
     bindQuickOverlayContext(frontmost);
-    const session: QuickOverlaySession = {
-      ...context,
-      id: randomUUID(),
-      hasSuggestions: false,
-      createdAt: Date.now()
-    };
+    const session = createPageSession(context);
     quickOverlaySession = session;
     return showAskOverlay(session);
   } catch (error) {
-    clearQuickReplySession();
+    if (invocation === quickInvocation) clearQuickReplySession();
     throw error;
   } finally {
-    quickReplyInFlight = false;
+    if (invocation === quickInvocation) quickReplyInFlight = false;
   }
 }
 
@@ -448,12 +509,14 @@ function requestQuickAsk(): void {
 
 async function showQuickReply(): Promise<void> {
   if (quickReplyInFlight) return;
+  clearQuickReplySession();
+  const invocation = quickInvocation;
+  const controller = new AbortController();
+  suggestionController = controller;
   quickReplyInFlight = true;
   const startedAt = performance.now();
   let captureFinishedAt = startedAt;
   try {
-    cancelAskInFlight();
-    quickOverlaySession = null;
     quickOverlayActive = true;
     quickReplyTargetApplication = "";
     quickInputTarget = null;
@@ -461,6 +524,7 @@ async function showQuickReply(): Promise<void> {
     quickOverlayHiddenForContext = false;
     quickReplyAnchor = screen.getCursorScreenPoint();
     const context = await prepareCurrentWindow(false);
+    if (invocation !== quickInvocation) return;
     const { target: focusedTarget, frontmost, source, screenshot } = context;
     if (!source || !screenshot) throw new Error("The current window could not be captured. Try opening Ask AI without page context.");
     quickInputTarget = focusedTarget;
@@ -473,12 +537,9 @@ async function showQuickReply(): Promise<void> {
     }
     bindQuickOverlayContext(frontmost);
     captureFinishedAt = performance.now();
-    quickOverlaySession = {
-      ...context,
-      id: randomUUID(),
-      hasSuggestions: false,
-      createdAt: Date.now()
-    };
+    const session = createPageSession(context);
+    quickOverlaySession = session;
+    quickReplyInFlight = false;
     const snapshot = store.getData();
     const model = snapshot.settings.models.find((item) => item.id === snapshot.settings.activeModelId)
       ?? snapshot.settings.models[0];
@@ -487,24 +548,16 @@ async function showQuickReply(): Promise<void> {
       message: `Generating ${snapshot.settings.candidateCount} suggestions…`,
       modelName: model?.model || model?.name || "Configured model"
     });
-    const request: GenerateRequest = {
-      sourceId: source.id,
-      channel: source.channel,
-      locale: snapshot.settings.locale,
-      quick: true,
-      scenario: "auto",
-      target: focusedTarget ?? undefined,
-      pageContext: {
-        applicationName: focusedTarget?.applicationName || frontmost.applicationName,
-        windowTitle: focusedTarget?.windowTitle || frontmost.windowTitle,
-        nearbyText: [focusedTarget?.label, focusedTarget?.placeholder].filter((value): value is string => Boolean(value))
-      }
-    };
-    const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
+    const request = pageRequest(session, snapshot.settings.locale);
+    const result = await generateWithModel(snapshot, readApiKey(), request, screenshot, fetch, controller.signal);
+    if (controller.signal.aborted || quickOverlaySession !== session) return;
+    await assertSessionCurrent(session);
     await rememberTokenUsage(request, result, snapshot);
+    if (controller.signal.aborted || quickOverlaySession !== session) return;
     const contact = result.detectedContact;
-    sendToOverlay("overlay:result", { ...result, channel: source.channel, contact, target: focusedTarget ?? undefined });
-    if (quickOverlaySession) quickOverlaySession.hasSuggestions = true;
+    session.result = result;
+    session.hasSuggestions = true;
+    sendToOverlay("overlay:result", { ...result, sessionId: session.id, channel: source.channel, contact, target: focusedTarget ?? undefined });
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     const finishedAt = performance.now();
     console.info(
@@ -512,13 +565,15 @@ async function showQuickReply(): Promise<void> {
       + `model=${Math.round(finishedAt - captureFinishedAt)}ms total=${Math.round(finishedAt - startedAt)}ms`
     );
   } catch (error) {
+    if (invocation !== quickInvocation || controller.signal.aborted) return;
     console.warn(`[quick-reply] failed after ${Math.round(performance.now() - startedAt)}ms`, error);
     showOverlayStatus({
       state: "error",
       message: error instanceof Error ? error.message : String(error)
     });
   } finally {
-    quickReplyInFlight = false;
+    if (invocation === quickInvocation) quickReplyInFlight = false;
+    if (suggestionController === controller) suggestionController = null;
   }
 }
 
@@ -626,7 +681,6 @@ async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: bool
         };
       }
       overlayWindow?.hide();
-      mainWindow?.hide();
       const targetApplication = request.target?.applicationName || quickReplyTargetApplication || targetApplicationName(request.channel);
       await activateApplication(targetApplication || "");
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -730,26 +784,30 @@ async function startAsk(request: AskRequest): Promise<void> {
   askInFlight = { requestId: request.requestId, controller };
   const snapshot = store.getData();
   try {
+    await assertSessionCurrent(session);
     const screenshot = request.includeContext ? await screenshotForAsk(session) : "";
     const result = await streamAnswerWithModel(
       snapshot,
       readApiKey(),
       question,
       screenshot,
-      (request.history ?? []).slice(-6),
+      session.history,
       request.includeContext
         ? { applicationName: session.frontmost.applicationName, windowTitle: session.frontmost.windowTitle }
         : undefined,
       (delta) => {
-        if (askInFlight?.requestId !== request.requestId) return;
+        if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
         sendAskEvent({ type: "delta", sessionId: session.id, requestId: request.requestId, delta });
       },
       controller.signal
     );
-    if (askInFlight?.requestId !== request.requestId) return;
+    if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
     await rememberAskTokenUsage(result.tokenUsage, session.source?.channel ?? "other", snapshot);
+    if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
+    rememberPageTurn(session, question, result.answer);
     sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer });
   } catch (error) {
+    if (quickOverlaySession !== session) return;
     const cancelled = controller.signal.aborted || (error instanceof Error && error.name === "AbortError");
     sendAskEvent(cancelled
       ? { type: "cancelled", sessionId: session.id, requestId: request.requestId }
@@ -807,14 +865,19 @@ function registerIpc(): void {
       await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
     }
   });
+  ipcMain.handle("permissions:open-accessibility", async () => {
+    if (process.platform === "darwin") await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+  });
 
   const generateAssistance = async (request: GenerateRequest) => {
+    const invocation = quickInvocation;
+    request = { ...request, contextPolicy: "page-only" };
     const screenshot = request.imageDataUrl || (request.sourceId ? await captureSource(request.sourceId) : "");
     const snapshot = store.getData();
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
     await rememberTokenUsage(request, result, snapshot);
     const contact = request.contact?.trim() || result.detectedContact;
-    if (store.getData().settings.autoShowOverlay) {
+    if (store.getData().settings.autoShowOverlay && invocation === quickInvocation) {
       clearQuickReplySession();
       if (!overlayWindow) overlayWindow = createOverlayWindow();
       sendToOverlay("overlay:result", { ...result, channel: request.channel, contact, target: request.target });
@@ -827,9 +890,15 @@ function registerIpc(): void {
   ipcMain.handle("reply:generate", (_event, request: GenerateRequest) => generateAssistance({ scenario: "reply", ...request }));
 
   const useSuggestion = async (request: UseReplyRequest) => {
+    if (request.sessionId) {
+      const session = usableQuickOverlaySession();
+      if (!session || session.id !== request.sessionId) throw new Error("This suggestion has expired. Open ContextCue again.");
+      await assertSessionCurrent(session);
+      request = { ...request, target: session.target ?? undefined };
+    }
     clipboard.writeText(request.text);
     const pasteResult = request.paste ? await bestEffortPaste(request) : { pasted: false };
-    void store.rememberAcceptedSuggestion({
+    if (!request.sessionId) void store.rememberAcceptedSuggestion({
       text: request.text,
       channel: request.channel,
       contact: request.contact,
@@ -841,9 +910,9 @@ function registerIpc(): void {
   };
   ipcMain.handle("assist:use", (_event, request: UseReplyRequest) => useSuggestion(request));
   ipcMain.handle("reply:use", (_event, request: UseReplyRequest) => useSuggestion({ scenario: "reply", ...request }));
-  ipcMain.on("overlay:resize", (event, requestedHeight: number, newCandidate: boolean) => {
+  ipcMain.on("overlay:resize", (event, requestedHeight: number, newCandidate: boolean, editing?: boolean) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
-    if (overlaySizer?.fitContent(requestedHeight, newCandidate === true) && !overlayManuallyPositioned) positionOverlayNearInput();
+    if (overlaySizer?.fitContent(requestedHeight, newCandidate === true, editing === true) && !overlayManuallyPositioned) positionOverlayNearInput();
   });
   ipcMain.on("overlay:resize-by", (event, edge: OverlayResizeEdge, deltaX: number, deltaY: number) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
@@ -866,9 +935,17 @@ function registerIpc(): void {
     overlayWindow.setPosition(nextX, nextY, false);
   });
   ipcMain.handle("overlay:hide", () => hideQuickOverlay());
-  ipcMain.handle("ask:open", (event) => {
+  ipcMain.handle("assist:revise", (event, request: ReviseSuggestionRequest) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating suggestions to revise a draft.");
+    return reviseSuggestion(request);
+  });
+  ipcMain.on("assist:cancel-revision", (event) => {
+    if (event.sender === overlayWindow?.webContents) { revisionController?.abort(); revisionController = null; }
+  });
+  ipcMain.handle("ask:open", async (event) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Ask AI is available from the floating panel.");
     const session = usableQuickOverlaySession();
+    if (session) await assertSessionCurrent(session);
     return session ? showAskOverlay(session) : showQuickAsk();
   });
   ipcMain.handle("ask:exit", (event, returnToSuggestions: boolean) => {
@@ -903,7 +980,7 @@ function registerIpc(): void {
 
   ipcMain.handle("settings:get", () => store.settings(configuredModelIds()));
   ipcMain.handle("settings:test-model", async (_event, incoming: TestModelConnectionRequest) => {
-    const result = await testModelConnection(incoming.model, incoming.apiKey?.trim() || readApiKey(incoming.model.id));
+    const result = await testModelConnection(incoming.model, incoming.apiKey?.trim() || readApiKey(incoming.model.id), fetch, incoming.verifyImage ? createVisionProbe() : undefined);
     if (result.tokenUsage) {
       await store.recordTokenUsage({
         ...result.tokenUsage,
@@ -915,6 +992,20 @@ function registerIpc(): void {
       });
     }
     return result;
+  });
+  ipcMain.handle("setup:example", async (event, imageDataUrl: string) => {
+    requireMainWindow(event);
+    if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,") || imageDataUrl.length > 500_000) throw new Error("Invalid example image. Reopen the setup guide.");
+    const snapshot = store.getData();
+    const request: GenerateRequest = { channel: "other", locale: snapshot.settings.locale, quick: true, scenario: "reply", contextPolicy: "page-only", intent: "This is a fictional setup example. Agree to move the design review to Friday at 10 am. Keep the reply brief." };
+    const result = await generateWithModel(snapshot, readApiKey(), request, imageDataUrl);
+    await rememberTokenUsage(request, result, snapshot);
+    return result;
+  });
+  ipcMain.handle("setup:complete", async (event) => {
+    requireMainWindow(event);
+    await store.saveSettings({ ...store.getData().settings, onboardingComplete: true });
+    return store.settings(configuredModelIds());
   });
   ipcMain.handle(
     "settings:save",

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, Check, Copy, Eye, EyeOff, RefreshCw, Send, Sparkles, Square } from "lucide-react";
-import type { AskHistoryMessage, AskOverlayContext } from "../shared/types";
+import type { AskOverlayContext } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -87,13 +87,6 @@ export function AskPanel({ context, onExit }: Props) {
     const nextQuestion = (override ?? question).trim();
     if (!nextQuestion || activeRequest.current) return;
     const requestId = crypto.randomUUID();
-    const history: AskHistoryMessage[] = turns
-      .filter((turn) => turn.status === "complete" && turn.answer.trim())
-      .slice(-3)
-      .flatMap((turn) => [
-        { role: "user" as const, content: turn.question },
-        { role: "assistant" as const, content: turn.answer }
-      ]);
     activeRequest.current = requestId;
     followOutput.current = true;
     setTurns((current) => [...current, { id: requestId, question: nextQuestion, answer: "", status: "streaming" }]);
@@ -102,8 +95,7 @@ export function AskPanel({ context, onExit }: Props) {
       sessionId: context.sessionId,
       requestId,
       question: nextQuestion,
-      includeContext,
-      history
+      includeContext
     });
   };
 
@@ -154,7 +146,7 @@ export function AskPanel({ context, onExit }: Props) {
             <ArrowLeft size={15}/>
           </button>
         ) : <span className="ask-mark"><Sparkles size={14}/></span>}
-        <div className="ask-heading"><strong>Ask AI</strong><span>Answers stay in this panel</span></div>
+        <div className="ask-heading"><strong>Ask AI</strong><span>Only this page · fresh session</span></div>
         {context.hasPageContext && (
           <button
             className={`ask-context-chip ${includeContext ? "ask-context-chip--active" : ""}`}

@@ -41,6 +41,7 @@ import {
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { MarkdownContent } from "./components/MarkdownContent";
 import { AppUpdates } from "./components/AppUpdates";
+import { SetupGuide } from "./components/SetupGuide";
 import { contextCueApi, isBrowserDemo } from "./lib/api";
 import { inferImageInputSupport } from "./shared/model-capabilities";
 import contextCueIcon from "../build/icon.svg";
@@ -118,6 +119,13 @@ function HomeView({
   const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Space";
   const askShortcut = settings?.askShortcut || "CommandOrControl+Shift+Enter";
   const readyCount = [modelReady, screenReady, sources.length > 0].filter(Boolean).length;
+
+  if (settings?.onboardingComplete) return <div className="workspace daily-workspace">
+    <header className="workspace-header"><div><span className="eyebrow">YOUR WORKSPACE</span><h1>Ready when you need a hand.</h1><p>Open a page, then call ContextCue. Every invocation starts a fresh session.</p></div><StatusPill configured={modelReady && Boolean(screenReady)}/></header>
+    <div className="daily-actions"><section><MessageSquareText size={25}/><h2>Write from this page</h2><p>Choose a suggestion, edit it, or describe a change in one sentence.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">{shortcutParts(shortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section><section><Sparkles size={25}/><h2>Ask about this page</h2><p>Ask a question with optional page context. Other windows never join the conversation.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">{shortcutParts(askShortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section></div>
+    <section className="daily-status"><div><Cpu size={18}/><span><strong>{activeModel?.name || "Model needed"}</strong><small>{activeModel?.model || "Configure a model"}</small></span><button className="text-button" onClick={onOpenSettings}>Manage model<ChevronRight size={14}/></button></div><div><ScanLine size={18}/><span><strong>{screenReady ? "Screen access available" : "Screen access needed"}</strong><small>{sources.length} visible windows · copying always available</small></span><button className="text-button" onClick={onOpenChannels}>Check windows<ChevronRight size={14}/></button></div></section>
+    <p className="daily-privacy"><ShieldCheck size={17}/>Only this page and this session. No past conversations or saved memory are sent. You decide what to copy or insert.</p>
+  </div>;
 
   return (
     <div className="workspace home-workspace">
@@ -518,7 +526,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   return (
     <div className="workspace memory-workspace">
       <header className="workspace-header memory-header">
-        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Memory files</h1><p>Write the background and preferences ContextCue should carry into suggestions.</p></div>
+        <div><span className="eyebrow">LOCAL MEMORY</span><h1>Memory files</h1><p>Your saved notes are preserved. Page-only sessions do not send these files or past conversations.</p></div>
         <div className="privacy-note"><ShieldCheck size={17}/><span>Stored locally<br/><small>Inspectable and removable</small></span></div>
       </header>
 
@@ -542,7 +550,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
               <b>{memory.facts.length}</b>
             </button>
           </div>
-          <div className="memory-rail-note"><ShieldCheck size={14}/><span>Only enabled, relevant files are added to a request.</span></div>
+          <div className="memory-rail-note"><ShieldCheck size={14}/><span>Stored on this device. Not included in page-only suggestions, revisions or Ask AI.</span></div>
         </aside>
 
         <section className="memory-document-pane">
@@ -562,7 +570,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                 ))}
                 {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>When ContextCue suggests something worth remembering, you decide whether to save it.</span></div>}
               </div>
-              <footer><span>{memory.acceptedReplies.length} accepted suggestions are also used as private style examples.</span></footer>
+              <footer><span>{memory.acceptedReplies.length} previously accepted suggestions are retained locally, but excluded from page-only sessions.</span></footer>
             </div>
           ) : activeDocument ? (
             <>
@@ -572,13 +580,13 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                   <details className="memory-scope-menu" ref={scopeDetails} onToggle={(event) => { if (event.currentTarget.open) moreDetails.current?.removeAttribute("open"); }}>
                     <summary aria-label={`Change scope. Currently ${scopeLabel(activeDocument)}`}>{activeDocument.scope === "global" ? <Globe2 size={14}/> : activeDocument.scope === "channel" ? <Hash size={14}/> : <UserRound size={14}/>}<span>{scopeLabel(activeDocument)}</span><ChevronDown size={13}/></summary>
                     <div className="memory-scope-popover">
-                      <span className="memory-popover-label">INCLUDE THIS FILE WHEN</span>
+                      <span className="memory-popover-label">SAVED SCOPE · NOT USED IN PAGE SESSIONS</span>
                       <div className="memory-scope-options">
                         {scopeOptions.map((option) => <button key={option.value} className={activeDocument.scope === option.value ? "is-active" : ""} onClick={() => { updateDocument({ scope: option.value, scopeValue: option.value === "global" ? undefined : activeDocument.scope === option.value ? activeDocument.scopeValue : option.value === "channel" ? "other" : "" }); if (option.value === "global") scopeDetails.current?.removeAttribute("open"); }} aria-pressed={activeDocument.scope === option.value}>{option.icon}{option.label}</button>)}
                       </div>
                       {activeDocument.scope === "channel" && <label className="memory-scope-value"><span>Channel</span><select value={activeDocument.scopeValue ?? "other"} onChange={(event) => updateDocument({ scopeValue: event.target.value })}>{Object.entries(CHANNEL_LABELS).map(([id, label]) => <option value={id} key={id}>{label}</option>)}</select></label>}
                       {activeDocument.scope === "person" && <label className="memory-scope-value"><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Exact contact name"/></label>}
-                      <p>{activeDocument.scope === "global" ? "Considered for every reply." : activeDocument.scope === "channel" ? "Used only for replies in this channel." : "Used only when this contact is detected."}</p>
+                      <p>Scope is kept for compatibility. This file is not sent in page-only sessions.</p>
                     </div>
                   </details>
                   <button className={`memory-active-control ${activeDocument.enabled ? "is-active" : ""}`} onClick={() => updateDocument({ enabled: !activeDocument.enabled })} role="switch" aria-checked={activeDocument.enabled}><i/>{activeDocument.enabled ? "Active" : "Paused"}</button>
@@ -1017,12 +1025,14 @@ function SettingsView({ settings, onChange, updateState }: { settings: AppSettin
       <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate a reply, draft, or prompt from the current window"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a quick conversation with optional page context"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
     </div>
     <AppUpdates state={updateState}/>
-    <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>
+    <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>This page only</strong><span>Requests use this page and this session, never saved memory or other windows.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>No automatic sending</li></ul></section>
   </div>;
 }
 
 export function App() {
   const [view, setView] = useState<ViewId>("home");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
   const [updatesFocus, setUpdatesFocus] = useState(0);
   const openUpdates = useCallback(() => { setView("settings"); setUpdatesFocus((value) => value + 1); }, []);
@@ -1046,12 +1056,17 @@ export function App() {
 
   useEffect(() => {
     void Promise.all([
-      refreshSources(),
       contextCueApi.getMemory().then(setMemory),
-      contextCueApi.getSettings().then(setSettings),
+      contextCueApi.getSettings().then((next) => { setSettings(next); if (next.onboardingComplete) void refreshSources(); }),
       contextCueApi.getPermissions().then(setPermissions)
     ]);
   }, [refreshSources]);
+
+  useEffect(() => {
+    const refresh = () => { void contextCueApi.getPermissions().then(setPermissions).catch(() => undefined); };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
 
   useEffect(() => {
     document.querySelector(".main-surface")?.scrollTo({ top: 0, behavior: "auto" });
@@ -1094,13 +1109,15 @@ export function App() {
           {updateState && (["available", "downloading", "downloaded", "installing"].includes(updateState.status) || (updateState.status === "error" && updateState.availableVersion)) && <button className="sidebar-update" onClick={openUpdates}><RefreshCw size={16} aria-hidden="true"/><span>{updateState.status === "downloaded" ? "Update ready" : updateState.status === "downloading" ? `Downloading · ${updateState.progress ?? 0}%` : updateState.status === "installing" ? "Installing update…" : updateState.status === "error" ? "Update needs attention" : `Update · ${updateState.availableVersion}`}</span></button>}
           {isBrowserDemo && <span className="demo-badge">Browser preview</span>}
           <div className={`model-status ${activeModel?.apiKeyConfigured && activeModel.supportsImageInput ? "" : "model-status--needed"}`}><i/><span><strong>{activeModel?.name || "Model not set"}</strong><small>{activeModel ? `${activeModel.model || "Model ID needed"} · ${!activeModel.supportsImageInput ? "image input required" : activeModel.apiKeyConfigured ? "ready" : "add key"}` : "Add a model"}</small></span></div>
-          <button onClick={() => setView("settings")}><CircleHelp size={16}/> Setup guide</button>
+          <button onClick={() => { setView("home"); setSetupOpen(true); }}><CircleHelp size={16}/> Setup guide</button>
         </div>
       </aside>
       <main className="main-surface">
         <AnimatePresence mode="wait">
           <motion.div key={view} className="view-frame" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.18 }}>
-            {view === "home" && <HomeView sources={sources} refreshSources={refreshSources} permissions={permissions} settings={settings} onOpenSettings={() => setView("settings")} onOpenChannels={() => setView("channels")}/>}
+            {view === "home" && (settings && (setupOpen || (!settings.onboardingComplete && !setupDismissed))
+              ? <SetupGuide settings={settings} onChange={setSettings} onDismiss={() => { setSetupOpen(false); setSetupDismissed(true); void refreshSources(); }} onFinish={(next) => { setSettings(next); setSetupOpen(false); setSetupDismissed(false); void refreshSources(); }}/>
+              : <HomeView sources={sources} refreshSources={refreshSources} permissions={permissions} settings={settings} onOpenSettings={() => setView("settings")} onOpenChannels={() => setView("channels")}/>)}
             {view === "memory" && <MemoryView memory={memory} onChange={setMemory}/>} 
             {view === "channels" && <ChannelsView sources={sources} refresh={refreshSources}/>} 
             {view === "usage" && <UsageView settings={settings}/>}

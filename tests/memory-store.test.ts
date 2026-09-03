@@ -10,6 +10,36 @@ afterEach(async () => {
 });
 
 describe("MemoryStore", () => {
+  it("persists first-run completion without changing credentials or memory", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-setup-test-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    expect(store.settings(new Set()).onboardingComplete).toBe(false);
+    await store.saveSettings(store.getData().settings, { "openai-default": "encrypted-test-key" });
+    const memory = store.snapshot();
+    await store.saveSettings({ ...store.getData().settings, onboardingComplete: true });
+    const next = new MemoryStore(path);
+    await next.load();
+    expect(next.settings(new Set()).onboardingComplete).toBe(true);
+    expect(next.getData().encryptedApiKeys).toEqual({ "openai-default": "encrypted-test-key" });
+    expect(next.snapshot()).toEqual(memory);
+  });
+
+  it("does not force an already configured legacy install through onboarding", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-setup-migration-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    const { onboardingComplete: _complete, ...legacy } = store.getData().settings;
+    await store.saveSettings(legacy, { "openai-default": "encrypted-test-key" });
+    const reloaded = new MemoryStore(path);
+    await reloaded.load();
+    expect(reloaded.settings(new Set()).onboardingComplete).toBe(true);
+    expect(reloaded.getData().encryptedApiKeys?.["openai-default"]).toBe("encrypted-test-key");
+  });
   it("persists profile, relationships, facts, and accepted replies", async () => {
     const directory = await mkdtemp(join(tmpdir(), "contextcue-test-"));
     temporaryDirectories.push(directory);

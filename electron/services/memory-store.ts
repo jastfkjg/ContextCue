@@ -96,7 +96,8 @@ export const DEFAULT_DATA: AppData = {
     locale: "auto",
     globalShortcut: "CommandOrControl+Shift+Space",
     askShortcut: "CommandOrControl+Shift+Enter",
-    autoShowOverlay: true
+    autoShowOverlay: true,
+    onboardingComplete: false
   }
 };
 
@@ -157,6 +158,7 @@ function migrate(input: LegacyAppData): AppData {
     settings: {
       ...defaults.settings,
       ...(legacySettings ?? {}),
+      onboardingComplete: legacySettings?.onboardingComplete ?? Boolean(input.encryptedApiKey || Object.keys(input.encryptedApiKeys ?? {}).length || input.tokenUsage?.length),
       models: configuredModels,
       activeModelId
     },

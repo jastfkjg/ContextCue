@@ -97,6 +97,17 @@ export interface GenerateRequest {
   scenario?: AssistScenario | "auto";
   target?: InputTarget;
   pageContext?: PageContext;
+  /** Page-scoped flows never include stored memory or accepted replies. */
+  contextPolicy?: "page-only";
+  revision?: { text: string; instruction: string };
+}
+
+export type OverlayResult = GenerationResult & { sessionId?: string; channel: ChannelId; contact: string; target?: InputTarget };
+
+export interface ReviseSuggestionRequest {
+  sessionId: string;
+  text: string;
+  instruction: string;
 }
 
 export interface AskHistoryMessage {
@@ -207,6 +218,7 @@ export interface AppSettings {
   globalShortcut: string;
   askShortcut: string;
   autoShowOverlay: boolean;
+  onboardingComplete?: boolean;
 }
 
 export type StoredAppSettings = Omit<AppSettings, "models"> & {
@@ -220,6 +232,7 @@ export type SaveSettingsRequest = AppSettings & {
 export interface TestModelConnectionRequest {
   model: LlmConfig;
   apiKey?: string;
+  verifyImage?: boolean;
 }
 
 export interface TestModelConnectionResult {
@@ -257,6 +270,7 @@ export interface UseReplyRequest {
   action?: AssistAction;
   scenario?: AssistScenario;
   target?: InputTarget;
+  sessionId?: string;
 }
 
 export interface UseReplyResult {
@@ -312,11 +326,15 @@ export interface ContextCueApi {
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
   testModelConnection: (request: TestModelConnectionRequest) => Promise<TestModelConnectionResult>;
+  generateExample: (imageDataUrl: string) => Promise<GenerationResult>;
+  completeSetup: () => Promise<AppSettings>;
   useReply: (request: UseReplyRequest) => Promise<UseReplyResult>;
   useSuggestion: (request: UseReplyRequest) => Promise<UseReplyResult>;
   openScreenSettings: () => Promise<void>;
+  openAccessibilitySettings: () => Promise<void>;
   getPermissions: () => Promise<PermissionStatus>;
-  onOverlayResult: (callback: (result: GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget }) => void) => () => void;
+  onOverlayResult: (callback: (result: OverlayResult) => void) => () => void;
+  onOverlayReset: (callback: () => void) => () => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   openAsk: () => Promise<AskOverlayContext>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;
@@ -326,7 +344,9 @@ export interface ContextCueApi {
   onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
   onAskEvent: (callback: (event: AskStreamEvent) => void) => () => void;
   moveOverlay: (deltaX: number, deltaY: number) => void;
-  resizeOverlay: (height: number, newCandidate: boolean) => void;
+  resizeOverlay: (height: number, newCandidate: boolean, editing?: boolean) => void;
   resizeOverlayBy: (edge: OverlayResizeEdge, deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
+  reviseSuggestion: (request: ReviseSuggestionRequest) => Promise<string>;
+  cancelRevision: () => void;
 }
