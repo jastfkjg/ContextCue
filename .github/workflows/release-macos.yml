@@ -52,13 +52,14 @@ jobs:
           npm test
           npm run build
 
-      - name: Package unsigned builds with in-app installer downloads
+      - name: Package ad-hoc signed beta builds with in-app installer downloads
         if: vars.MACOS_SIGNING_ENABLED != 'true'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: |
           npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never \
-            -c.mac.identity=null -c.mac.hardenedRuntime=false \
+            -c.mac.identity=- -c.mac.hardenedRuntime=false \
+            -c.mac.preAutoEntitlements=false -c.mac.notarize=false \
             -c.extraMetadata.contextcueMacAutoUpdate=false
 
       - name: Sign and notarize builds with automatic installation
@@ -86,6 +87,12 @@ jobs:
           BUILD_ARCH: ${{ matrix.arch }}
           SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
         run: node scripts/verify-macos-update-config.mjs
+
+      - name: Verify signatures inside downloadable DMG and ZIP
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+          SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
+        run: node scripts/verify-macos-artifacts.mjs
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
@@ -133,7 +140,7 @@ jobs:
           if [[ "${SIGNING_ENABLED}" == "true" ]]; then
             echo "Signed and notarized macOS build. Future updates can be installed from Settings → App updates." > release-notes.md
           else
-            echo "Unsigned early-access macOS build. Settings → App updates can check for releases and download the installer. Quit ContextCue and replace it in Applications to finish updating." > release-notes.md
+            echo "Ad-hoc signed early-access macOS build; not Apple notarized. On first launch, macOS may require System Settings → Privacy & Security → Open Anyway. If that option is unavailable, use a Developer ID signed and notarized release. Settings → App updates downloads the installer; quit ContextCue and replace it in Applications to finish updating." > release-notes.md
           fi
           gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
             release-assets/* --verify-tag --draft \

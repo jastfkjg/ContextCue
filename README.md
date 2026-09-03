@@ -179,10 +179,11 @@ The browser build uses a non-networked preview dataset for UI review. Real scree
 | `npm run build` | Build main, preload, and renderer bundles |
 | `npm run package` | Create an unpacked desktop application |
 | `npm run dist` | Create platform installers |
+| `npm run dist:mac:beta -- --arm64` | Build an ad-hoc signed macOS beta; use `--x64` for Intel |
 
 ContextCue checks for updates 15 seconds after launch and every 6 hours while running. New releases appear in a system notification and the sidebar. You can also use **Settings → App updates** or **Check for Updates…** in the tray context menu.
 
-Downloads start when you choose them and display progress. Signed builds offer **Restart and update**. The default unsigned macOS builds download and verify a DMG inside the app; choose **Open installer**, quit ContextCue, and replace the app in Applications. Memory and settings live outside the app bundle.
+Downloads start when you choose them and display progress. Developer ID signed and notarized macOS builds offer **Restart and update**. The default ad-hoc signed, unnotarized macOS beta builds download and verify a DMG inside the app; choose **Open installer**, quit ContextCue, and replace the app in Applications. Memory and settings live outside the app bundle.
 
 The release workflow supports optional signing/notarization and generates a combined update feed for Intel and Apple Silicon. See the [update release guide](./docs/updates.md) for setup and verification. Users of older builds without an updater must install an updater-enabled build manually once.
 
