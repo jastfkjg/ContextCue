@@ -38,7 +38,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
       text: candidate.text,
       channel,
       contact,
-      paste,
+      paste: paste && Boolean(target),
       action: candidate.action ?? (target?.selectedText ? "replace-selection" : "insert"),
       scenario,
       target
@@ -96,7 +96,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
 
   const candidate = candidates[index];
   const action = candidate.action ?? (target?.selectedText ? "replace-selection" : "insert");
-  const insertLabel = action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
+  const insertLabel = !target ? (status === "copied" ? "Copied" : "Copy") : action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
   return (
     <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
       {compact && (
@@ -170,7 +170,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
               <span>Next</span>
             </button>
             <button className="compact-text-action" onClick={() => void useCandidate(true)} aria-label={status === "pasted" ? "Applied" : insertLabel}>
-              {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
+              {status === "pasted" || (!target && status === "copied") ? <Check size={16} /> : !target ? <Copy size={16} /> : <CornerDownLeft size={16} />}
               <span>{status === "pasted" ? "Applied" : insertLabel}</span>
             </button>
             {onAsk && (
@@ -206,7 +206,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
               {status === "copied" ? <Check size={16} /> : <Copy size={16} />}
               {status === "copied" ? "Copied" : "Copy"}
             </button>
-            <button
+            {target && <button
               className="button button--primary"
               onClick={() => void useCandidate(true)}
               aria-label={status === "pasted" ? "Inserted" : insertLabel}
@@ -214,7 +214,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
             >
               {status === "pasted" ? <Check size={16} /> : <CornerDownLeft size={16} />}
               {status === "pasted" ? "Inserted" : insertLabel}
-            </button>
+            </button>}
           </>
         )}
       </div>

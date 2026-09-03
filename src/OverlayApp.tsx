@@ -9,7 +9,7 @@ type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string; 
 
 export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
-  const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Waiting for an input field…" });
+  const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Reading the current window…" });
   const [askContext, setAskContext] = useState<AskOverlayContext | null>(null);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
 

@@ -4,7 +4,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { desktopCapturer, nativeImage } from "electron";
+import { desktopCapturer, nativeImage, systemPreferences } from "electron";
 import type { CaptureSource } from "../../src/shared/types";
 import { detectChannel } from "./channel";
 
@@ -12,18 +12,6 @@ const THUMBNAIL_SIZE = { width: 1440, height: 900 };
 export const QUICK_CAPTURE_SIZE = { width: 1200, height: 750 };
 export type CaptureSourceRef = Pick<CaptureSource, "id" | "name" | "channel">;
 const execFileAsync = promisify(execFile);
-
-export async function listCaptureSourceRefs(): Promise<CaptureSourceRef[]> {
-  const sources = await desktopCapturer.getSources({
-    types: ["window"],
-    thumbnailSize: { width: 0, height: 0 },
-    fetchWindowIcons: false
-  });
-  return sources
-    .filter((source) => source.name !== "ContextCue")
-    .map((source) => ({ id: source.id, name: source.name, channel: detectChannel(source.name) }))
-    .sort((a, b) => Number(b.channel !== "other") - Number(a.channel !== "other"));
-}
 
 export async function listCaptureSources(): Promise<CaptureSource[]> {
   const sources = await desktopCapturer.getSources({
@@ -54,7 +42,9 @@ export async function captureSource(
     thumbnailSize,
     fetchWindowIcons: false
   });
-  const source = sources.find((item) => item.id === sourceId);
+  const nativeId = /^window:([1-9]\d*):/.exec(sourceId)?.[1];
+  const source = sources.find((item) => item.id === sourceId
+    || (nativeId && /^window:([1-9]\d*):/.exec(item.id)?.[1] === nativeId));
   if (!source || source.thumbnail.isEmpty()) {
     throw new Error("The selected window is no longer available. Refresh the source list and try again.");
   }
@@ -67,7 +57,7 @@ async function captureMacWindow(sourceId: string): Promise<string> {
   if (!windowId) throw new Error("The selected source is not a window.");
   const path = join(tmpdir(), `contextcue-quick-${process.pid}-${randomUUID()}.jpg`);
   try {
-    await execFileAsync("/usr/sbin/screencapture", ["-x", `-l${windowId}`, "-tjpg", path]);
+    await execFileAsync("/usr/sbin/screencapture", ["-x", `-l${windowId}`, "-tjpg", path], { timeout: 8000 });
     const image = nativeImage.createFromBuffer(await readFile(path));
     if (image.isEmpty()) throw new Error("The current window could not be captured.");
     const size = image.getSize();
@@ -87,6 +77,10 @@ async function captureMacWindow(sourceId: string): Promise<string> {
 
 export async function captureQuickSource(sourceId: string): Promise<string> {
   if (process.platform === "darwin") {
+    const permission = systemPreferences.getMediaAccessStatus("screen");
+    if (permission === "denied" || permission === "restricted") {
+      throw new Error("Allow Screen Recording for ContextCue (Electron in development) in System Settings → Privacy & Security, then restart the app. You can still use Ask AI without page context.");
+    }
     try {
       return await captureMacWindow(sourceId);
     } catch {

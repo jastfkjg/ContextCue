@@ -125,7 +125,7 @@ function HomeView({
         <div>
           <span className="eyebrow">QUICK ASSIST</span>
           <h1>Write from the page you’re on.</h1>
-          <p>Keep ContextCue in the background. Call it from any focused text field.</p>
+          <p>Keep ContextCue in the background. Call it from any app or browser window.</p>
         </div>
         <span className={`home-readiness ${readyCount === 3 ? "home-readiness--ready" : ""}`}><i />{readyCount === 3 ? "Ready to use" : `${readyCount} of 3 ready`}</span>
       </header>
@@ -133,7 +133,7 @@ function HomeView({
       <section className="home-command-stage">
         <div className="home-command-copy">
           <span className="home-command-label"><Command size={14}/> Global shortcuts</span>
-          <h2>Choose or ask.<br/>Right where you’re typing.</h2>
+          <h2>Choose or ask.<br/>Right where you’re working.</h2>
           <p>For instant writing suggestions, press:</p>
           <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">
             {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
@@ -143,7 +143,7 @@ function HomeView({
             <Sparkles size={13}/><span>Ask AI</span>
             {shortcutParts(askShortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
           </button>
-          <small>ContextCue reads the focused field and visible page, then opens compact suggestions. It never submits automatically.</small>
+          <small>ContextCue reads the current window to suggest a reply, draft, or prompt. Copy it, or insert into a recognized field.</small>
         </div>
 
         <div className="home-overlay-demo" aria-hidden="true">
@@ -160,7 +160,7 @@ function HomeView({
         <section className="home-workflow">
           <div className="home-section-heading"><span className="eyebrow">HOW IT WORKS</span><h2>Three steps, without switching context.</h2></div>
           <ol>
-            <li><span>01</span><div><strong>Focus a text field</strong><small>Reply, complete a form, compose, search, or select text to rewrite.</small></div><MessageSquareText size={18}/></li>
+            <li><span>01</span><div><strong>Open any window</strong><small>Use the visible page, or focus a field to write directly into it.</small></div><MessageSquareText size={18}/></li>
             <li><span>02</span><div><strong>Call ContextCue</strong><small>Press your global shortcut to read the field and visible context.</small></div><Command size={18}/></li>
             <li><span>03</span><div><strong>Choose and apply</strong><small>Use the arrow keys to switch, then Enter to write into the original field.</small></div><CornerDownLeft size={18}/></li>
           </ol>
@@ -624,7 +624,7 @@ function ChannelsView({ sources, refresh }: { sources: CaptureSource[]; refresh:
     { id: "other", detail: "Any visible screen or application window", level: "Universal" }
   ];
   return <div className="workspace channels-workspace"><header className="workspace-header"><div><span className="eyebrow">SURFACES</span><h1>Works where you type.</h1></div><button className="button button--quiet" onClick={() => void refresh()}><RefreshCw size={15}/> Scan windows</button></header>
-    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One context pipeline, every app.</h2><p>ContextCue reads the focused field plus the visible window only after you invoke it. On macOS it returns to the exact field before applying text.</p></div></div>
+    <div className="channel-intro"><div className="channel-orbit"><span>微</span><span>S</span><span>L</span><i><ScanLine size={27}/></i></div><div><h2>One context pipeline, every app.</h2><p>ContextCue reads the current window when you invoke it. Recognized input fields support direct insertion on macOS; suggestions are always available to copy.</p></div></div>
     <section className="channel-table"><header><span>Channel</span><span>Context method</span><span>Status</span></header>{supported.map((item) => <div key={item.id}><span><i className={`channel-logo channel-logo--${item.id}`}>{CHANNEL_MARKS[item.id]}</i><strong>{CHANNEL_LABELS[item.id]}</strong></span><span>{item.detail}</span><span className="ready-mark"><i/>{item.level}</span></div>)}</section>
     <section className="visible-windows"><div className="section-bar"><div><span className="step-number">LIVE</span><h2>Visible windows</h2></div><span>{sources.length} windows found</span></div><div className="window-list">{sources.slice(0, 12).map((source) => <div key={source.id}><img src={source.thumbnail} alt=""/><span><strong>{source.name}</strong><small>{CHANNEL_LABELS[source.channel]}</small></span></div>)}{sources.length === 0 && <div className="list-empty">No capturable windows found. Open an app and scan again.</div>}</div></section>
   </div>;
@@ -1014,7 +1014,7 @@ function SettingsView({ settings, onChange, updateState }: { settings: AppSettin
     </div>
     <div className="preference-grid">
       <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Suggestion behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Writing language</span><div className="choice-group choice-group--language" role="group" aria-label="Writing language">{([{ value: "auto", label: "Match context" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate text for the focused field"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a question box near the current field"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate a reply, draft, or prompt from the current window"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a quick conversation with optional page context"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
     </div>
     <AppUpdates state={updateState}/>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>Local by default</strong><span>Memory stays on this device. Screenshots are sent only when you generate.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>Explicit memory saves</li></ul></section>

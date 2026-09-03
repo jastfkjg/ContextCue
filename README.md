@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./build/icon.png" width="96" height="96" alt="ContextCue app icon" />
   <h1>ContextCue</h1>
-  <p><strong>AI suggestions that stay with the focused field.</strong></p>
+  <p><strong>Quick AI suggestions and conversations from any window.</strong></p>
   <p>A local-first desktop writing assistant for replies, forms, composition, rewriting, search, and generic text completion.</p>
 
   <p>
@@ -21,7 +21,7 @@
 
 ---
 
-ContextCue reads a screenshot of the active window only when you invoke it. On macOS it also inspects the focused editable control, combines that context with a small slice of local memory, and shows task-aware suggestions beside the original field.
+ContextCue reads a screenshot of the active window only when you invoke it, then generates useful replies, drafts, or AI prompts with a small slice of local memory. An editable field is optional: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied.
 
 > [!IMPORTANT]
 > ContextCue requires a model that supports **image input**. Text-only models may accept an OpenAI-compatible request while silently ignoring its image; ContextCue detects known text-only models and blocks context-free generation.
@@ -30,7 +30,7 @@ ContextCue reads a screenshot of the active window only when you invoke it. On m
 
 | | Capability | What it does |
 |---|---|---|
-| ⚡ | **Any-field invocation** | Press one global shortcut from a chat, form, editor, or search field. |
+| ⚡ | **Any-window invocation** | Press one global shortcut from an app or browser page, with or without an input field. |
 | ✦ | **Streaming Ask AI** | Open a compact question panel with a second shortcut or continue from generated suggestions. |
 | ✦ | **Task-aware drafts** | Route between reply, form, compose, rewrite, search, and generic completion. |
 | ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
@@ -39,14 +39,14 @@ ContextCue reads a screenshot of the active window only when you invoke it. On m
 | ◉ | **Multiple model providers** | Configure several Responses or Chat Completions endpoints and choose the default model. |
 | 🔒 | **OS-protected keys** | Encrypt each API key with Electron `safeStorage` and the operating-system keychain. |
 
-Supported window detection includes **WeChat**, **Slack**, **Lark / Feishu**, **Gmail**, **Microsoft Teams**, **WhatsApp**, and other visible applications.
+Window selection uses the operating system's foreground window ID, without an application-name allowlist. Channel labels such as WeChat, Slack, and Gmail provide optional model context and never determine which window is captured.
 
 ## How it works
 
 ```text
-Focused text control
+Current app or browser window
   └─ global shortcut
-      └─ read control metadata and capture that window once
+      └─ capture that exact window once; optionally read focused-control metadata
           └─ select relevant local memory
               └─ classify the writing task and call the vision model
                   └─ validate 1–5 suggestions
@@ -55,7 +55,7 @@ Focused text control
 
 The floating panel is bound to the originating application, window, and—on macOS—focused control. Changing the target invalidates the panel.
 
-Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. Its optional current-page context stays only in the short-lived overlay session, answers stream into the panel, and closing the panel clears the screenshot and in-memory Q&A.
+Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. If capture is unavailable, the panel explains why and still allows questions without page context. Closing the panel clears the screenshot and in-memory Q&A.
 
 ## Quick start
 
@@ -80,9 +80,9 @@ npm run dev
 1. Open **Settings → Models** and add a provider, API base URL, model ID, API format, and API key.
 2. Confirm that **Image input** is marked as supported, then set that model as the default.
 3. Grant Screen Recording permission when your operating system asks. Insertion also needs Accessibility / automation permission on macOS.
-4. Open an app or page and place the cursor in the text field you want to use.
+4. Open an app or page. Optionally focus a text field for direct insertion.
 5. Press `⌘ ⇧ Space` on macOS or `Ctrl ⇧ Space` on Windows / Linux.
-6. Swipe between candidates and apply one. ContextCue writes into the field but never submits automatically.
+6. Swipe between candidates and copy one, or insert it into a recognized field. ContextCue never submits automatically.
 
 To ask a quick question instead, press `⌘ ⇧ Enter` / `Ctrl ⇧ Enter`, or choose **Ask AI** from the suggestion panel. Both shortcuts can be changed in Settings. If either registration fails, ContextCue keeps both previous shortcuts.
 
@@ -127,7 +127,7 @@ For each generation, ContextCue selects only the matching relationship, relevant
 
 ## Privacy boundaries
 
-- A screenshot is captured only after the user invokes ContextCue from a focused field.
+- A screenshot is captured only after the user invokes ContextCue from the current window.
 - Screenshots are sent to the configured model provider but are not written to the long-term memory file.
 - Text inside screenshots and page metadata is treated as untrusted data, not as instructions.
 - Long-term memory remains local except for the small relevant subset included in a generation request.
@@ -172,6 +172,7 @@ The browser build uses a non-networked preview dataset for UI review. Real scree
 | `npm run dev` | Start Electron in development mode |
 | `npm run lint` | Run TypeScript validation |
 | `npm test` | Run unit tests |
+| `npm run test:window` | macOS: verify two same-title native windows and capture locally without model calls |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run build` | Build main, preload, and renderer bundles |
 | `npm run package` | Create an unpacked desktop application |
@@ -186,7 +187,8 @@ The release workflow supports optional signing/notarization and generates a comb
 ## Current limitations
 
 - Screenshots are resized rather than cropped to a user-selected region.
-- macOS validates the focused control and attempts direct Accessibility write-back; unsupported controls fall back to paste, while Windows/Linux remain best-effort.
+- macOS validates the focused control and attempts direct Accessibility write-back; known controls without AX write support fall back to validated paste. Without a recognized target, including on Windows/Linux, suggestions offer copying.
+- Native foreground capture is verified on macOS. Windows uses its foreground-window API; Linux requires X11 and `xdotool`. Protected windows and unsupported capture environments can use Ask AI without page context.
 - There is no browser DOM extension yet, so complex iframes, canvas editors, and some rich-text controls depend on the OS accessibility tree and screenshots.
 - Channel support is based on visible windows, not historical OAuth message sync.
 - Field-neighborhood cropping, richer nearby accessibility text, local OCR/redaction, voice input, and calendar actions are planned.

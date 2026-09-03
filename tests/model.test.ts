@@ -428,6 +428,18 @@ describe("model memory and parsing", () => {
     expect(result.candidates[0]).toMatchObject({ action: "replace-all", label: "Concise" });
   });
 
+  it("lets the screenshot determine the task when no editable field is available", async () => {
+    const payload = { output: [{ content: [{ type: "output_text", text: JSON.stringify({
+      scenario: "generic", candidates: [{ text: "A useful prompt", tone: "Clear", strategy: "Next step" }]
+    }) }] }] };
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } }));
+    await generateWithModel(data(), "test-key", { channel: "other", locale: "auto", quick: true, scenario: "auto" }, "data:image/png;base64,fixture", fetcher as typeof fetch);
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(body.input[1].content[0].text).toContain("Scenario hint: auto");
+    expect(body.input[1].content[1].image_url).toBe("data:image/png;base64,fixture");
+  });
+
   it("asks Qwen to skip thinking for quick replies", async () => {
     const configured = data();
     configured.settings.models[0].model = "qwen3.7-plus";

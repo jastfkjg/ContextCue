@@ -23,6 +23,7 @@
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:window": "node scripts/test-foreground-window.mjs",
     "lint": "tsc --noEmit",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder"

@@ -117,7 +117,7 @@ export function normalizeMacInputTarget(raw: RawMacTarget): InputTarget | null {
 export async function getFocusedInputTarget(): Promise<InputTarget | null> {
   if (process.platform !== "darwin") return null;
   try {
-    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_TARGET_SCRIPT]);
+    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_TARGET_SCRIPT], { timeout: 1500 });
     return normalizeMacInputTarget(JSON.parse(stdout.trim()) as RawMacTarget);
   } catch {
     return null;

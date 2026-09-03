@@ -40,15 +40,11 @@ import type {
 import {
   captureSource,
   captureQuickSource,
-  listCaptureSourceRefs,
   listCaptureSources,
   type CaptureSourceRef
 } from "./services/capture";
 import {
-  frontmostMatchesQuickReplyContext,
-  selectQuickReplySource,
-  targetApplicationName,
-  type QuickReplyContext
+  targetApplicationName
 } from "./services/channel";
 import { importLegacyBrandData, MemoryStore } from "./services/memory-store";
 import { generateWithModel, streamAnswerWithModel, testModelConnection } from "./services/model";
@@ -57,6 +53,8 @@ import electronUpdater from "electron-updater";
 import { UpdateService } from "./services/updater";
 import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./services/installer-download";
 import type { AppUpdateState } from "../src/shared/types";
+import { getFrontmostWindow, sameFrontmostWindow, type FrontmostWindow } from "./services/front-window";
+import { prepareQuickContext } from "./services/quick-context";
 
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
@@ -67,12 +65,11 @@ let updates: UpdateService;
 let openUpdatesRequested = false;
 const installerAbort = new AbortController();
 let quickReplyInFlight = false;
-let quickSourceRefs: CaptureSourceRef[] = [];
 let quickReplyAnchor: { x: number; y: number } | null = null;
 let quickReplyTargetApplication = "";
 let quickInputTarget: InputTarget | null = null;
 let quickOverlayActive = false;
-let quickReplyContext: QuickReplyContext | null = null;
+let quickReplyContext: FrontmostWindow | null = null;
 let quickOverlayHiddenForContext = false;
 let quickContextCheckInFlight = false;
 let quickContextTimer: NodeJS.Timeout | null = null;
@@ -83,6 +80,7 @@ interface QuickOverlaySession {
   frontmost: FrontmostWindow;
   target: InputTarget | null;
   screenshot?: string;
+  contextUnavailableReason?: string;
   hasSuggestions: boolean;
   createdAt: number;
 }
@@ -290,76 +288,21 @@ function showOverlayStatus(status: OverlayStatus): void {
   if (!quickOverlayHiddenForContext) overlayWindow.showInactive();
 }
 
-interface FrontmostWindow {
-  applicationName: string;
-  windowTitle: string;
-}
-
-async function frontmostWindow(): Promise<FrontmostWindow> {
-  try {
-    if (process.platform === "darwin") {
-      const { stdout } = await execFileAsync("osascript", [
-        "-e",
-        "tell application \"System Events\"",
-        "-e",
-        "set frontProcess to first application process whose frontmost is true",
-        "-e",
-        "set applicationName to name of frontProcess",
-        "-e",
-        "try",
-        "-e",
-        "set windowTitle to name of front window of frontProcess as text",
-        "-e",
-        "on error",
-        "-e",
-        "set windowTitle to \"\"",
-        "-e",
-        "end try",
-        "-e",
-        "return applicationName & linefeed & windowTitle",
-        "-e",
-        "end tell"
-      ]);
-      const [applicationName = "", ...titleLines] = stdout.trimEnd().split(/\r?\n/);
-      return { applicationName: applicationName.trim(), windowTitle: titleLines.join("\n").trim() };
-    }
-    if (process.platform === "linux") {
-      const { stdout } = await execFileAsync("xdotool", ["getactivewindow", "getwindowname"]);
-      return { applicationName: "", windowTitle: stdout.trim() };
-    }
-  } catch {
-    return { applicationName: "", windowTitle: "" };
-  }
-  return { applicationName: "", windowTitle: "" };
-}
-
-async function refreshQuickSourceRefs(): Promise<CaptureSourceRef[]> {
-  quickSourceRefs = await listCaptureSourceRefs();
-  return quickSourceRefs;
-}
-
-function bindQuickReplyContext(source: CaptureSourceRef, frontmost: FrontmostWindow): void {
-  quickReplyContext = {
-    applicationName: frontmost.applicationName,
-    windowTitle: frontmost.windowTitle,
-    sourceName: source.name,
-    channel: source.channel
-  };
+function bindQuickOverlayContext(frontmost: FrontmostWindow): void {
+  quickReplyContext = frontmost.windowId ? frontmost : null;
   quickOverlayHiddenForContext = false;
 }
 
-function bindQuickOverlayContext(source: CaptureSourceRef | undefined, frontmost: FrontmostWindow): void {
-  if (source) {
-    bindQuickReplyContext(source, frontmost);
-    return;
-  }
-  quickReplyContext = {
-    applicationName: frontmost.applicationName,
-    windowTitle: frontmost.windowTitle,
-    sourceName: frontmost.windowTitle || frontmost.applicationName,
-    channel: "other"
-  };
-  quickOverlayHiddenForContext = false;
+async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
+  // Hide our own windows before asking the OS which external window is active.
+  // Do not show a loading overlay until the original screenshot has been saved.
+  overlayWindow?.hide();
+  mainWindow?.hide();
+  return prepareQuickContext({
+    getWindow: () => getFrontmostWindow(),
+    getTarget: getFocusedInputTarget,
+    capture: captureQuickSource
+  }, allowWithoutScreenshot);
 }
 
 function cancelAskInFlight(requestId?: string): void {
@@ -402,15 +345,11 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
   const context = quickReplyContext;
   try {
     const [current, currentTarget] = await Promise.all([
-      frontmostWindow(),
+      getFrontmostWindow(),
       quickInputTarget ? getFocusedInputTarget() : Promise.resolve(null)
     ]);
     if (!quickOverlayActive || quickReplyContext !== context) return;
-    const matches = frontmostMatchesQuickReplyContext(
-      context,
-      current.applicationName,
-      current.windowTitle
-    );
+    const matches = sameFrontmostWindow(context, current);
     const targetMatches = !quickInputTarget || sameInputTarget(quickInputTarget, currentTarget);
     if (matches && targetMatches) {
       if (quickOverlayHiddenForContext) {
@@ -433,7 +372,8 @@ function askContextForSession(session: QuickOverlaySession): AskOverlayContext {
     applicationName: session.frontmost.applicationName,
     windowTitle: session.frontmost.windowTitle,
     channel: session.source?.channel ?? "other",
-    hasPageContext: Boolean(session.source),
+    hasPageContext: Boolean(session.screenshot),
+    contextUnavailableReason: session.contextUnavailableReason,
     canReturnToSuggestions: session.hasSuggestions
   };
 }
@@ -465,30 +405,20 @@ async function showQuickAsk(): Promise<AskOverlayContext> {
     clearQuickReplySession();
     quickOverlayActive = true;
     quickReplyAnchor = screen.getCursorScreenPoint();
-    mainWindow?.hide();
-    const [focusedTarget, frontmost, availableSources] = await Promise.all([
-      getFocusedInputTarget(),
-      frontmostWindow(),
-      refreshQuickSourceRefs()
-    ]);
-    if (focusedTarget?.sensitive) {
-      throw new Error("ContextCue is disabled for passwords, verification codes, and other sensitive fields.");
-    }
+    const context = await prepareCurrentWindow(true);
+    const { target: focusedTarget, frontmost } = context;
     quickInputTarget = focusedTarget;
-    quickReplyTargetApplication = focusedTarget?.applicationName || frontmost.applicationName;
+    quickReplyTargetApplication = frontmost.applicationName;
     if (focusedTarget?.bounds) {
       quickReplyAnchor = {
         x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
         y: focusedTarget.bounds.y + focusedTarget.bounds.height
       };
     }
-    const source = selectQuickReplySource(availableSources, frontmost.applicationName, frontmost.windowTitle);
-    bindQuickOverlayContext(source, frontmost);
+    bindQuickOverlayContext(frontmost);
     const session: QuickOverlaySession = {
+      ...context,
       id: randomUUID(),
-      source,
-      frontmost,
-      target: focusedTarget,
       hasSuggestions: false,
       createdAt: Date.now()
     };
@@ -515,7 +445,6 @@ async function showQuickReply(): Promise<void> {
   if (quickReplyInFlight) return;
   quickReplyInFlight = true;
   const startedAt = performance.now();
-  let discoveryFinishedAt = startedAt;
   let captureFinishedAt = startedAt;
   try {
     cancelAskInFlight();
@@ -526,63 +455,22 @@ async function showQuickReply(): Promise<void> {
     quickReplyContext = null;
     quickOverlayHiddenForContext = false;
     quickReplyAnchor = screen.getCursorScreenPoint();
-    mainWindow?.hide();
-    const focusedTarget = await getFocusedInputTarget();
-    if (focusedTarget?.sensitive) {
-      throw new Error("ContextCue is disabled for passwords, verification codes, and other sensitive fields.");
-    }
+    const context = await prepareCurrentWindow(false);
+    const { target: focusedTarget, frontmost, source, screenshot } = context;
+    if (!source || !screenshot) throw new Error("The current window could not be captured. Try opening Ask AI without page context.");
     quickInputTarget = focusedTarget;
+    quickReplyTargetApplication = frontmost.applicationName;
     if (focusedTarget?.bounds) {
       quickReplyAnchor = {
         x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
         y: focusedTarget.bounds.y + focusedTarget.bounds.height
       };
     }
-    const initialSnapshot = store.getData();
-    const initialModel = initialSnapshot.settings.models.find((item) => item.id === initialSnapshot.settings.activeModelId)
-      ?? initialSnapshot.settings.models[0];
-    showOverlayStatus({
-      state: "loading",
-      message: focusedTarget ? "Reading the focused field and current page…" : "Reading the current page…",
-      modelName: initialModel?.model || initialModel?.name || "Configured model"
-    });
-    const [frontmost, availableSources] = await Promise.all([
-      frontmostWindow(),
-      // Window IDs and browser titles can change whenever the user switches a
-      // tab. Always discover a fresh source before a quick capture.
-      refreshQuickSourceRefs()
-    ]);
-    let source = selectQuickReplySource(availableSources, frontmost.applicationName, frontmost.windowTitle);
-    if (!source) {
-      source = selectQuickReplySource(await refreshQuickSourceRefs(), frontmost.applicationName, frontmost.windowTitle);
-    }
-    if (!source) {
-      throw new Error("No active page or app window was found. Keep the target window visible and try again.");
-    }
-    quickReplyTargetApplication = focusedTarget?.applicationName || frontmost.applicationName;
-    bindQuickReplyContext(source, frontmost);
-    discoveryFinishedAt = performance.now();
-
-    let screenshot: string;
-    try {
-      screenshot = await captureQuickSource(source.id);
-    } catch {
-      source = selectQuickReplySource(
-        await refreshQuickSourceRefs(),
-        frontmost.applicationName,
-        frontmost.windowTitle
-      );
-      if (!source) throw new Error("The current page or app window is no longer available. Keep it visible and try again.");
-      bindQuickReplyContext(source, frontmost);
-      screenshot = await captureQuickSource(source.id);
-    }
+    bindQuickOverlayContext(frontmost);
     captureFinishedAt = performance.now();
     quickOverlaySession = {
+      ...context,
       id: randomUUID(),
-      source,
-      frontmost,
-      target: focusedTarget,
-      screenshot,
       hasSuggestions: false,
       createdAt: Date.now()
     };
@@ -599,7 +487,7 @@ async function showQuickReply(): Promise<void> {
       channel: source.channel,
       locale: snapshot.settings.locale,
       quick: true,
-      scenario: focusedTarget ? "auto" : "reply",
+      scenario: "auto",
       target: focusedTarget ?? undefined,
       pageContext: {
         applicationName: focusedTarget?.applicationName || frontmost.applicationName,
@@ -617,11 +505,9 @@ async function showQuickReply(): Promise<void> {
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
     const finishedAt = performance.now();
     console.info(
-      `[quick-reply] discover=${Math.round(discoveryFinishedAt - startedAt)}ms `
-      + `capture=${Math.round(captureFinishedAt - discoveryFinishedAt)}ms `
+      `[quick-reply] prepare=${Math.round(captureFinishedAt - startedAt)}ms `
       + `model=${Math.round(finishedAt - captureFinishedAt)}ms total=${Math.round(finishedAt - startedAt)}ms`
     );
-    void refreshQuickSourceRefs().catch(() => undefined);
   } catch (error) {
     console.warn(`[quick-reply] failed after ${Math.round(performance.now() - startedAt)}ms`, error);
     showOverlayStatus({
@@ -727,6 +613,7 @@ async function hideQuickOverlay(): Promise<void> {
 
 async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: boolean; error?: string }> {
   try {
+    if (!request.target) return { pasted: false, error: "No editable field was identified. The suggestion was copied." };
     if (process.platform === "darwin") {
       if (!systemPreferences.isTrustedAccessibilityClient(true)) {
         await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
@@ -795,23 +682,9 @@ function sendAskEvent(event: AskStreamEvent): void {
 }
 
 async function screenshotForAsk(session: QuickOverlaySession): Promise<string> {
+  // Ask always uses the snapshot from invocation, even if the tab later changes.
   if (session.screenshot) return session.screenshot;
-  let source = session.source;
-  if (!source) throw new Error("No current-page context is available. Turn off page context and ask again.");
-  try {
-    session.screenshot = await captureQuickSource(source.id);
-  } catch {
-    source = selectQuickReplySource(
-      await refreshQuickSourceRefs(),
-      session.frontmost.applicationName,
-      session.frontmost.windowTitle
-    );
-    if (!source) throw new Error("The original page is no longer available. Turn off page context or reopen Ask AI there.");
-    session.source = source;
-    bindQuickOverlayContext(source, session.frontmost);
-    session.screenshot = await captureQuickSource(source.id);
-  }
-  return session.screenshot;
+  throw new Error(session.contextUnavailableReason || "No page snapshot is available. Turn off page context and ask again.");
 }
 
 async function rememberAskTokenUsage(
@@ -1091,7 +964,6 @@ app.whenReady().then(async () => {
   overlayWindow = createOverlayWindow();
   tray = createTray();
   updates.start();
-  void refreshQuickSourceRefs().catch(() => undefined);
   quickContextTimer = setInterval(() => void syncQuickOverlayWithFrontmostWindow(), 600);
 
   app.on("activate", () => {

@@ -182,7 +182,7 @@ export function AskPanel({ context, onExit }: Props) {
           <div className="ask-empty">
             <Sparkles size={18}/>
             <strong>What would you like to know?</strong>
-            <span>{includeContext ? "Ask about the visible page or anything else." : "Ask a quick question without page context."}</span>
+            <span>{includeContext ? "Ask about the captured page or anything else." : context.contextUnavailableReason || "Ask a quick question without page context."}</span>
           </div>
         ) : turns.map((turn) => (
           <article className="ask-turn" key={turn.id}>

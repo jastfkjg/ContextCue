@@ -118,6 +118,7 @@ export interface AskOverlayContext {
   windowTitle: string;
   channel: ChannelId;
   hasPageContext: boolean;
+  contextUnavailableReason?: string;
   canReturnToSuggestions: boolean;
 }
 
