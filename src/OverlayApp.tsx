@@ -116,14 +116,13 @@ export function OverlayApp() {
       >
         <X size={17} />
       </button>
-      {askContext ? (
-        <AskPanel key={askContext.sessionId} context={askContext} onExit={exitAsk}/>
-      ) : payload ? (
+      {askContext && <AskPanel key={`ask-${askContext.sessionId}`} context={askContext} onExit={exitAsk}/>}
+      {payload && (
         <CandidateCarousel
-          key={payload.sessionId ?? payload.generatedAt}
+          key={`suggestions-${payload.sessionId ?? payload.generatedAt}`}
           sessionId={payload.sessionId}
           contextError={expired?.sessionId === payload.sessionId ? expired?.message : undefined}
-          onEditCandidate={(index, text) => setPayload((current) => current ? { ...current, candidates: current.candidates.map((candidate, i) => i === index ? { ...candidate, text } : candidate) } : null)}
+          active={!askContext}
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}
@@ -133,7 +132,8 @@ export function OverlayApp() {
           onAsk={expired?.sessionId === payload.sessionId ? undefined : enterAsk}
           onHeightChange={contextCueApi.resizeOverlay}
         />
-      ) : (
+      )}
+      {!askContext && !payload && (
         status.state === "loading" ? (
           <div
             className="overlay-processing"

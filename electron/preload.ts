@@ -11,6 +11,7 @@ import type {
   MemoryFact,
   OverlayStatus,
   OverlayResult,
+  RevisionCandidateEvent,
   SaveSettingsRequest,
   TestModelConnectionRequest,
   UseReplyRequest,
@@ -69,7 +70,7 @@ const api: ContextCueApi = {
     ipcRenderer.on("overlay:expired", listener);
     return () => ipcRenderer.removeListener("overlay:expired", listener);
   },
-  setOverlayEditing: (sessionId, editing) => ipcRenderer.send("overlay:editing", sessionId, editing),
+  setRevisionComposerOpen: (sessionId, open) => ipcRenderer.send("overlay:revision-composer", sessionId, open),
   onOverlayReset: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("overlay:reset", listener);
@@ -96,11 +97,16 @@ const api: ContextCueApi = {
     return () => ipcRenderer.removeListener("overlay:ask-event", listener);
   },
   moveOverlay: (deltaX, deltaY) => ipcRenderer.send("overlay:move-by", deltaX, deltaY),
-  resizeOverlay: (height, newCandidate, editing) => ipcRenderer.send("overlay:resize", height, newCandidate, editing),
+  resizeOverlay: (height, newCandidate, expanded) => ipcRenderer.send("overlay:resize", height, newCandidate, expanded),
   resizeOverlayBy: (edge, deltaX, deltaY) => ipcRenderer.send("overlay:resize-by", edge, deltaX, deltaY),
   hideOverlay: () => ipcRenderer.invoke("overlay:hide"),
   reviseSuggestion: (request) => ipcRenderer.invoke("assist:revise", request),
-  cancelRevision: () => ipcRenderer.send("assist:cancel-revision")
+  onRevisionCandidate: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: RevisionCandidateEvent) => callback(value);
+    ipcRenderer.on("overlay:revision-candidate", listener);
+    return () => ipcRenderer.removeListener("overlay:revision-candidate", listener);
+  },
+  cancelRevision: (requestId) => ipcRenderer.send("assist:cancel-revision", requestId)
 };
 
 contextBridge.exposeInMainWorld("contextCue", api);

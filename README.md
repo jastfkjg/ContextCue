@@ -37,7 +37,7 @@ Local-first means memory and settings are stored on your device, not that model 
 | ✦ | **Task-aware drafts** | Generate replies, form-field text, new drafts, rewrites, search queries, and text completions. |
 | ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
 | ↵ | **Apply without submitting** | On macOS, validate the original control before inserting or replacing text. |
-| ✎ | **Edit and revise in place** | Edit a candidate or describe a change in one sentence. Review and save the draft before copying or inserting. |
+| ✦ | **Revise into multiple alternatives** | Describe a change below the current suggestion. Revised candidates appear in place, with the original group one click away. |
 | 🧠 | **Preserved local memory** | Existing Markdown notes, facts and history remain manageable on-device, but are excluded from page-only sessions. |
 | ✓ | **First-run guide** | Connect a provider, verify image input and permissions, then practice with a fictional conversation. |
 | ◉ | **Multiple model providers** | Configure several Responses or Chat Completions endpoints and choose the default model. |
@@ -62,13 +62,19 @@ Current app or browser window
                       └─ swipe · copy · apply
 ```
 
-The floating panel tracks the originating application, native window ID and visible window title, plus the recognized focused control on macOS. A detected app, window or page-title change clears the old session and cancels its requests. While editing, the panel keeps your draft and instructions visible with a notice: you can edit, save and copy them, but must reopen ContextCue for AI revisions or insertion. Otherwise the panel hides. Every new invocation captures a fresh page, even in the same window. Outside editing, changing only the focused field on the same page can temporarily hide the panel and restore it when returning to that field. Insertion validates the original target again before writing.
+The floating panel tracks the originating application, native window ID and visible window title, plus the recognized focused control on macOS. A detected app, window or page-title change clears the old session and cancels its requests. While the revision composer is open, the panel keeps your suggestions and instructions visible with a notice: you can still copy suggestions, but must reopen ContextCue for AI revisions or insertion. Otherwise the panel hides. Every new invocation captures a fresh page, even in the same window. With the composer closed, changing only the focused field on the same page can temporarily hide the panel and restore it when returning to that field. Insertion validates the original target again before writing.
 
 Suggestions initially fit their content. Drag any edge or the bottom-right grip to resize. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
 
 Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A.
 
-Candidate dots share a compact header with the count and are keyboard accessible with Tab then Enter / Space; navigation is hidden while editing. Choose **Edit** to edit directly, or add changes and background in the multiline **Instructions or context** field and choose **Revise with AI**. Quick presets append to the instructions, preserving any background you have entered. Only the current draft, revision instruction and session screenshot are sent to the active model. **Stop revising** cancels the revision; failures preserve the draft. **Save draft** updates the candidate without inserting it or creating a long-term rule. Enter adds a line in either text field; arrow keys move the caret, Escape cancels editing, and `Cmd / Ctrl + Enter` saves. The main process owns each session's Q&A history and includes at most three completed turns. Suggestion and revision requests time out after 45 seconds; closing or replacing a session cancels requests and discards late results.
+Candidate dots share a compact header with the count and are keyboard accessible with Tab then Enter / Space. Choose **Revise** in the home toolbar to open **How should this change?** below the visible candidate. The panel keeps its position and width, expands downwards up to 540px, and scrolls internally when the screen leaves less room. **Shorter**, **Warmer** and **More direct** append to your instructions without replacing background you have entered. Enter adds a line; arrows inside the field move the caret; `Cmd / Ctrl + Enter` starts revision. Escape closes the composer first.
+
+Revision uses the candidate selected when you submit, your instruction and the session's original screenshot. It requests the configured candidate count (1–5, normally 3) in one streaming request. Each complete, validated candidate appears as soon as it is ready; subsequent arrivals do not change your selection. **Revised · 1/3** identifies the new group. A provider that returns ordinary JSON instead of a stream shows its validated group once the response completes. Initial suggestion generation still waits for its complete response.
+
+Success closes the composer automatically; there is no separate Edit page or Save draft step. **Back to original suggestions** and **Show revised suggestions** switch between the original group and the latest revision, without accumulating every past variant. **Stop** keeps completed candidates and your instructions. Failure restores the group shown before that request and keeps the instructions for retry. Copy / Insert remains a separate explicit action; neither generation nor revision sends a message. Returning from Ask AI preserves the candidate group and selection.
+
+The main process owns each session's Q&A history and includes at most three completed turns. Suggestion and revision requests each have a 45-second total timeout, including a possible format-repair retry. Closing or replacing a session cancels requests and discards late results.
 
 ## Quick start
 
@@ -140,7 +146,7 @@ The document names end in `.md`, but their contents are stored inside Electron's
 | `tokenUsage` | Up to 5,000 local request records, including provider-reported token counts and model metadata |
 | `settings` | Model, candidate, language, shortcut, and overlay preferences |
 
-Page-only suggestions, revisions and Ask AI never load these documents, contacts, facts or accepted examples. Copying, inserting or editing in the floating panel no longer appends long-term accepted history. Existing data is preserved; provide any additional background explicitly in the current session. Legacy APIs and storage structures remain for compatibility.
+Page-only suggestions, revisions and Ask AI never load these documents, contacts, facts or accepted examples. Copying, inserting or revising in the floating panel no longer appends long-term accepted history. Existing data is preserved; provide any additional background explicitly in the current session. Legacy APIs and storage structures remain for compatibility.
 
 ## Token usage
 

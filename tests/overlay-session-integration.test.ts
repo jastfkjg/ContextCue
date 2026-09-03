@@ -134,16 +134,17 @@ describe("overlay clicks during asynchronous context checks", () => {
     const resize = (height: number) => harness.handlers.get("overlay:resize")!(event(), height, true, false);
     resize(320);
     const position = overlay.getPosition();
+    const cappedHeight = overlay.getSize()[1];
     overlay.setPosition.mockClear();
     resize(180);
     expect(overlay.getSize()[1]).toBe(180);
     expect(overlay.getPosition()).toEqual(position);
     resize(320);
-    expect(overlay.getSize()[1]).toBe(320);
+    expect(overlay.getSize()[1]).toBe(cappedHeight);
     expect(overlay.getPosition()).toEqual(position);
     expect(overlay.setPosition).not.toHaveBeenCalled();
     const bounds = overlay.getBounds();
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(882);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(892);
   });
 
   it.each(["window", "input"])("keeps the clicked overlay open when a pending %s lookup reports a mismatch", async (lookup) => {
@@ -189,40 +190,86 @@ describe("overlay clicks during asynchronous context checks", () => {
 
   const reviseCurrent = () => invoke("assist:revise", {
     sessionId: latest<OverlayResult>("overlay:result").sessionId,
-    text: "Edited draft", instruction: "Shorter"
+    requestId: crypto.randomUUID(), text: "Edited draft", instruction: "Shorter"
   });
 
-  const markEditing = (editing = true) => harness.handlers.get("overlay:editing")!(
-    event(), latest<OverlayResult>("overlay:result").sessionId, editing
+  const markComposerOpen = (revising = true) => harness.handlers.get("overlay:revision-composer")!(
+    event(), latest<OverlayResult>("overlay:result").sessionId, revising
   );
 
-  it("keeps the editor and invalidates only its page context when revision validation detects a page change", async () => {
+  it("streams revision candidates without reanchoring and ignores cancelled or superseded requests", async () => {
     const overlay = await openSuggestions();
-    markEditing();
+    overlay.focus();
+    markComposerOpen();
+    const position = overlay.getPosition();
+    const bounds = overlay.getBounds();
+    const finishes: Array<(value: GenerationResult) => void> = [];
+    harness.generate.mockImplementation(() => new Promise((resolve) => finishes.push(resolve)));
+    const sessionId = latest<OverlayResult>("overlay:result").sessionId;
+    const revise = (requestId: string) => invoke("assist:revise", { sessionId, requestId, text: "Selected draft", instruction: "Warmer" });
+    const first = revise("first");
+    const cancelled = expect(first).rejects.toThrow("cancelled");
+    await vi.waitFor(() => expect(finishes).toHaveLength(1));
+    const oldCall = harness.generate.mock.calls[1];
+    oldCall[6](result.candidates[0]);
+    expect(latest("overlay:revision-candidate")).toMatchObject({ sessionId, requestId: "first", candidate: result.candidates[0] });
+    expect(overlay.getPosition()).toEqual(position);
+    expect(overlay.getBounds()).toEqual(bounds);
+    const second = revise("second");
+    await vi.waitFor(() => expect(finishes).toHaveLength(2));
+    expect(oldCall[5].aborted).toBe(true);
+    invoke("assist:cancel-revision", "first");
+    const newCall = harness.generate.mock.calls[2];
+    expect(newCall[5].aborted).toBe(false);
+    const count = harness.events.length;
+    oldCall[6]({ ...result.candidates[0], text: "Late old candidate" });
+    expect(harness.events).toHaveLength(count);
+    finishes[0](result);
+    await cancelled;
+    newCall[6](result.candidates[0]);
+    finishes[1](result);
+    await expect(second).resolves.toEqual(result.candidates);
+    expect(latest("overlay:revision-candidate")).toMatchObject({ requestId: "second" });
+  });
+
+  it("can cancel while foreground validation is still pending, before calling the model", async () => {
+    await openSuggestions();
+    let finish!: (value: FrontmostWindow) => void;
+    harness.getWindow.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = invoke("assist:revise", { sessionId: latest<OverlayResult>("overlay:result").sessionId, requestId: "validation", text: "Draft", instruction: "Shorter" });
+    invoke("assist:cancel-revision", "validation");
+    finish(harness.window);
+    await expect(pending).rejects.toThrow("cancelled");
+    expect(harness.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the revision composer and invalidates only its page context when revision validation detects a page change", async () => {
+    const overlay = await openSuggestions();
+    markComposerOpen();
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
     harness.window = { ...harness.window, windowId: "202" };
     await expect(reviseCurrent()).rejects.toThrow("window or page changed");
     expect(overlay.hide).not.toHaveBeenCalled();
     expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
-    expect(latest<{ message: string }>("overlay:expired").message).toContain("Your draft is kept");
+    expect(latest<{ message: string }>("overlay:expired").message).toContain("Your suggestions and instructions are kept");
     await expect(reviseCurrent()).rejects.toThrow("expired");
     expect(harness.generate).toHaveBeenCalledTimes(1);
   });
 
-  it("does not hide an open editor because the source input loses focus", async () => {
+  it("does not hide an open revision composer because the source input loses focus", async () => {
     const overlay = await openSuggestions();
-    markEditing();
+    markComposerOpen();
     harness.getTarget.mockResolvedValue(null);
     await harness.poll!();
     expect(overlay.hide).not.toHaveBeenCalled();
-    markEditing(false);
+    markComposerOpen(false);
     await harness.poll!();
     expect(overlay.hide).toHaveBeenCalledOnce();
   });
 
-  it("expires an old page snapshot without clearing an unsaved editor", async () => {
+  it("expires an old page snapshot without clearing an unsaved revision composer", async () => {
     const overlay = await openSuggestions();
-    markEditing();
+    markComposerOpen();
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
     const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
     try { await harness.poll!(); } finally { now.mockRestore(); }
@@ -232,9 +279,9 @@ describe("overlay clicks during asynchronous context checks", () => {
     await expect(reviseCurrent()).rejects.toThrow("expired");
   });
 
-  it("cancels an in-flight revision on a page change and retains the editor for recovery", async () => {
+  it("cancels an in-flight revision on a page change and retains the revision composer for recovery", async () => {
     const overlay = await openSuggestions();
-    markEditing();
+    markComposerOpen();
     overlay.focus();
     let finish!: (value: GenerationResult) => void;
     harness.generate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -249,26 +296,26 @@ describe("overlay clicks during asynchronous context checks", () => {
     await expect(pending).rejects.toThrow("cancelled");
   });
 
-  it("revises the captured page while the editor owns focus, without inspecting a different window underneath it", async () => {
+  it("revises the captured page while the revision composer owns focus, without inspecting a different window underneath it", async () => {
     const overlay = await openSuggestions();
     overlay.focus();
     harness.getWindow.mockClear().mockResolvedValue({ ...harness.window, windowId: "202" });
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
-    await expect(reviseCurrent()).resolves.toBe("Current draft");
+    await expect(reviseCurrent()).resolves.toEqual(result.candidates);
     expect(harness.getWindow).not.toHaveBeenCalled();
     expect(harness.generate.mock.calls[1][3]).toBe("data:image/png;base64,WeChat");
     expect(overlay.hide).not.toHaveBeenCalled();
     expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
   });
 
-  it("ignores a stale foreground result if the editor gains focus during revision validation", async () => {
+  it("ignores a stale foreground result if the revision composer gains focus during revision validation", async () => {
     const overlay = await openSuggestions();
     let finish!: (value: FrontmostWindow) => void;
     harness.getWindow.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const pending = reviseCurrent();
     overlay.focus();
     finish({ ...harness.window, windowId: "202" });
-    await expect(pending).resolves.toBe("Current draft");
+    await expect(pending).resolves.toEqual(result.candidates);
     expect(overlay.hide).not.toHaveBeenCalled();
   });
 
@@ -285,7 +332,7 @@ describe("overlay clicks during asynchronous context checks", () => {
       await expect(pending).rejects.toThrow("window or page changed");
       expect(harness.generate).toHaveBeenCalledTimes(1);
     } else {
-      await expect(pending).resolves.toBe("Current draft");
+      await expect(pending).resolves.toEqual(result.candidates);
       expect(overlay.hide).not.toHaveBeenCalled();
     }
   });
@@ -308,10 +355,10 @@ describe("overlay clicks during asynchronous context checks", () => {
     await expect(reviseCurrent()).rejects.toThrow("Window focus is changing");
     expect(overlay.hide).not.toHaveBeenCalled();
     expect(harness.generate).toHaveBeenCalledTimes(1);
-    await expect(reviseCurrent()).resolves.toBe("Current draft");
+    await expect(reviseCurrent()).resolves.toEqual(result.candidates);
   });
 
-  it("rejects a late revision if focus leaves the editor for a different page during generation", async () => {
+  it("rejects a late revision if focus leaves the revision composer for a different page during generation", async () => {
     const overlay = await openSuggestions();
     overlay.focus();
     let finish!: (value: GenerationResult) => void;
@@ -372,9 +419,9 @@ describe("Electron overlay session boundaries", () => {
     await vi.waitFor(() => expect(harness.generate).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(latest<OverlayResult>("overlay:result")?.sessionId).toBeTruthy());
     const suggestion = latest<OverlayResult>("overlay:result");
-    await expect(invoke("assist:revise", { sessionId: suggestion.sessionId, text: "Edited draft", instruction: "Shorter" })).resolves.toBe("Current draft");
+    await expect(invoke("assist:revise", { sessionId: suggestion.sessionId, requestId: crypto.randomUUID(), text: "Edited draft", instruction: "Shorter" })).resolves.toEqual(result.candidates);
     expect(harness.generate.mock.calls[1][2]).toMatchObject({ contextPolicy: "page-only", revision: { text: "Edited draft", instruction: "Shorter" } });
     await openAsk("Different browser", "303");
-    await expect(invoke("assist:revise", { sessionId: suggestion.sessionId, text: "Old draft", instruction: "Shorter" })).rejects.toThrow("expired");
+    await expect(invoke("assist:revise", { sessionId: suggestion.sessionId, requestId: crypto.randomUUID(), text: "Old draft", instruction: "Shorter" })).rejects.toThrow("expired");
   });
 });

@@ -10,7 +10,15 @@ function fixture() {
 }
 
 describe("resizable suggestion and Ask AI windows", () => {
-  it("expands the editor, then fits the saved candidate again", () => {
+  it("caps expansion at the available space below without shifting position or width", () => {
+    const { window, sizer } = fixture();
+    window.setBounds({ x: 160, y: 690, width: 520, height: 140 });
+    sizer.fitContent(600, true, true);
+    expect(window.getBounds()).toEqual({ x: 160, y: 690, width: 520, height: 202 });
+    sizer.fitContent(100, true, false);
+    expect(window.getBounds()).toEqual({ x: 160, y: 690, width: 520, height: 140 });
+  });
+  it("expands the inline composer, then fits the candidate again", () => {
     const { window, sizer } = fixture();
     sizer.fitContent(620, true, true);
     expect(window.getBounds().height).toBe(540);

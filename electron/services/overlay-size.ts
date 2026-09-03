@@ -54,13 +54,17 @@ export class OverlaySizer {
     } else this.apply(size);
   }
 
-  fitContent(height: number, newCandidate = false, editing = false): boolean {
+  fitContent(height: number, newCandidate = false, expanded = false): boolean {
     if (this.mode !== "suggestions" || !Number.isFinite(height) || height <= 0) return false;
     this.contentHeight = height;
     if (newCandidate) this.manualSuggestionHeight = false;
     if (this.manualSuggestionHeight) return false;
     const current = this.window.getBounds();
-    const next = this.constrain({ ...current, height: Math.min(editing ? 540 : 360, height) });
+    const area = this.workArea(current);
+    // Auto-fit never repositions the window, including when a composer opens
+    // near the bottom edge. The scroll region handles any remaining content.
+    const available = Math.max(1, area.y + area.height - 8 - current.y);
+    const next = { ...current, height: Math.min(available, Math.max(140, Math.round(Math.min(expanded ? 540 : 360, height)))) };
     if (next.height === current.height) return false;
     this.window.setBounds(next, false);
     return true;

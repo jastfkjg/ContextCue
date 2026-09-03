@@ -2,6 +2,8 @@ import type {
   AppSettings,
   AppUpdateState,
   AskStreamEvent,
+  RevisionCandidateEvent,
+  CandidateReply,
   CaptureSource,
   GenerationResult,
   ContextCueApi,
@@ -10,6 +12,9 @@ import type {
   TokenUsageRecord,
   UserProfile
 } from "../shared/types";
+
+const demoRevisionListeners = new Set<(event: RevisionCandidateEvent) => void>();
+const demoRevisions = new Map<string, AbortController>();
 
 const demoSvg = encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="600">
@@ -278,7 +283,7 @@ const browserDemoApi: ContextCueApi = {
   },
   onOverlayReset: () => () => undefined,
   onOverlayExpired: () => () => undefined,
-  setOverlayEditing: () => undefined,
+  setRevisionComposerOpen: () => undefined,
   onOverlayStatus: (callback) => {
     if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
     const timeout = window.setTimeout(() => callback({
@@ -343,11 +348,34 @@ const browserDemoApi: ContextCueApi = {
   resizeOverlay: () => undefined,
   resizeOverlayBy: () => undefined,
   hideOverlay: async () => undefined,
-  reviseSuggestion: async ({ text, instruction }) => {
-    await new Promise((resolve) => setTimeout(resolve, 450));
-    return /short|brief|短/i.test(instruction) ? "Thursday works. I'll send the deck before we meet." : `${text}\n[Preview revision: ${instruction}]`;
+  reviseSuggestion: async ({ sessionId, requestId, text, instruction }) => {
+    const controller = new AbortController();
+    demoRevisions.set(requestId, controller);
+    const short = /short|brief|短/i.test(instruction);
+    const candidates: CandidateReply[] = [
+      { text: short ? "Thursday works. I'll send the deck before we meet." : `${text} Thanks for being flexible!`, tone: "Warm", strategy: "Friendly confirmation" },
+      { text: short ? "Thursday confirmed. Deck coming before the meeting." : "Thursday works for me. I'll make sure you have the updated deck beforehand.", tone: "Direct", strategy: "Clear next step" },
+      { text: short ? "Sounds good — Thursday it is. I'll send the deck ahead.": "Happy to move our sync to Thursday at the same time. I'll send you the updated deck before then.", tone: "Natural", strategy: "Acknowledge and confirm" }
+    ].slice(0, demoSettings.candidateCount);
+    try {
+      for (const candidate of candidates) {
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => { window.clearTimeout(timer); reject(new Error("Revision cancelled.")); };
+          const timer = window.setTimeout(() => { controller.signal.removeEventListener("abort", abort); resolve(); }, 650);
+          controller.signal.addEventListener("abort", abort, { once: true });
+        });
+        controller.signal.throwIfAborted();
+        demoRevisionListeners.forEach((listener) => listener({ sessionId, requestId, candidate }));
+      }
+      return candidates;
+    } finally { demoRevisions.delete(requestId); }
   },
-  cancelRevision: () => undefined
+  onRevisionCandidate: (callback) => {
+    demoRevisionListeners.add(callback);
+    return () => { demoRevisionListeners.delete(callback); };
+  },
+  cancelRevision: (requestId) => demoRevisions.get(requestId)?.abort()
+
 };
 
 export const contextCueApi: ContextCueApi = window.contextCue ?? browserDemoApi;

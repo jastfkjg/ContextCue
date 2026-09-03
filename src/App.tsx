@@ -360,7 +360,7 @@ function ReplyWorkspace({
                   <span>UNDERSTOOD</span>
                   <p>{result.conversationSummary}</p>
                 </div>
-                <CandidateCarousel candidates={result.candidates} channel={channel} contact={contact || result.detectedContact} />
+                <CandidateCarousel key={result.generatedAt} candidates={result.candidates} channel={channel} contact={contact || result.detectedContact} />
                 {result.memorySuggestions.length > 0 && (
                   <div className="memory-suggestions">
                     <div className="suggestion-title"><Brain size={15} /><span>Worth remembering?</span><small>Nothing is saved automatically.</small></div>

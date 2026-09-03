@@ -106,8 +106,15 @@ export type OverlayResult = GenerationResult & { sessionId?: string; channel: Ch
 
 export interface ReviseSuggestionRequest {
   sessionId: string;
+  requestId: string;
   text: string;
   instruction: string;
+}
+
+export interface RevisionCandidateEvent {
+  sessionId: string;
+  requestId: string;
+  candidate: CandidateReply;
 }
 
 export interface AskHistoryMessage {
@@ -336,7 +343,7 @@ export interface ContextCueApi {
   onOverlayResult: (callback: (result: OverlayResult) => void) => () => void;
   onOverlayReset: (callback: () => void) => () => void;
   onOverlayExpired: (callback: (event: { sessionId: string; message: string }) => void) => () => void;
-  setOverlayEditing: (sessionId: string, editing: boolean) => void;
+  setRevisionComposerOpen: (sessionId: string, open: boolean) => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   openAsk: () => Promise<AskOverlayContext>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;
@@ -346,9 +353,10 @@ export interface ContextCueApi {
   onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
   onAskEvent: (callback: (event: AskStreamEvent) => void) => () => void;
   moveOverlay: (deltaX: number, deltaY: number) => void;
-  resizeOverlay: (height: number, newCandidate: boolean, editing?: boolean) => void;
+  resizeOverlay: (height: number, newCandidate: boolean, expanded?: boolean) => void;
   resizeOverlayBy: (edge: OverlayResizeEdge, deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
-  reviseSuggestion: (request: ReviseSuggestionRequest) => Promise<string>;
-  cancelRevision: () => void;
+  reviseSuggestion: (request: ReviseSuggestionRequest) => Promise<CandidateReply[]>;
+  onRevisionCandidate: (callback: (event: RevisionCandidateEvent) => void) => () => void;
+  cancelRevision: (requestId: string) => void;
 }

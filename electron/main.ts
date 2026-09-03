@@ -31,6 +31,7 @@ import type {
   MemoryFact,
   OverlayStatus,
   ReviseSuggestionRequest,
+  CandidateReply,
   SaveSettingsRequest,
   TestModelConnectionRequest,
   TokenUsageRecord,
@@ -83,8 +84,8 @@ type QuickOverlaySession = PageSession;
 let quickOverlaySession: PageSession | null = null;
 let quickInvocation = 0;
 let suggestionController: AbortController | null = null;
-let revisionController: AbortController | null = null;
-let editingSessionId: string | null = null;
+let revisionInFlight: { requestId: string; controller: AbortController } | null = null;
+let revisionComposerSessionId: string | null = null;
 let askInFlight: { requestId: string; controller: AbortController } | null = null;
 
 let overlaySizer: OverlaySizer | null = null;
@@ -259,7 +260,7 @@ function createOverlayWindow(): BrowserWindow {
 }
 
 function sendToOverlay(
-  channel: "overlay:status" | "overlay:result" | "overlay:ask-open" | "overlay:ask-event" | "overlay:reset" | "overlay:expired",
+  channel: "overlay:status" | "overlay:result" | "overlay:ask-open" | "overlay:ask-event" | "overlay:reset" | "overlay:expired" | "overlay:revision-candidate",
   payload: unknown
 ): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
@@ -267,7 +268,7 @@ function sendToOverlay(
     overlaySizer?.show("suggestions");
   } else if (channel === "overlay:ask-open") overlaySizer?.show("ask");
   else if (channel === "overlay:status") overlaySizer?.show((payload as OverlayStatus).state === "error" ? "error" : "loading");
-  if (channel !== "overlay:ask-event" && channel !== "overlay:reset" && channel !== "overlay:expired") positionOverlayNearInput();
+  if (channel !== "overlay:ask-event" && channel !== "overlay:reset" && channel !== "overlay:expired" && channel !== "overlay:revision-candidate") positionOverlayNearInput();
   const invocation = quickInvocation;
   const destination = overlayWindow;
   const send = () => {
@@ -336,9 +337,8 @@ function clearQuickReplySession(preserveDraft = false): void {
   quickInvocation += 1;
   suggestionController?.abort();
   suggestionController = null;
-  revisionController?.abort();
-  revisionController = null;
-  editingSessionId = null;
+  cancelRevisionInFlight();
+  revisionComposerSessionId = null;
   quickReplyInFlight = false;
   cancelAskInFlight();
   quickOverlayActive = false;
@@ -352,16 +352,16 @@ function clearQuickReplySession(preserveDraft = false): void {
 
 function invalidateQuickReplySession(message: string): void {
   const sessionId = quickOverlaySession?.id;
-  const preserveDraft = Boolean(sessionId && editingSessionId === sessionId);
+  const preserveDraft = Boolean(sessionId && revisionComposerSessionId === sessionId);
   if (!preserveDraft) overlayWindow?.hide();
-  // Discard the screenshot and target even when keeping the local editor open.
+  // Discard the screenshot and target even when keeping the revision composer open.
   clearQuickReplySession(preserveDraft);
   if (preserveDraft) sendToOverlay("overlay:expired", { sessionId, message });
 }
 
 async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
   if (quickOverlaySession && Date.now() - quickOverlaySession.createdAt > ASK_SESSION_TTL_MS) {
-    invalidateQuickReplySession("Page context expired. Your draft is kept. Reopen ContextCue for AI revisions; you can still edit, save and copy this draft.");
+    invalidateQuickReplySession("Page context expired. Your suggestions and instructions are kept. You can still copy suggestions; reopen ContextCue to revise or insert.");
     return;
   }
   if (
@@ -387,7 +387,7 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
       getFrontmostWindow(),
       quickInputTarget ? getFocusedInputTarget() : Promise.resolve(null)
     ]);
-    // A lookup can straddle a click on Edit / Ask AI or an editor field. Never
+    // A lookup can straddle a click on Revise / Ask AI or the instruction field. Never
     // hide the panel using a result from before that focus transition, even if
     // focus has already returned to the source window. The next poll checks it.
     if (!quickOverlayActive || quickReplyContext !== context
@@ -400,7 +400,7 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
     }
     const matches = sameFrontmostWindow(context, current);
     if (!matches) {
-      invalidateQuickReplySession("The page changed. Your draft is kept. Reopen ContextCue for AI revisions; you can still edit, save and copy this draft.");
+      invalidateQuickReplySession("The page changed. Your suggestions and instructions are kept. You can still copy suggestions; reopen ContextCue to revise or insert.");
       return;
     }
     const targetMatches = !quickInputTarget || sameInputTarget(quickInputTarget, currentTarget);
@@ -412,9 +412,9 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
       }
       return;
     }
-    // An editor uses the saved snapshot; changing the source input focus should
+    // The revision composer uses the saved snapshot; changing the source input focus should
     // not hide it. Applying a draft still validates the original input target.
-    if (editingSessionId === quickOverlaySession?.id) return;
+    if (revisionComposerSessionId === quickOverlaySession?.id) return;
     if (overlayWindow.isVisible()) overlayWindow.hide();
     quickOverlayHiddenForContext = true;
   } finally {
@@ -438,7 +438,7 @@ function usableQuickOverlaySession(): QuickOverlaySession | null {
   const session = quickOverlaySession;
   if (!session) return null;
   if (Date.now() - session.createdAt <= ASK_SESSION_TTL_MS) return session;
-  invalidateQuickReplySession("Page context expired. Your draft is kept. Reopen ContextCue for AI revisions; you can still edit, save and copy this draft.");
+  invalidateQuickReplySession("Page context expired. Your suggestions and instructions are kept. You can still copy suggestions; reopen ContextCue to revise or insert.");
   return null;
 }
 
@@ -446,7 +446,7 @@ async function assertSessionCurrent(session: PageSession): Promise<void> {
   if (quickOverlaySession !== session) throw new Error("This page session has ended. Open ContextCue again.");
   if (!session.frontmost.windowId) return;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    // Editing / Ask AI owns focus and uses the invocation's saved snapshot.
+    // Revise / Ask AI owns focus and uses the invocation's saved snapshot.
     // Even on macOS, the top external window underneath our panel is not proof
     // of a page switch. The watcher resumes validation when focus leaves us.
     if (overlayWindow?.isFocused()) return;
@@ -455,11 +455,11 @@ async function assertSessionCurrent(session: PageSession): Promise<void> {
     const current = await getFrontmostWindow();
     if (quickOverlaySession !== session) throw new Error("This page session has ended. Open ContextCue again.");
     if (overlayWindow?.isFocused()) return;
-    // Focus may have entered and left the editor during the lookup. Retry with
+    // Focus may have entered and left the composer during the lookup. Retry with
     // a fresh result rather than invalidating the session using a stale one.
     if (overlayWindow !== checkedWindow || focusRevision !== overlayFocusRevision) continue;
     if (!sameFrontmostWindow(session.frontmost, current)) {
-      invalidateQuickReplySession("The page changed. Your draft is kept. Reopen ContextCue for AI revisions; you can still edit, save and copy this draft.");
+      invalidateQuickReplySession("The page changed. Your suggestions and instructions are kept. You can still copy suggestions; reopen ContextCue to revise or insert.");
       throw new Error("The window or page changed. Open ContextCue again on the current page.");
     }
     return;
@@ -467,30 +467,42 @@ async function assertSessionCurrent(session: PageSession): Promise<void> {
   throw new Error("Window focus is changing. Try again once the current window is active.");
 }
 
-async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<string> {
+function cancelRevisionInFlight(requestId?: string): void {
+  if (!revisionInFlight || (requestId && revisionInFlight.requestId !== requestId)) return;
+  revisionInFlight.controller.abort();
+  revisionInFlight = null;
+}
+
+async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<CandidateReply[]> {
   const session = usableQuickOverlaySession();
   if (!session || request.sessionId !== session.id || !session.result || !session.screenshot) {
     throw new Error("This suggestion has expired. Open ContextCue again on the current page.");
   }
-  if (typeof request.text !== "string" || !request.text.trim() || request.text.length > 16_000
+  if (typeof request.requestId !== "string" || !request.requestId || request.requestId.length > 128
+    || typeof request.text !== "string" || !request.text.trim() || request.text.length > 16_000
     || typeof request.instruction !== "string" || !request.instruction.trim() || request.instruction.length > 2_000) {
     throw new Error("Enter a draft and a revision instruction (up to 2,000 characters).");
   }
-  await assertSessionCurrent(session);
-  revisionController?.abort();
+  cancelRevisionInFlight();
   const controller = new AbortController();
-  revisionController = controller;
-  const snapshot = store.getData();
-  const generation = { ...pageRequest(session, snapshot.settings.locale), revision: { text: request.text, instruction: request.instruction } };
+  const pending = { requestId: request.requestId, controller };
+  revisionInFlight = pending;
+  const current = () => revisionInFlight === pending && !controller.signal.aborted && quickOverlaySession === session;
   try {
-    const result = await generateWithModel(snapshot, readApiKey(), generation, session.screenshot, fetch, controller.signal);
-    if (controller.signal.aborted || quickOverlaySession !== session) throw new Error("Revision cancelled.");
+    await assertSessionCurrent(session);
+    if (!current()) throw new Error("Revision cancelled.");
+    const snapshot = store.getData();
+    const generation = { ...pageRequest(session, snapshot.settings.locale), revision: { text: request.text, instruction: request.instruction } };
+    const result = await generateWithModel(snapshot, readApiKey(), generation, session.screenshot, fetch, controller.signal, (candidate) => {
+      if (current()) sendToOverlay("overlay:revision-candidate", { sessionId: session.id, requestId: request.requestId, candidate });
+    });
+    if (!current()) throw new Error("Revision cancelled.");
     await assertSessionCurrent(session);
     await rememberTokenUsage(generation, result, snapshot);
-    if (controller.signal.aborted || quickOverlaySession !== session) throw new Error("Revision cancelled.");
-    return result.candidates[0].text;
+    if (!current()) throw new Error("Revision cancelled.");
+    return result.candidates;
   } finally {
-    if (revisionController === controller) revisionController = null;
+    if (revisionInFlight === pending) revisionInFlight = null;
   }
 }
 
@@ -947,12 +959,12 @@ function registerIpc(): void {
   };
   ipcMain.handle("assist:use", (_event, request: UseReplyRequest) => useSuggestion(request));
   ipcMain.handle("reply:use", (_event, request: UseReplyRequest) => useSuggestion({ scenario: "reply", ...request }));
-  ipcMain.on("overlay:resize", (event, requestedHeight: number, newCandidate: boolean, editing?: boolean) => {
+  ipcMain.on("overlay:resize", (event, requestedHeight: number, newCandidate: boolean, expanded?: boolean) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
     // Content changes resize in place. Re-anchoring here can flip a short
     // candidate below the input and the next long candidate above it.
-    // OverlaySizer only moves the window if needed to keep it on screen.
-    overlaySizer?.fitContent(requestedHeight, newCandidate === true, editing === true);
+    // Overflow scrolls inside the panel instead of moving its top-left corner.
+    overlaySizer?.fitContent(requestedHeight, newCandidate === true, expanded === true);
   });
   ipcMain.on("overlay:resize-by", (event, edge: OverlayResizeEdge, deltaX: number, deltaY: number) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
@@ -976,13 +988,13 @@ function registerIpc(): void {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating suggestions to revise a draft.");
     return reviseSuggestion(request);
   });
-  ipcMain.on("overlay:editing", (event, sessionId: string, editing: boolean) => {
+  ipcMain.on("overlay:revision-composer", (event, sessionId: string, open: boolean) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
-    if (editing === true && quickOverlaySession?.id === sessionId) editingSessionId = sessionId;
-    else if (editing === false && editingSessionId === sessionId) editingSessionId = null;
+    if (open === true && quickOverlaySession?.id === sessionId) revisionComposerSessionId = sessionId;
+    else if (open === false && revisionComposerSessionId === sessionId) revisionComposerSessionId = null;
   });
-  ipcMain.on("assist:cancel-revision", (event) => {
-    if (event.sender === overlayWindow?.webContents) { revisionController?.abort(); revisionController = null; }
+  ipcMain.on("assist:cancel-revision", (event, requestId: string) => {
+    if (event.sender === overlayWindow?.webContents && typeof requestId === "string" && requestId) cancelRevisionInFlight(requestId);
   });
   ipcMain.handle("ask:open", async (event) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Ask AI is available from the floating panel.");
