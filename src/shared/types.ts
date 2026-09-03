@@ -112,6 +112,8 @@ export interface AskRequest {
   history?: AskHistoryMessage[];
 }
 
+export type OverlayResizeEdge = "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
 export interface AskOverlayContext {
   sessionId: string;
   applicationName: string;
@@ -324,5 +326,7 @@ export interface ContextCueApi {
   onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
   onAskEvent: (callback: (event: AskStreamEvent) => void) => () => void;
   moveOverlay: (deltaX: number, deltaY: number) => void;
+  resizeOverlay: (height: number, newCandidate: boolean) => void;
+  resizeOverlayBy: (edge: OverlayResizeEdge, deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
 }

@@ -4,6 +4,7 @@ import type { AskOverlayContext, ChannelId, GenerationResult, InputTarget, Overl
 import { contextCueApi } from "./lib/api";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { AskPanel } from "./components/AskPanel";
+import { OverlayWindowControls } from "./components/OverlayWindowControls";
 
 type OverlayPayload = GenerationResult & { channel: ChannelId; contact: string; target?: InputTarget };
 
@@ -82,6 +83,7 @@ export function OverlayApp() {
 
   return (
     <main className={`overlay-root ${askContext ? "overlay-root--ask" : !payload ? `overlay-root--${status.state}` : ""}`}>
+      {(askContext || payload) && <OverlayWindowControls/>}
       <button
         className="overlay-hover-close"
         onClick={() => void contextCueApi.hideOverlay()}
@@ -101,6 +103,7 @@ export function OverlayApp() {
           target={payload.target}
           compact
           onAsk={enterAsk}
+          onHeightChange={contextCueApi.resizeOverlay}
         />
       ) : (
         status.state === "loading" ? (

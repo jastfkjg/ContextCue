@@ -55,6 +55,8 @@ Current app or browser window
 
 The floating panel is bound to the originating application, window, and—on macOS—focused control. Changing the target invalidates the panel.
 
+Suggestions initially fit their content. Drag any edge or the bottom-right grip to resize. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
+
 Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. If capture is unavailable, the panel explains why and still allows questions without page context. Closing the panel clears the screenshot and in-memory Q&A.
 
 ## Quick start

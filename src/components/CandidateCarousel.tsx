@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, Sparkles } from "lucide-react";
 import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
@@ -13,9 +13,10 @@ interface Props {
   target?: InputTarget;
   compact?: boolean;
   onAsk?: () => void;
+  onHeightChange?: (height: number, newCandidate: boolean) => void;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", target, compact = false, onAsk }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", target, compact = false, onAsk, onHeightChange }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
@@ -23,6 +24,33 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
   const pointerStart = useRef<number | null>(null);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const horizontalSwipe = useRef(createHorizontalSwipeTracker());
+  const shell = useRef<HTMLElement | null>(null);
+  const stage = useRef<HTMLDivElement | null>(null);
+  const copyObserver = useRef<ResizeObserver | null>(null);
+  const measuredCopy = useRef<HTMLDivElement | null>(null);
+  const measureCopy = useCallback((node: HTMLDivElement | null) => {
+    copyObserver.current?.disconnect();
+    if (!node || !compact) return;
+    // A new candidate always starts at its first line, even after scrolling the last one.
+    if (stage.current) stage.current.scrollTop = 0;
+    if (!onHeightChange) return;
+    // Feedback can reattach this ref to the same node. Only a new candidate
+    // should release a manually chosen height, not resize-observer callbacks.
+    const newCandidate = measuredCopy.current !== node;
+    measuredCopy.current = node;
+    const measure = (resetHeight = false) => {
+      if (!shell.current) return;
+      const padding = Number.parseFloat(getComputedStyle(shell.current).paddingTop) || 0;
+      const actions = shell.current.querySelector<HTMLElement>(".candidate-actions")?.offsetHeight ?? 0;
+      const note = shell.current.querySelector<HTMLElement>(".candidate-feedback")?.offsetHeight ?? 0;
+      onHeightChange(Math.ceil(padding + node.offsetHeight + actions + note + 2), resetHeight);
+    };
+    copyObserver.current = new ResizeObserver(() => measure());
+    copyObserver.current.observe(node);
+    const note = shell.current?.querySelector(".candidate-feedback");
+    if (note) copyObserver.current.observe(note);
+    measure(newCandidate);
+  }, [compact, onHeightChange, feedback]);
 
   const move = (next: number) => {
     const wrapped = (next + candidates.length) % candidates.length;
@@ -98,7 +126,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
   const action = candidate.action ?? (target?.selectedText ? "replace-selection" : "insert");
   const insertLabel = !target ? (status === "copied" ? "Copied" : "Copy") : action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
   return (
-    <section className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
+    <section ref={shell} className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
       {compact && (
         <div
           className="candidate-drag-handle"
@@ -118,7 +146,11 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
         </div>
       )}
       <div
+        ref={stage}
         className="candidate-stage"
+        tabIndex={compact ? 0 : undefined}
+        role={compact ? "region" : undefined}
+        aria-label={compact ? `Suggestion ${index + 1} of ${candidates.length}` : undefined}
         onWheel={handleTrackpadSwipe}
         onPointerDown={(event) => {
           if (compact) return;
@@ -138,6 +170,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
       >
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
+            ref={measureCopy}
             key={`${index}-${candidate.text}`}
             custom={direction}
             initial={{ opacity: 0, x: direction * 34 }}

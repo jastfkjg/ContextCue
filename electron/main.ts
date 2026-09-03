@@ -55,6 +55,8 @@ import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./service
 import type { AppUpdateState } from "../src/shared/types";
 import { getFrontmostWindow, sameFrontmostWindow, type FrontmostWindow } from "./services/front-window";
 import { prepareQuickContext } from "./services/quick-context";
+import { OverlaySizer } from "./services/overlay-size";
+import type { OverlayResizeEdge } from "../src/shared/types";
 
 const execFileAsync = promisify(execFile);
 let mainWindow: BrowserWindow | null = null;
@@ -88,10 +90,9 @@ interface QuickOverlaySession {
 let quickOverlaySession: QuickOverlaySession | null = null;
 let askInFlight: { requestId: string; controller: AbortController } | null = null;
 
-const OVERLAY_RESULT_SIZE = { width: 420, height: 124 };
-const OVERLAY_LOADING_SIZE = { width: 420, height: 96 };
-const OVERLAY_ERROR_SIZE = { width: 420, height: 150 };
-const OVERLAY_ASK_SIZE = { width: 420, height: 336 };
+let overlaySizer: OverlaySizer | null = null;
+let overlayManuallyPositioned = false;
+const OVERLAY_RESULT_SIZE = { width: 420, height: 140 };
 const ASK_SESSION_TTL_MS = 5 * 60_000;
 
 function rendererUrl(mode?: "overlay"): string {
@@ -229,6 +230,7 @@ function createOverlayWindow(): BrowserWindow {
     transparent: true,
     backgroundColor: "#00000000",
     roundedCorners: true,
+    // Transparent windows use our edge handles; native resizing is unreliable across platforms.
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -242,10 +244,12 @@ function createOverlayWindow(): BrowserWindow {
     }
   });
   window.setHasShadow(false);
+  overlaySizer = new OverlaySizer(window, (bounds) => screen.getDisplayMatching(bounds).workArea);
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   void loadRenderer(window, "overlay");
   window.on("closed", () => {
     overlayWindow = null;
+    overlaySizer = null;
     clearQuickReplySession();
   });
   return window;
@@ -256,6 +260,12 @@ function sendToOverlay(
   payload: unknown
 ): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
+  if (channel === "overlay:result") {
+    overlaySizer?.show("suggestions");
+    overlayManuallyPositioned = false;
+  } else if (channel === "overlay:ask-open") overlaySizer?.show("ask");
+  else if (channel === "overlay:status") overlaySizer?.show((payload as OverlayStatus).state === "error" ? "error" : "loading");
+  if (channel !== "overlay:ask-event") positionOverlayNearInput();
   const send = () => overlayWindow?.webContents.send(channel, payload);
   if (overlayWindow.webContents.isLoadingMainFrame()) overlayWindow.webContents.once("did-finish-load", send);
   else send();
@@ -281,9 +291,6 @@ function positionOverlayNearInput(): void {
 
 function showOverlayStatus(status: OverlayStatus): void {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
-  const size = status.state === "error" ? OVERLAY_ERROR_SIZE : OVERLAY_LOADING_SIZE;
-  overlayWindow.setSize(size.width, size.height, false);
-  positionOverlayNearInput();
   sendToOverlay("overlay:status", status);
   if (!quickOverlayHiddenForContext) overlayWindow.showInactive();
 }
@@ -389,8 +396,6 @@ function usableQuickOverlaySession(): QuickOverlaySession | null {
 function showAskOverlay(session: QuickOverlaySession): AskOverlayContext {
   if (!overlayWindow) overlayWindow = createOverlayWindow();
   const context = askContextForSession(session);
-  overlayWindow.setSize(OVERLAY_ASK_SIZE.width, OVERLAY_ASK_SIZE.height, false);
-  positionOverlayNearInput();
   sendToOverlay("overlay:ask-open", context);
   overlayWindow.show();
   overlayWindow.focus();
@@ -498,8 +503,6 @@ async function showQuickReply(): Promise<void> {
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
     await rememberTokenUsage(request, result, snapshot);
     const contact = result.detectedContact;
-    overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
-    positionOverlayNearInput();
     sendToOverlay("overlay:result", { ...result, channel: source.channel, contact, target: focusedTarget ?? undefined });
     if (quickOverlaySession) quickOverlaySession.hasSuggestions = true;
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
@@ -768,7 +771,7 @@ async function exitAsk(returnToSuggestions: boolean): Promise<void> {
     await hideQuickOverlay();
     return;
   }
-  overlayWindow?.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
+  overlaySizer?.show("suggestions");
   positionOverlayNearInput();
   try {
     await activateApplication(quickReplyTargetApplication);
@@ -814,8 +817,6 @@ function registerIpc(): void {
     if (store.getData().settings.autoShowOverlay) {
       clearQuickReplySession();
       if (!overlayWindow) overlayWindow = createOverlayWindow();
-      overlayWindow.setSize(OVERLAY_RESULT_SIZE.width, OVERLAY_RESULT_SIZE.height, false);
-      positionOverlayNearInput();
       sendToOverlay("overlay:result", { ...result, channel: request.channel, contact, target: request.target });
       overlayWindow.show();
       overlayWindow.focus();
@@ -840,9 +841,19 @@ function registerIpc(): void {
   };
   ipcMain.handle("assist:use", (_event, request: UseReplyRequest) => useSuggestion(request));
   ipcMain.handle("reply:use", (_event, request: UseReplyRequest) => useSuggestion({ scenario: "reply", ...request }));
+  ipcMain.on("overlay:resize", (event, requestedHeight: number, newCandidate: boolean) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    if (overlaySizer?.fitContent(requestedHeight, newCandidate === true) && !overlayManuallyPositioned) positionOverlayNearInput();
+  });
+  ipcMain.on("overlay:resize-by", (event, edge: OverlayResizeEdge, deltaX: number, deltaY: number) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    overlayManuallyPositioned = true;
+    overlaySizer?.resizeBy(edge, deltaX, deltaY);
+  });
   ipcMain.on("overlay:move-by", (event, deltaX: number, deltaY: number) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
     if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
+    overlayManuallyPositioned = true;
 
     const [currentX, currentY] = overlayWindow.getPosition();
     const [width, height] = overlayWindow.getSize();

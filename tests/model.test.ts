@@ -262,6 +262,88 @@ describe("model memory and parsing", () => {
     expect(result.candidates.map((candidate) => candidate.text)).toEqual(["One", "Two"]);
   });
 
+  it("recovers common candidate body aliases and ignores null or malformed entries", () => {
+    const result = parseModelJson(JSON.stringify({
+      candidates: [null, 42, {}, { label: "Not a draft" }, { reply: "First draft" }, { text: " ", content: "Second draft" }],
+      memory_suggestions: [null]
+    }));
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual(["First draft", "Second draft"]);
+    expect(result.memorySuggestions).toEqual([]);
+  });
+
+  it.each([
+    [[], "empty suggestion list"],
+    [[{ text: " " }, { label: "Only metadata" }], "without readable text"]
+  ])("distinguishes empty candidates from candidates missing text: %j", (candidates, message) => {
+    expect(() => parseModelJson(JSON.stringify({ candidates }))).toThrow(String(message));
+  });
+
+  it.each(["responses", "chat-completions"] as const)("recovers empty %s output once using the original screenshot and records both requests' usage", async (protocol) => {
+    const configured = data();
+    configured.settings.models[0].apiProtocol = protocol;
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      const text = JSON.stringify({ candidates: fetcher.mock.calls.length === 1 ? [] : [{ text: "Recovered draft" }] });
+      const payload = protocol === "responses" ? { output_text: text } : { choices: [{ message: { content: text }, finish_reason: "stop" }] };
+      return Response.json({ ...payload, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } });
+    });
+    const result = await generateWithModel(configured, "test-key", { ...request, quick: true }, "data:image/png;base64,original", fetcher as typeof fetch);
+    expect(result.candidates[0].text).toBe("Recovered draft");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const bodies = fetcher.mock.calls.map(([, options]) => JSON.parse(String(options?.body)));
+    expect(JSON.stringify(bodies[1])).toContain("previous response had no readable candidates");
+    for (const body of bodies) expect(JSON.stringify(body)).toContain("data:image/png;base64,original");
+    expect(result.tokenUsage).toMatchObject({ inputTokens: 20, outputTokens: 10, totalTokens: 30, reported: true });
+  });
+
+  it("stops after one format recovery and logs structure without generated text or keys", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const fetcher = vi.fn(async () => Response.json({ output_text: JSON.stringify({ candidates: [], conversation_summary: "private page contents" }) }));
+      await expect(generateWithModel(data(), "private-api-key", request, "data:image/png;base64,private", fetcher as typeof fetch)).rejects.toThrow("empty suggestion list");
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      const diagnostics = JSON.stringify(warn.mock.calls);
+      expect(diagnostics).toContain('"kind":"empty"');
+      expect(diagnostics).not.toContain("private");
+    } finally { warn.mockRestore(); }
+  });
+
+  it("retries malformed output without treating commentary as a candidate", async () => {
+    const fetcher = vi.fn(async () => Response.json({ output_text: fetcher.mock.calls.length === 1
+      ? "The conversation seems to need a reply."
+      : JSON.stringify({ candidates: ["A complete draft"] }) }));
+    const result = await generateWithModel(data(), "test-key", request, "data:image/png;base64,fixture", fetcher as typeof fetch);
+    expect(result.candidates.map((candidate) => candidate.text)).toEqual(["A complete draft"]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("increases the recovery budget only when unusable output was truncated", async () => {
+    const configured = data();
+    configured.settings.models[0].apiProtocol = "chat-completions";
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ choices: [{
+      message: { content: fetcher.mock.calls.length === 1 ? '{"candidates":[{"text":"unfinished' : '{"candidates":[{"text":"Finished"}]}' },
+      finish_reason: fetcher.mock.calls.length === 1 ? "length" : "stop"
+    }] }));
+    await generateWithModel(configured, "test-key", { ...request, quick: true }, "data:image/png;base64,fixture", fetcher as typeof fetch);
+    const bodies = fetcher.mock.calls.map(([, options]) => JSON.parse(String(options?.body)));
+    expect(bodies.map((body) => body.max_tokens)).toEqual([1040, 2080]);
+  });
+
+  it.each([
+    { choices: [{ finish_reason: "content_filter", message: { content: '{"candidates":[]}' } }] },
+    { choices: [{ message: { refusal: "Declined", content: '{"candidates":[]}' } }] },
+    { output: [{ content: [{ type: "refusal", refusal: "Declined" }] }] }
+  ])("does not retry a provider refusal or filtered response: %j", async (payload) => {
+    const fetcher = vi.fn(async () => Response.json(payload));
+    await expect(generateWithModel(data(), "test-key", request, "data:image/png;base64,fixture", fetcher as typeof fetch)).rejects.toThrow("declined");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry an HTTP error", async () => {
+    const fetcher = vi.fn(async () => Response.json({ error: { message: "Rate limited" } }, { status: 429 }));
+    await expect(generateWithModel(data(), "test-key", request, "data:image/png;base64,fixture", fetcher as typeof fetch)).rejects.toThrow("Rate limited");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("blocks text-only models before sending a context-free request", async () => {
     const configured = data();
     configured.settings.models[0].name = "DeepSeek Flash";

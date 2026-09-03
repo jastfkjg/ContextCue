@@ -326,6 +326,8 @@ const browserDemoApi: ContextCueApi = {
     };
   },
   moveOverlay: () => undefined,
+  resizeOverlay: () => undefined,
+  resizeOverlayBy: () => undefined,
   hideOverlay: async () => undefined
 };
 

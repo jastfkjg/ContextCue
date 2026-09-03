@@ -118,7 +118,7 @@ export function buildMemoryContext(data: AppData, request: GenerateRequest): str
   );
 }
 
-export function buildSystemPrompt(candidateCount: number, quick = false): string {
+export function buildSystemPrompt(candidateCount: number, quick = false, repairOutput = false): string {
   return `You are ContextCue, a private writing assistant for the user's current window. Read the visible screenshot and optional focused-input metadata, identify the task, and draft up to ${candidateCount} useful text candidates.
 
 Rules:
@@ -130,10 +130,11 @@ Rules:
 - Match the page language unless the user's memory asks otherwise.
 - Make candidates meaningfully different in strategy, not superficial paraphrases.
 - Follow explicit user intent and long-term memory, but never invent personal facts.
+- Return at least one candidate with non-empty text. If a reply needs unknown personal details, draft a clarification or acknowledgement instead of inventing those details or returning an empty list.
 - Never fill passwords, verification codes, payment-card data, government identifiers, or similarly sensitive fields.
 - Keep candidate text ready to copy or insert. Put a short user-facing description in label and choose action from insert, replace-selection, or replace-all. Without a focused target, use insert; the app will offer copying.
 - Memory suggestions must be durable and useful. Do not suggest saving sensitive secrets or transient conversation details.
-- Return only data matching the requested JSON schema.${quick ? "\n- Optimize for speed: keep metadata minimal and return immediately once the candidates are ready." : ""}`;
+- Return only data matching the requested JSON schema. The candidates array contains objects with text, tone, strategy, label, and action; the actual draft MUST be in text, not in the summary or label.${quick ? "\n- Optimize for speed: keep metadata minimal and return immediately once the candidates are ready." : ""}${repairOutput ? '\n- The previous response had no readable candidates in the required format. Generate the suggestions again from the same screenshot. Start the JSON object with "candidates" and put each complete draft in a non-empty "text" string. Keep drafts concise; do not include commentary outside JSON.' : ""}`;
 }
 
 function scenarioHint(request: GenerateRequest): AssistScenario | "auto" {
@@ -219,7 +220,7 @@ function requestProtocol(
   return configuration.apiProtocol;
 }
 
-function responsesBody(data: AppData, request: GenerateRequest, screenshot: string) {
+function responsesBody(data: AppData, request: GenerateRequest, screenshot: string, repairOutput = false) {
   const configuration = activeModel(data);
   const candidateCount = quickCandidateCount(data, request);
   const schema = schemaForRequest(request, candidateCount);
@@ -228,7 +229,7 @@ function responsesBody(data: AppData, request: GenerateRequest, screenshot: stri
     input: [
       {
         role: "system",
-        content: [{ type: "input_text", text: buildSystemPrompt(candidateCount, request.quick) }]
+        content: [{ type: "input_text", text: buildSystemPrompt(candidateCount, request.quick, repairOutput) }]
       },
       {
         role: "user",
@@ -251,14 +252,14 @@ function responsesBody(data: AppData, request: GenerateRequest, screenshot: stri
   };
 }
 
-function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot: string) {
+function chatCompletionsBody(data: AppData, request: GenerateRequest, screenshot: string, repairOutput = false) {
   const configuration = activeModel(data);
   const candidateCount = quickCandidateCount(data, request);
   const schema = schemaForRequest(request, candidateCount);
   return {
     model: configuration.model,
     messages: [
-      { role: "system", content: buildSystemPrompt(candidateCount, request.quick) },
+      { role: "system", content: buildSystemPrompt(candidateCount, request.quick, repairOutput) },
       {
         role: "user",
         content: [
@@ -485,12 +486,31 @@ function normalizeReplyObject(value: unknown): Record<string, unknown> | undefin
   return Array.isArray(candidates) ? { ...object, candidates } : undefined;
 }
 
+class SuggestionOutputError extends Error {
+  constructor(readonly kind: "malformed" | "empty" | "missing-text", readonly candidateCount = 0) {
+    super(kind === "empty"
+      ? "The model returned an empty suggestion list. Try Ask AI with a specific question."
+      : kind === "missing-text"
+        ? "The model returned suggestions without readable text. Try again or choose another model."
+        : "The model returned malformed suggestion data. Try again or choose another model.");
+  }
+}
+
+function normalizeCandidate(value: unknown): Partial<CandidateReply> | undefined {
+  if (typeof value === "string") return { text: value };
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const item = value as Record<string, unknown>;
+  // Tolerate common body-field aliases; labels and reasoning are never drafts.
+  const text = [item.text, item.reply, item.content].find((part) => typeof part === "string" && part.trim());
+  return typeof text === "string" ? { ...item, text } : undefined;
+}
+
 function completeReplyObjects(text: string): Array<Record<string, unknown>> {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const replies: Array<Record<string, unknown>> = [];
   try {
     const complete = normalizeReplyObject(JSON.parse(cleaned));
-    if (complete) replies.push(complete);
+    if (complete) return [complete];
   } catch {
     // Continue with the tolerant scanner for commentary or multiple JSON objects.
   }
@@ -540,7 +560,7 @@ function completeReplyObjects(text: string): Array<Record<string, unknown>> {
 
 function mergedReplyObject(text: string): Record<string, unknown> {
   const replies = completeReplyObjects(text);
-  if (!replies.length) throw new Error("The model returned malformed suggestion data. Try again or choose another model.");
+  if (!replies.length) throw new SuggestionOutputError("malformed");
 
   const best = replies.reduce((current, reply) => {
     const currentCount = Array.isArray(current.candidates) ? current.candidates.length : 0;
@@ -568,8 +588,8 @@ export function parseModelJson(text: string, candidateLimit = 3): GenerationResu
   const parsed = mergedReplyObject(text);
   const seenCandidates = new Set<string>();
   const candidates = (Array.isArray(parsed.candidates) ? parsed.candidates : [])
-    .map((item) => typeof item === "string" ? { text: item } : item as Partial<CandidateReply>)
-    .filter((item) => typeof item.text === "string" && item.text.trim())
+    .map(normalizeCandidate)
+    .filter((item): item is Partial<CandidateReply> => Boolean(item?.text?.trim()))
     .filter((item) => {
       const normalized = item.text!.trim().replace(/\s+/g, " ").toLowerCase();
       if (seenCandidates.has(normalized)) return false;
@@ -586,10 +606,14 @@ export function parseModelJson(text: string, candidateLimit = 3): GenerationResu
         ? item.action as AssistAction
         : "insert"
     }));
-  if (!candidates.length) throw new Error("The model returned no usable suggestion. Try again or choose another model.");
+  if (!candidates.length) {
+    const count = Array.isArray(parsed.candidates) ? parsed.candidates.length : 0;
+    throw new SuggestionOutputError(count ? "missing-text" : "empty", count);
+  }
 
   const suggestions = (Array.isArray(parsed.memory_suggestions) ? parsed.memory_suggestions : [])
     .filter((item): item is MemorySuggestion => {
+      if (!item || typeof item !== "object") return false;
       const value = item as Partial<MemorySuggestion>;
       return typeof value.content === "string" && typeof value.category === "string";
     })
@@ -634,40 +658,75 @@ export async function generateWithModel(
   const baseUrl = configuration.apiBaseUrl.replace(/\/$/, "");
   const protocol = requestProtocol(configuration, screenshot);
   const endpoint = protocol === "responses" ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
-  const body = protocol === "responses"
-    ? responsesBody(data, request, screenshot)
-    : chatCompletionsBody(data, request, screenshot);
-
   const startedAt = performance.now();
-  const response = await fetcher(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const message = (payload as { error?: { message?: string } }).error?.message;
-    throw new Error(message || `The model request failed with HTTP ${response.status}.`);
-  }
-  const text = responseText(payload, protocol);
-  if (!text.trim()) {
-    const root = payload as Record<string, unknown>;
-    console.warn("[model-response] empty final answer", {
-      model: configuration.model,
-      protocol,
-      status: root.status,
-      incompleteDetails: root.incomplete_details,
-      usage: root.usage
+  const totalUsage = responseTokenUsage({});
+  let increaseBudget = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const body = protocol === "responses"
+      ? responsesBody(data, request, screenshot, attempt > 0)
+      : chatCompletionsBody(data, request, screenshot, attempt > 0);
+    if (increaseBudget) {
+      if ("max_output_tokens" in body) body.max_output_tokens *= 2;
+      else body.max_tokens *= 2;
+    }
+    const response = await fetcher(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body)
     });
-    throw new Error("The model returned no final answer. For a thinking model, disable thinking or increase its output budget.");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(providerErrorMessage(payload, `The model request failed with HTTP ${response.status}.`));
+    const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+    const choice = (root.choices as Array<{ finish_reason?: string; message?: { refusal?: unknown } }> | undefined)?.[0];
+    const incompleteReason = (root.incomplete_details as { reason?: string } | undefined)?.reason;
+    const output = Array.isArray(root.output) ? root.output as Array<{ content?: Array<{ type?: string }> }> : [];
+    const refused = Boolean(choice?.message?.refusal) || output.some((item) => Array.isArray(item?.content)
+      && item.content.some((part) => part?.type === "refusal"));
+    if (refused || choice?.finish_reason === "content_filter" || incompleteReason === "content_filter") {
+      throw new Error("The model declined to generate suggestions for this context.");
+    }
+    if (root.error || root.status === "failed") throw new Error(providerErrorMessage(root, "The model could not complete the request."));
+    const usage = responseTokenUsage(payload);
+    totalUsage.inputTokens += usage.inputTokens;
+    totalUsage.outputTokens += usage.outputTokens;
+    totalUsage.totalTokens += usage.totalTokens;
+    totalUsage.cachedTokens += usage.cachedTokens;
+    totalUsage.reasoningTokens += usage.reasoningTokens;
+    totalUsage.reported = attempt === 0 ? usage.reported : totalUsage.reported && usage.reported;
+    const text = responseText(root, protocol);
+    const truncated = choice?.finish_reason === "length" || incompleteReason === "max_output_tokens";
+    const diagnostic = {
+      model: configuration.model, protocol, attempt: attempt + 1,
+      finishReason: choice?.finish_reason, status: root.status,
+      incompleteReason, responseCharacters: text.length
+    };
+    if (!text.trim()) {
+      console.warn("[model-response] no final answer", diagnostic);
+      throw new Error(truncated
+        ? "The model reached its output limit before returning suggestions. Disable thinking or use another model."
+        : "The model returned no final answer. For a thinking model, disable thinking or increase its output budget.");
+    }
+    try {
+      return {
+        ...parseModelJson(text, quickCandidateCount(data, request)),
+        tokenUsage: { ...totalUsage, latencyMs: Math.max(0, Math.round(performance.now() - startedAt)) }
+      };
+    } catch (error) {
+      if (!(error instanceof SuggestionOutputError)) throw error;
+      // Log only structural diagnostics, never screenshots, drafts, or keys.
+      console.warn("[model-response] unusable suggestions", { ...diagnostic, kind: error.kind, candidateCount: error.candidateCount });
+      if (attempt === 1) {
+        if (truncated) throw new Error("The model's suggestion output was cut off before a usable draft was returned. Try fewer suggestions or another model.");
+        throw new Error(`${error.message} Automatic format recovery also failed.`);
+      }
+      increaseBudget = truncated;
+      // Retry only invalid suggestion data, once, with the original screenshot.
+    }
   }
-  return {
-    ...parseModelJson(text, quickCandidateCount(data, request)),
-    tokenUsage: responseTokenUsage(payload, performance.now() - startedAt)
-  };
+  throw new Error("The model could not return usable suggestions.");
 }
 
 export interface AskModelResult {
