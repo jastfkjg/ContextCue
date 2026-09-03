@@ -480,8 +480,9 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .overlay-processing strong { font-size: 14px; font-weight: 590; letter-spacing: -.018em; }
 .overlay-processing span { overflow: hidden; color: #96988f; font-size: 10px; font-weight: 530; text-overflow: ellipsis; white-space: nowrap; }
 .overlay-root .candidate-shell { height: 100%; margin: 0; border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
-.candidate-shell--compact { position: relative; display: flex; flex-direction: column; padding-top: 28px; }
-.candidate-drag-handle { position: absolute; z-index: 5; top: 0; left: 50%; width: 64px; height: 28px; display: flex; align-items: flex-start; justify-content: center; padding-top: 9px; cursor: grab; touch-action: none; transform: translateX(-50%); }
+.candidate-shell--compact { position: relative; display: flex; flex-direction: column; padding-top: 32px; }
+.candidate-topbar { position: absolute; top: 0; right: 0; left: 0; height: 32px; display: flex; align-items: center; padding: 0 44px 0 22px; }
+.candidate-drag-handle { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 9px; cursor: grab; touch-action: none; }
 .candidate-drag-handle:active { cursor: grabbing; }
 .candidate-drag-handle > span { width: 24px; height: 3px; border-radius: 2px; background: rgb(126 128 119 / 28%); }
 .candidate-shell--compact .candidate-stage { flex: 1; display: block; min-height: 0; max-height: none; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #b9bcb1 transparent; cursor: text; }
@@ -609,20 +610,30 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .candidate-dots > button > span { width: 6px; height: 6px; border-radius: 50%; background: #a4a79b; }
 .candidate-dots > button.active > span { width: 9px; height: 9px; background: #536b22; }
 .candidate-dots > button:hover:not(:disabled) { background: #e6eadc; }
-.candidate-navigation { flex: 0 0 auto; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 44px 0 22px; }
-.candidate-navigation > span { color: #65695d; font-size: 11px; }
+.candidate-navigation { position: relative; z-index: 1; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 28px; }
+.candidate-navigation > span { color: #65695d; font-size: 11px; font-variant-numeric: tabular-nums; }
 .candidate-navigation .candidate-dots { padding: 0; }
+.candidate-navigation .candidate-dots > button { width: 24px; height: 24px; }
+.candidate-navigation .candidate-dots > button.active > span { width: 7px; height: 7px; }
 .candidate-shell--compact .candidate-actions { gap: 20px; }
 .compact-text-action { font-size: 12px; min-height: 32px; }
-.candidate-editor { padding: 8px 22px 18px; }
-.candidate-editor label { display: flex; flex-direction: column; gap: 7px; color: #4e5445; font-size: 12px; font-weight: 600; }
-.candidate-editor textarea { min-height: 110px; max-height: 240px; resize: vertical; padding: 10px; font-size: 14px; line-height: 1.55; }
-.candidate-editor form { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
-.candidate-editor input { padding: 10px; font-size: 13px; }
-.candidate-editor small { color: #65695d; font-size: 11px; line-height: 1.5; }
+.candidate-editor { padding: 5px 20px 14px; }
+.candidate-editor-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.candidate-editor-heading strong { color: #30362a; font-size: 14px; font-weight: 650; }
+.candidate-editor-heading > span { color: #74796d; font-size: 10px; }
+.candidate-editor label { display: flex; flex-direction: column; gap: 6px; color: #4e5445; font-size: 11px; font-weight: 600; }
+.candidate-editor textarea { min-height: 84px; max-height: 220px; resize: vertical; padding: 10px 12px; font-size: 13px; font-weight: 400; line-height: 1.6; border-color: #d7dad0; background: #fdfefb; }
+.candidate-editor textarea[readonly] { color: #5c6354; background: #f3f5ee; }
+.candidate-editor form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e3d8; }
+.candidate-editor .revision-instruction { min-height: 60px; max-height: 140px; font-size: 12px; }
 .candidate-editor .button { min-height: 34px; font-size: 12px; }
+.revision-label-row { min-height: 18px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.revision-submit-row { min-height: 35px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.revision-progress { display: inline-flex; align-items: center; gap: 6px; color: #616b53; font-size: 10px; }
+.revision-progress .spinner { width: 12px; height: 12px; }
+.revision-submit-row .button { min-width: 130px; margin-left: auto; }
 .candidate-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 0; }
-.candidate-shell--compact .candidate-edit-actions { flex-basis: 52px; height: 52px; padding-block: 6px; }
+.candidate-shell--compact .candidate-edit-actions { flex-basis: 50px; height: 50px; padding: 7px 20px; gap: 8px; }
 .candidate-edit-actions .button { min-height: 34px; font-size: 12px; }
 .revision-presets { display: flex; flex-wrap: wrap; gap: 5px; }
 .revision-presets button { min-height: 28px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; background: var(--paper); color: #515947; font-size: 11px; }

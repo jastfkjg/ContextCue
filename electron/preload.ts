@@ -64,6 +64,12 @@ const api: ContextCueApi = {
     ipcRenderer.on("overlay:result", listener);
     return () => ipcRenderer.removeListener("overlay:result", listener);
   },
+  onOverlayExpired: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { sessionId: string; message: string }) => callback(value);
+    ipcRenderer.on("overlay:expired", listener);
+    return () => ipcRenderer.removeListener("overlay:expired", listener);
+  },
+  setOverlayEditing: (sessionId, editing) => ipcRenderer.send("overlay:editing", sessionId, editing),
   onOverlayReset: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("overlay:reset", listener);

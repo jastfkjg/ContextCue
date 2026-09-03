@@ -277,6 +277,8 @@ const browserDemoApi: ContextCueApi = {
     return () => window.clearTimeout(timeout);
   },
   onOverlayReset: () => () => undefined,
+  onOverlayExpired: () => () => undefined,
+  setOverlayEditing: () => undefined,
   onOverlayStatus: (callback) => {
     if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
     const timeout = window.setTimeout(() => callback({

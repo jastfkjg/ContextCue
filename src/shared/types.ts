@@ -335,6 +335,8 @@ export interface ContextCueApi {
   getPermissions: () => Promise<PermissionStatus>;
   onOverlayResult: (callback: (result: OverlayResult) => void) => () => void;
   onOverlayReset: (callback: () => void) => () => void;
+  onOverlayExpired: (callback: (event: { sessionId: string; message: string }) => void) => () => void;
+  setOverlayEditing: (sessionId: string, editing: boolean) => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   openAsk: () => Promise<AskOverlayContext>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;

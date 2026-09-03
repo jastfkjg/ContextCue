@@ -12,6 +12,7 @@ export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Reading the current window…" });
   const [askContext, setAskContext] = useState<AskOverlayContext | null>(null);
+  const [expired, setExpired] = useState<{ sessionId: string; message: string } | null>(null);
   const eventRevision = useRef(0);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
 
@@ -42,12 +43,14 @@ export function OverlayApp() {
       eventRevision.current += 1;
       setAskContext(null);
       setPayload(null);
+      setExpired(null);
       setStatus({ state: "loading", message: "Reading the current window…" });
     });
     const stopResult = contextCueApi.onOverlayResult((result) => {
       eventRevision.current += 1;
       setAskContext(null);
       setPayload(result);
+      setExpired(null);
     });
     const stopStatus = contextCueApi.onOverlayStatus((next) => {
       eventRevision.current += 1;
@@ -60,17 +63,22 @@ export function OverlayApp() {
       setPayload((current) => current?.sessionId === context.sessionId ? current : null);
       setAskContext(context);
     });
+    const stopExpired = contextCueApi.onOverlayExpired((event) => {
+      eventRevision.current += 1;
+      setExpired(event);
+    });
     return () => {
       stopResult();
       stopStatus();
       stopAskOpen();
       stopReset();
+      stopExpired();
     };
   }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
       if (!askContext) {
         void contextCueApi.hideOverlay();
@@ -114,6 +122,7 @@ export function OverlayApp() {
         <CandidateCarousel
           key={payload.sessionId ?? payload.generatedAt}
           sessionId={payload.sessionId}
+          contextError={expired?.sessionId === payload.sessionId ? expired?.message : undefined}
           onEditCandidate={(index, text) => setPayload((current) => current ? { ...current, candidates: current.candidates.map((candidate, i) => i === index ? { ...candidate, text } : candidate) } : null)}
           candidates={payload.candidates}
           channel={payload.channel}
@@ -121,7 +130,7 @@ export function OverlayApp() {
           scenario={payload.scenario}
           target={payload.target}
           compact
-          onAsk={enterAsk}
+          onAsk={expired?.sessionId === payload.sessionId ? undefined : enterAsk}
           onHeightChange={contextCueApi.resizeOverlay}
         />
       ) : (

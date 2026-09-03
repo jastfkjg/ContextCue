@@ -15,11 +15,12 @@ interface Props {
   onAsk?: () => void;
   onHeightChange?: (height: number, newCandidate: boolean, editing?: boolean) => void;
   sessionId?: string;
+  contextError?: string;
   practice?: boolean;
   onEditCandidate?: (index: number, text: string) => void;
 }
 
-export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", target, compact = false, onAsk, onHeightChange, sessionId, practice = false, onEditCandidate }: Props) {
+export function CandidateCarousel({ candidates, channel, contact, scenario = "reply", target, compact = false, onAsk, onHeightChange, sessionId, contextError, practice = false, onEditCandidate }: Props) {
   const [index, setIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [status, setStatus] = useState<"idle" | "copied" | "pasted">("idle");
@@ -32,7 +33,18 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
   const [applying, setApplying] = useState(false);
   const revisionRun = useRef(0);
   const editButton = useRef<HTMLButtonElement>(null);
+  const revisionButton = useRef<HTMLButtonElement>(null);
   useEffect(() => () => { revisionRun.current += 1; }, []);
+  useEffect(() => {
+    if (!compact || !sessionId) return;
+    contextCueApi.setOverlayEditing(sessionId, editing);
+    return () => contextCueApi.setOverlayEditing(sessionId, false);
+  }, [compact, sessionId, editing]);
+  useEffect(() => {
+    if (!contextError) return;
+    revisionRun.current += 1;
+    setRevising(false);
+  }, [contextError]);
   const pointerStart = useRef<number | null>(null);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const horizontalSwipe = useRef(createHorizontalSwipeTracker());
@@ -55,15 +67,14 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
       const padding = Number.parseFloat(getComputedStyle(shell.current).paddingTop) || 0;
       const actions = shell.current.querySelector<HTMLElement>(".candidate-actions")?.offsetHeight ?? 0;
       const note = shell.current.querySelector<HTMLElement>(".candidate-feedback")?.offsetHeight ?? 0;
-      const navigation = shell.current.querySelector<HTMLElement>(".candidate-navigation")?.offsetHeight ?? 0;
-      onHeightChange(Math.ceil(padding + navigation + node.offsetHeight + actions + note + 2), resetHeight, editing);
+      onHeightChange(Math.ceil(padding + node.offsetHeight + actions + note + 2), resetHeight, editing);
     };
     copyObserver.current = new ResizeObserver(() => measure());
     copyObserver.current.observe(node);
     const note = shell.current?.querySelector(".candidate-feedback");
     if (note) copyObserver.current.observe(note);
     measure(newCandidate);
-  }, [compact, onHeightChange, feedback, editing]);
+  }, [compact, onHeightChange, feedback, editing, contextError]);
 
   const move = (next: number) => {
     if (editing || applying) return;
@@ -81,7 +92,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
     setApplying(true);
     setFeedback("");
     try {
-      if (practice) {
+      if (practice || contextError) {
         await contextCueApi.copyText(text);
         setStatus("copied");
       } else {
@@ -116,13 +127,14 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
     window.requestAnimationFrame(() => editButton.current?.focus());
   };
   const revise = async () => {
-    if (!sessionId || !instruction.trim() || !draft.trim() || revising) return;
+    if (!sessionId || contextError || !instruction.trim() || !draft.trim() || revising) return;
+    revisionButton.current?.focus();
     const run = ++revisionRun.current;
     setRevising(true);
     setFeedback("");
     try {
       const text = await contextCueApi.reviseSuggestion({ sessionId, text: draft, instruction });
-      if (run === revisionRun.current) { setDraft(text); setInstruction(""); }
+      if (run === revisionRun.current) { setDraft(text); setFeedback("Draft updated. Review it, then save."); }
     } catch (error) {
       if (run === revisionRun.current) setFeedback(error instanceof Error ? error.message : String(error));
     } finally {
@@ -187,19 +199,23 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
       disabled={editing || applying} onClick={() => move(dot)}><span aria-hidden="true"/></button>)}
   </div>;
   const action = candidate.action ?? (target?.selectedText ? "replace-selection" : "insert");
-  const insertLabel = !target ? (status === "copied" ? "Copied" : "Copy") : action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
+  const canInsert = Boolean(target) && !contextError;
+  const insertLabel = !canInsert ? (status === "copied" ? "Copied" : "Copy") : action === "replace-selection" ? "Replace selection" : action === "replace-all" ? "Replace field" : "Insert";
   return (
     <section ref={shell} className={`candidate-shell ${compact ? "candidate-shell--compact" : ""}`}>
       {compact && (
-        <div
-          className="candidate-drag-handle"
-          aria-hidden="true"
-          onPointerDown={beginWindowDrag}
-          onPointerMove={continueWindowDrag}
-          onPointerUp={endWindowDrag}
-          onPointerCancel={endWindowDrag}
-        >
-          <span/>
+        <div className="candidate-topbar">
+          {!editing && candidates.length > 1 && <div className="candidate-navigation"><span>{index + 1}/{candidates.length}</span>{dots}</div>}
+          <div
+            className="candidate-drag-handle"
+            aria-hidden="true"
+            onPointerDown={beginWindowDrag}
+            onPointerMove={continueWindowDrag}
+            onPointerUp={endWindowDrag}
+            onPointerCancel={endWindowDrag}
+          >
+            <span/>
+          </div>
         </div>
       )}
       {!compact && (
@@ -208,7 +224,6 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
           <span>{index + 1} / {candidates.length}</span>
         </div>
       )}
-      {compact && <div className="candidate-navigation"><span>{index + 1} / {candidates.length} · This page only</span>{dots}</div>}
       <div
         ref={stage}
         className="candidate-stage"
@@ -237,14 +252,24 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
           if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finishEdit(false); }
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !revising) { event.preventDefault(); finishEdit(true); }
         }}>
-          <label> Edit suggestion<textarea autoFocus aria-label="Edit suggestion" value={draft} maxLength={16_000} disabled={revising} onChange={(event) => setDraft(event.target.value)}/></label>
-          {sessionId && <form onSubmit={(event) => { event.preventDefault(); void revise(); }}>
-            <label htmlFor="revision-instruction">Change it in one sentence</label>
-            <div className="revision-presets">{["Make it shorter", "Make it warmer", "Be more direct"].map((text) => <button key={text} type="button" disabled={revising} onClick={() => setInstruction(text)}>{text}</button>)}</div>
-            <input id="revision-instruction" value={instruction} maxLength={2_000} disabled={revising} onChange={(event) => setInstruction(event.target.value)} placeholder="e.g. Decline politely and suggest Friday"/>
-            {revising ? <button type="button" className="button button--quiet" onClick={stopRevision}><Square size={13}/> Stop</button>
-              : <button className="button button--quiet" type="submit" disabled={!draft.trim() || !instruction.trim()}><Sparkles size={14}/> Revise with AI</button>}
-            <small role="status">{revising ? "Revising with this page only…" : "Uses only this page and this draft. Nothing is sent or inserted automatically."}</small>
+          <div className="candidate-editor-heading"><strong>Edit draft</strong><span>Review before saving</span></div>
+          <label><span className="visually-hidden">Edit suggestion</span><textarea autoFocus aria-label="Edit suggestion" rows={3} value={draft} maxLength={16_000} readOnly={revising} onChange={(event) => setDraft(event.target.value)}/></label>
+          {sessionId && <form aria-busy={revising} onSubmit={(event) => { event.preventDefault(); void revise(); }}>
+            <div className="revision-label-row"><label htmlFor="revision-instruction">Instructions or context</label>
+              <span className="revision-progress" role="status">{revising && <><span className="spinner spinner--dark" aria-hidden="true"/> Revising draft…</>}</span>
+            </div>
+            <textarea id="revision-instruction" className="revision-instruction" rows={2} value={instruction} maxLength={2_000} readOnly={revising} onChange={(event) => setInstruction(event.target.value)} placeholder="What should change? Add any useful context…"/>
+            <div className="revision-submit-row">
+            <div className="revision-presets">{[["Shorter", "Make it shorter"], ["Warmer", "Make it warmer"], ["More direct", "Be more direct"]].map(([label, text]) => {
+              const nextInstruction = instruction.trim() ? `${instruction.trimEnd()}\n${text}` : text;
+              return <button key={text} type="button" disabled={revising || Boolean(contextError) || nextInstruction.length > 2_000} onClick={() => setInstruction(nextInstruction)}>{label}</button>;
+            })}</div>
+              <button ref={revisionButton} type={revising ? "button" : "submit"} className="button button--quiet"
+                disabled={!revising && (Boolean(contextError) || !draft.trim() || !instruction.trim())}
+                onClick={(event) => { if (revising) { event.preventDefault(); stopRevision(); } }}>
+                {revising ? <><Square size={13}/> Stop revising</> : <><Sparkles size={14}/> Revise with AI</>}
+              </button>
+            </div>
           </form>}
         </div> : <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -271,7 +296,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
               <span>Next</span>
             </button>
             <button className="compact-text-action" disabled={applying} onClick={() => void useCandidate(true)} aria-label={status === "pasted" ? "Applied" : insertLabel}>
-              {status === "pasted" || (!target && status === "copied") ? <Check size={16} /> : !target ? <Copy size={16} /> : <CornerDownLeft size={16} />}
+              {status === "pasted" || (!canInsert && status === "copied") ? <Check size={16} /> : !canInsert ? <Copy size={16} /> : <CornerDownLeft size={16} />}
               <span>{status === "pasted" ? "Applied" : insertLabel}</span>
             </button>
             <button ref={editButton} className="compact-text-action" disabled={applying} onClick={() => { setDraft(candidateText); setInstruction(""); setFeedback(""); setEditing(true); }}><Pencil size={15}/><span>Edit</span></button>
@@ -311,7 +336,7 @@ export function CandidateCarousel({ candidates, channel, contact, scenario = "re
           </>
         )}
       </div>}
-      {feedback && <p className="candidate-feedback" role="status">{feedback}</p>}
+      {(contextError || feedback) && <p className="candidate-feedback" role="status">{contextError || feedback}</p>}
     </section>
   );
 }
