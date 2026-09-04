@@ -97,3 +97,8 @@ Packaged-app acceptance still required on each supported OS:
 - Use a plain background, readable labels and single-column settings rows. Keep routine status compact and reveal capture tests, diagnostics and contextual help on demand.
 - Use the shared SelectMenu for all in-app dropdowns, including onboarding, memory scope and usage filters. Popups must remain within the viewport, scroll long lists and support arrow keys, typeahead, Enter, Escape, Tab and outside dismissal.
 - Memory deletion uses an app-styled modal with initial Cancel focus, focus containment and focus restoration on close. No browser alert, confirm or native select menus in the renderer.
+
+- Permissions groups access rows separately from capture troubleshooting. Granted states keep a short purpose label, and the Settings saved indicator is hidden on read-only tabs when there are no pending edits.
+- Memory uses a compact file rail, filename plus Write/Preview controls, and a persistent local save status below the editor. Scope, enabled metadata and deletion live in File options; these settings do not imply inclusion in current AI sessions. At narrow widths, the file rail becomes a horizontal list above the editor.
+
+- Models uses a compact model list and grouped identity/connection fields. Keep the API URL full width, expose image input as an explicit switch, and keep removal separate from the default-model action. Switching models replaces the editor immediately; reveal the selected model when the list scrolls or changes orientation.

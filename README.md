@@ -1,8 +1,8 @@
 <div align="center">
   <img src="./build/icon.png" width="80" height="80" alt="ContextCue app icon" />
   <h1>ContextCue</h1>
-  <p><strong>Ask and write from your screen. Skip copying the background.</strong></p>
-  <p>Your current screen, one entry for questions, drafts, and rewrites.</p>
+  <p><strong>Ask about your screen. Turn ideas into drafts.</strong></p>
+  <p>One floating assistant for understanding a page, drafting a reply, and finding the right words.</p>
   <p>
     <a href="https://github.com/jastfkjg/ContextCue/releases">Download for macOS</a>
     · <a href="#quick-start">Quick start</a>
@@ -20,8 +20,8 @@ Press a shortcut to open **Ask AI** over the window you’re using. Ask “What 
 | When you need to… | ContextCue helps you… |
 |---|---|
 | **Understand a page** | Ask for a summary, explanation, or next steps in a compact AI conversation, with optional page context. |
-| **Reply to a conversation** | Generate up to five alternatives from the visible context. Switch with arrow keys, dots, or a horizontal swipe. |
-| **Find the right tone** | Ask for a shorter, warmer, or more direct version. Compare revised suggestions with the originals. |
+| **Turn intent into a draft** | Say what you want to communicate in Ask AI. Writing requests open reply candidates you can revise, copy, or insert. |
+| **Find the right tone** | Revise a selected draft while keeping it in view. Compare alternatives, then return to the same Ask AI conversation. |
 | **Write beyond chat** | Draft text, rewrite a passage, complete a field, or compose a search query. |
 | **Use your own model** | Connect an image-capable model through a Responses or Chat Completions endpoint; keep multiple configurations. |
 | **Stay in control** | Review before copying or inserting. See provider-reported token usage locally. Nothing is sent or submitted automatically. |
@@ -49,9 +49,9 @@ macOS is the primary verified platform. Windows and Linux can run from source; L
 
 The **Setup guide** walks you through adding a model and API key, verifying image input, checking screen access, and asking about or drafting a reply to a fictional conversation. macOS Accessibility permission is optional and enables insertion into supported fields.
 
-Use a model that supports **image input** for suggestions and page-aware questions. Text-only models work for questions, drafts, and subsequent draft revisions in **Ask AI** when page context is off. Model requests, including setup verification, may incur provider charges. [Provider and environment configuration →](./docs/guide.md#model-providers)
+Manage connections in **Settings → Models**; complete the required fields and changes save automatically. Use a model that supports **image input** for suggestions and page-aware questions. Text-only models work for questions, drafts, and subsequent draft revisions in **Ask AI** when page context is off. Model requests, including setup verification, may incur provider charges. [Provider and environment configuration →](./docs/guide.md#model-providers)
 
-Check screen recording and optional insertion access in **Settings → Permissions**. Test a window with a local screenshot preview, or expand Window diagnostics to scan sources. No model request is sent by these checks.
+Check screen recording and optional insertion access in **Settings → Permissions**. Expand **Test window capture**, start the test, and switch to your target window within three seconds. Return to Settings to inspect the local preview.
 
 ### 3. Open a window and call ContextCue
 
@@ -59,28 +59,44 @@ Check screen recording and optional insertion access in **Settings → Permissio
 |---|---|---|
 | Open Ask AI (main entry) | `⌘ ⇧ Space` | `Ctrl ⇧ Space` |
 | Generate writing suggestions directly | `⌘ ⇧ Enter` | `Ctrl ⇧ Enter` |
+| Send an Ask AI question / add a newline | `Enter` / `Shift Enter` | `Enter` / `Shift Enter` |
 | Switch suggestions | `←` / `→` | `←` / `→` |
 | Apply the selected suggestion¹ | `Enter` | `Enter` |
 | Submit revision instructions | `⌘ Enter` | `Ctrl Enter` |
 | Close the composer or panel | `Esc` | `Esc` |
 
-¹ Outside text inputs, with the revision composer closed. Inserts into a recognized macOS field, otherwise copies. It never sends the message. These are defaults for new installs; upgrades preserve existing shortcuts. Both global shortcuts are configurable in **Settings**.
+¹ Outside text inputs, with the revision composer closed. Inserts into a recognized macOS field, otherwise copies. It never sends the message. These are defaults for new installs; upgrades preserve existing shortcuts. Change shortcuts, writing language, and candidate count in **Settings → General**.
 
 ## See it in action
 
 ### From a question to a usable draft
 
-Open **Ask AI** to ask “What do I need to do before the review?” or “Explain this page.” Answers stream into the panel, and you can ask follow-up questions. Writing requests open usable drafts with **Revise**, Copy / Insert, and a path back to the same conversation. Toggle the page chip to include or exclude the captured page for your next request; hover to see its capture time.
+Ask “What do I need to do before the review?” to understand the page. Then say “Draft a friendly reply confirming the time and promising to send the deck.” ContextCue opens writing candidates in the same floating window. Choose one, revise it, or return to **Ask AI** to continue the conversation. **Open draft** brings you back to the latest draft.
 
 ![ContextCue offers reply candidates you can revise, copy, or insert.](./docs/images/readme/reply-en.png)
 
-Each invocation starts a fresh session. The snapshot stays fixed during that session. Use the refresh button in Ask AI to capture the original window again and start a new conversation; this clears the old conversation and drafts. Failed refreshes preserve your work. Invoke with the shortcut on another window to start there. Turning page context off excludes the screenshot and page metadata from the next request; earlier answers in that session can still provide context.
+Use the page chip to toggle screenshot context, or the refresh button to capture the original window again and start a new conversation. Refresh clears old questions and drafts only after capture succeeds. Switching to another app temporarily hides the panel; returning to the original window restores your work. [Session and refresh details →](./docs/guide.md#how-it-works)
 
 ### Make a draft sound like you
 
-Choose **Revise**, describe the change, and get fresh alternatives in the same panel. Start with **Shorter**, **Warmer**, or **More direct**, or write your own instruction. You can return to the original suggestions at any time.
+Choose **Revise**, describe the change, and get fresh alternatives in the same panel. Start with **Shorter**, **Warmer**, or **More direct**, or write your own instruction. The draft and revision instructions scroll separately, so you can keep the text in view. **Collapse** folds the instructions away; the top-right **×** closes the window. You can switch back to the original suggestions.
 
 ![The real ContextCue revision composer with an English draft and the instruction: Make it shorter and friendlier. Keep the meeting time.](./docs/images/readme/revise-en.png)
+
+### Set up your workspace
+
+Home shows **Ask AI**, **Quick writing**, and model and screen-access status. Settings groups the controls into four tabs:
+
+| Tab | What you can change |
+|---|---|
+| **General** | Record shortcuts, choose a writing language, and set the number of suggestions. |
+| **Models** | Add model connections, test an endpoint, and choose the default. |
+| **Permissions** | Check screen and insertion access; test capture and inspect available windows. |
+| **About** | Check for updates and download a new version. |
+
+![ContextCue’s General settings, showing the four settings tabs, Ask AI and Quick writing shortcuts, and writing preferences.](./docs/images/readme/settings-en.png)
+
+Settings save automatically. **Writing language** controls generated text; **Match context** follows the language of the page. **Token usage** in the sidebar shows usage by model, daily trends, and recent requests.
 
 ## Your context, your choice
 

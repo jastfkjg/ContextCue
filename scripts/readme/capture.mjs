@@ -22,7 +22,7 @@ try {
   cli("open", preview);
   cli("run-code", "--filename", "scripts/readme/capture-playwright.js");
   for (const locale of ["en", "zh-CN"]) {
-    for (const scene of ["reply", "revise", "ask"]) {
+    for (const scene of ["ask", "reply", "revise", "settings"]) {
       const name = `${scene}-${locale}.png`;
       copyFileSync(resolve(root, "output/playwright", name), resolve(root, "docs/images/readme", name));
     }

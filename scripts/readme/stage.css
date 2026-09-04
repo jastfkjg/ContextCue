@@ -39,6 +39,11 @@ iframe { display: block; width: 440px; height: 190px; border: 0; border-radius: 
 .stage--revise .panel-position { top: 274px; }
 .stage--ask .panel-position { top: 227px; }
 .stage--ask iframe { height: 390px; }
+.stage--settings { height: 1000px; }
+.app-position { position: absolute; left: 52px; top: 204px; }
+.app-position iframe { width: 1096px; height: 710px; border: 1px solid #d5d8ce; border-radius: 12px; }
+.stage--settings .tip { bottom: 39px; }
+.stage--settings footer { bottom: 15px; }
 .tip { position: absolute; left: 52px; bottom: 54px; display: flex; align-items: center; gap: 13px; color: #62704f; font-size: 12px; }
 kbd { display: inline-block; padding: 7px 11px; border: 1px solid #ced7bd; border-bottom-width: 2px; border-radius: 6px; font: 11px "Inter Variable", sans-serif; color: #4c5d35; background: #f8faf2; }
 footer { position: absolute; left: 52px; right: 52px; bottom: 20px; display: flex; justify-content: space-between; color: #99a38b; font-size: 9px; }

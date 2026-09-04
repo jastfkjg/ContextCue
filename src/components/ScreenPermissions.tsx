@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CheckCircle2, ChevronRight, ExternalLink, RefreshCw, ScanLine, X } from "lucide-react";
+import { Camera, CheckCircle2, Accessibility, ChevronRight, ExternalLink, RefreshCw, ScanLine, X } from "lucide-react";
 import { contextCueApi, isBrowserDemo } from "../lib/api";
 import type { CapturePreview, CaptureSource, PermissionStatus } from "../shared/types";
 
@@ -87,23 +87,27 @@ export function ScreenPermissions({ permissions, onPermissions }: {
   const isMac = /Mac/.test(navigator.platform);
   return <section id="screen-permissions" className="screen-permissions" tabIndex={-1} aria-labelledby="screen-permissions-title">
     <div className="screen-section-heading">
-      <div className="settings-heading"><div><h2 id="screen-permissions-title">Screen access</h2></div></div>
+      <div className="settings-heading"><div><h2 id="screen-permissions-title">App permissions</h2></div></div>
       <button className="text-button" onClick={() => void checkPermissions()} disabled={checking}><RefreshCw size={14}/>{checking ? "Checking…" : "Recheck"}</button>
     </div>
+    <div className="permission-access-list">
     <div className="screen-permission-row">
-      <div><strong>Screen recording</strong>{permissions?.screen !== "granted" && <p>Required to read the current window.</p>}</div>
-      <span className="permission-status">{isBrowserDemo ? "Preview mode" : permissions ? screenLabels[permissions.screen] : "Not checked"}</span>
-      {isMac && !isBrowserDemo && <button className="text-button" onClick={() => void openPermission("screen")}>Manage<ExternalLink size={13}/></button>}
+      <ScanLine className="permission-icon" size={21}/><div className="permission-copy"><strong>Screen recording</strong><p>Read the window you invoke Ask AI on.</p></div>
+      <span className={`permission-status ${isBrowserDemo ? "" : permissions?.screen === "granted" ? "permission-status--allowed" : "permission-status--needed"}`}>{!isBrowserDemo && permissions?.screen === "granted" && <CheckCircle2 size={13}/>} {isBrowserDemo ? "Preview" : permissions ? screenLabels[permissions.screen] : "Not checked"}</span>
+      {isMac && !isBrowserDemo && <button className="permission-manage" aria-label="Manage screen recording" onClick={() => void openPermission("screen")}>Manage<ExternalLink size={13}/></button>}
     </div>
     <div className="screen-permission-row">
-      <div><strong>Accessibility <small>Optional</small></strong>{!permissions?.accessibility && <p>For direct insertion. Copying works without it.</p>}</div>
-      <span className="permission-status">{isBrowserDemo ? "Preview mode" : !isMac ? "Not required" : !permissions ? "Not checked" : permissions.accessibility ? "Allowed" : "Not allowed"}</span>
-      {isMac && !isBrowserDemo && <button className="text-button" onClick={() => void openPermission("accessibility")}>Manage<ExternalLink size={13}/></button>}
+      <Accessibility className="permission-icon" size={21}/><div className="permission-copy"><strong>Accessibility <small>Optional</small></strong><p>Insert drafts into a text field. Copying is always available.</p></div>
+      <span className={`permission-status ${!isBrowserDemo && permissions?.accessibility ? "permission-status--allowed" : ""}`}>{!isBrowserDemo && permissions?.accessibility && <CheckCircle2 size={13}/>} {isBrowserDemo ? "Preview" : !isMac ? "Not required" : !permissions ? "Not checked" : permissions.accessibility ? "Allowed" : "Not allowed"}</span>
+      {isMac && !isBrowserDemo && <button className="permission-manage" aria-label="Manage accessibility" onClick={() => void openPermission("accessibility")}>Manage<ExternalLink size={13}/></button>}
+    </div>
     </div>
     {permissionError && <p className="screen-error" role="alert">{permissionError}</p>}
+    <div className="permission-tools"><h3>Troubleshooting</h3>
+    <div className="permission-tools-list">
     <details className="screen-test-disclosure" onToggle={(event) => {
       if (!event.currentTarget.open && countdown !== null) { run.current += 1; setCountdown(null); }
-    }}><summary><ChevronRight size={15}/>Test window capture<span>Local preview</span></summary>
+    }}><summary><ChevronRight size={15}/>Test window capture</summary>
     <div className="screen-capture-test">
       <div><p>{isBrowserDemo ? "Try a sample preview. Desktop capture is available in the installed app." : "Start the test, then switch to the window you want to check within 3 seconds."}</p><small>No model request.</small></div>
       <div className="screen-test-actions"><button className="button button--quiet" disabled={busy} onClick={() => {
@@ -121,7 +125,7 @@ export function ScreenPermissions({ permissions, onPermissions }: {
     <details className="screen-diagnostics" onToggle={(event) => {
       setDiagnosticsOpen(event.currentTarget.open);
     }}>
-      <summary><ChevronRight size={15}/>Window diagnostics<span>For troubleshooting</span></summary>
+      <summary><ChevronRight size={15}/>Window diagnostics</summary>
       {diagnosticsOpen && <div className="screen-diagnostics-body">
         <div className="screen-scan-heading"><p>Available windows and displays.</p><button className="text-button" disabled={scanning} onClick={() => void scan()}><RefreshCw size={14}/>{scanning ? "Scanning…" : "Scan sources"}</button></div>
         {scanError && <p className="screen-error" role="alert">{scanError}</p>}
@@ -130,5 +134,6 @@ export function ScreenPermissions({ permissions, onPermissions }: {
         {Boolean(sources?.length) && <ul className="screen-source-list">{sources!.map((source) => <li key={source.id}><img src={source.thumbnail} alt="" loading="lazy"/><span><strong>{source.name}</strong><small>{source.id.startsWith("screen:") ? "Display" : "Window"}</small></span></li>)}</ul>}
       </div>}
     </details>
+    </div></div>
   </section>;
 }

@@ -21,13 +21,16 @@ export const examples = {
       "Sounds good, Thursday at 2. Deck coming your way before then!"
     ],
     question: "What do I need to do before the review?",
+    draftRequest: "Draft a friendly reply confirming the time and promising to send the deck before we meet.",
+    draftAnswer: "Here are three replies you can use.",
     answer: "**Send Jamie the updated deck before Thursday at 2 pm.**\n\n- The design review is now Thursday at 2 pm.\n- You’ve already confirmed the new time.\n- Jamie’s remaining request is the updated deck.",
     footer: "Fictional conversation · Actual ContextCue interface",
     label: "ContextCue · writing suggestions", askLabel: "ContextCue · Ask AI",
     scenes: {
-      reply: { eyebrow: "02 / WRITE IN CONTEXT", title: "The right words. Right here.", subtitle: "Turn the conversation on your screen into a reply you can use.", tip: "Choose a reply. Copy it when you’re ready.", shortcut: "⌘ ⇧ Enter" },
+      reply: { eyebrow: "02 / TURN INTENT INTO A DRAFT", title: "Ask for it. Make it a draft.", subtitle: "“Confirm the time and say I’ll send the deck before we meet.”", tip: "Draft → Revise → back to the same conversation", shortcut: "Ask AI" },
       revise: { eyebrow: "03 / MAKE IT YOURS", title: "A little shorter. A little warmer.", subtitle: "Tell ContextCue what to change, without starting over.", tip: "One instruction → multiple alternatives", shortcut: "⌘ / Ctrl + Enter" },
-      ask: { eyebrow: "01 / ASK ABOUT THIS PAGE", title: "From conversation to clarity.", subtitle: "Ask a question using the page you already have open.", tip: "Page context is optional. You control what’s included.", shortcut: "⌘ ⇧ Space" }
+      ask: { eyebrow: "01 / ASK ABOUT THIS PAGE", title: "From conversation to clarity.", subtitle: "Ask a question using the page you already have open.", tip: "Page context is optional. Refresh when the page changes.", shortcut: "⌘ ⇧ Space" },
+      settings: { eyebrow: "04 / YOUR WORKSPACE", title: "Your shortcuts. Your preferences.", subtitle: "Manage writing preferences, models, permissions, and updates in one place.", tip: "Changes save automatically.", shortcut: "Settings" }
     }
   },
   "zh-CN": {
@@ -51,13 +54,16 @@ export const examples = {
       "那就周四下午两点，演示文稿我提前发你～"
     ],
     question: "评审前我还需要做什么？",
+    draftRequest: "帮我写一条友好的回复，确认时间，并说明会在开会前发出文稿。",
+    draftAnswer: "给你三条可以使用的回复。",
     answer: "**在周四下午两点评审前，把更新后的演示文稿发给林悦。**\n\n- 设计评审已改到周四下午两点。\n- 你已经确认了新的时间。\n- 林悦还在等更新后的演示文稿。",
     footer: "虚构示例对话 · ContextCue 真实界面",
     label: "ContextCue · 写作建议", askLabel: "ContextCue · 页面问答",
     scenes: {
-      reply: { eyebrow: "02 / 就地写作", title: "想说的话，就在当前窗口。", subtitle: "根据屏幕上的对话，给你几种合适的回复。", tip: "挑一条合适的，确认后再复制使用。", shortcut: "⌘ ⇧ Enter" },
+      reply: { eyebrow: "02 / 把想法变成草稿", title: "说出意图，接着写好。", subtitle: "“帮我确认时间，并说明会在开会前发出文稿。”", tip: "起草 → 修改 → 返回同一段问答", shortcut: "Ask AI" },
       revise: { eyebrow: "03 / 调整成你的语气", title: "短一点，亲切一点。", subtitle: "直接说出修改要求，不必从头再写。", tip: "一句修改要求，生成多个新候选", shortcut: "⌘ / Ctrl + Enter" },
-      ask: { eyebrow: "01 / 直接问当前页面", title: "从一段对话，到清晰的下一步。", subtitle: "不用搬运上下文，就能针对当前页面提问。", tip: "可随时关闭页面上下文，由你决定是否使用。", shortcut: "⌘ ⇧ Space" }
+      ask: { eyebrow: "01 / 直接问当前页面", title: "从一段对话，到清晰的下一步。", subtitle: "不用搬运上下文，就能针对当前页面提问。", tip: "页面上下文可选，页面变化后可手动刷新。", shortcut: "⌘ ⇧ Space" },
+      settings: { eyebrow: "04 / 设置你的工作方式", title: "快捷键和写作偏好，由你来定。", subtitle: "在同一处管理写作偏好、模型、权限与应用更新。", tip: "修改后自动保存。", shortcut: "Settings" }
     }
   }
 };

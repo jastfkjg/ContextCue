@@ -106,6 +106,12 @@ npm run dev
 
 Do not commit `.env` files.
 
+## Settings workspace
+
+Open **Settings** from the sidebar. **General** contains shortcut recording, writing language, suggestion count (2–5), and automatic suggestion display. Writing language affects generated content, not interface labels. **Models** manages connections and the default model; **Permissions** groups screen access, optional insertion access and capture troubleshooting; **About** contains application updates.
+
+Valid changes save automatically after you finish typing. Check the **Saved** indicator before leaving; incomplete model fields and save failures are shown in the header. Home shortcuts lead to General, model management to Models, and screen checks to Permissions.
+
 ## Model providers
 
 Each saved model has its own endpoint, protocol, image-input capability, and securely stored API key.
@@ -119,7 +125,7 @@ Each saved model has its own endpoint, protocol, image-input capability, and sec
 
 ## Local memory
 
-Use **Memory** to keep and preview existing Markdown notes. Global / Channel / Person scopes and enabled state remain as compatibility metadata, but are not used by page-only sessions. Previously saved facts can still be inspected and removed.
+Use **Memory** to keep and preview existing Markdown notes. Select a file from the left rail, switch between **Write** and **Preview**, and check the local save status below the editor. **File options** holds scope, enabled metadata, and deletion. **File options** contains All contexts / Channel / Person scopes, enabled state, and deletion. Scope and enabled state remain as compatibility metadata, but are not used by page-only sessions. Previously saved facts can still be inspected and removed.
 
 The document names end in `.md`, but their contents are stored inside Electron's platform-specific `userData/contextcue-data.json`, alongside the other local data:
 
@@ -145,7 +151,7 @@ Expand **Test window capture** and choose **Start test**, then switch to the tar
 
 ## Token usage
 
-Open **Usage** to filter usage by model and the last 7 days, last 30 days, or all retained records. The page shows input/output totals, daily trends, model breakdowns, and recent request history. Counts come from provider responses; missing counts are shown as **Not reported**, not estimated. Usage records stay on your device and are not a provider billing statement.
+Open **Token usage** to filter usage by model and the last 7 days, last 30 days, or all retained records. The page shows input/output totals, daily trends, model breakdowns, and recent request history. Counts come from provider responses; missing counts are shown as **Not reported**, not estimated. Usage records stay on your device and are not a provider billing statement.
 
 ## Privacy boundaries
 

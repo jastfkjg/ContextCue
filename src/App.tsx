@@ -332,7 +332,7 @@ function MarkdownPreview({ content }: { content: string }) {
 type MemorySaveState = "saved" | "pending" | "saving" | "error";
 
 function scopeLabel(document: MemoryDocument): string {
-  if (document.scope === "global") return "Every conversation";
+  if (document.scope === "global") return "All contexts";
   if (document.scope === "channel") return document.scopeValue ? CHANNEL_LABELS[document.scopeValue as ChannelId] ?? document.scopeValue : "Choose a channel";
   return document.scopeValue || "Choose a person";
 }
@@ -347,16 +347,15 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
   const saveTimer = useRef<number>();
   const pendingDocument = useRef<MemoryDocument | null>(null);
   const revision = useRef(0);
-  const scopeDetails = useRef<HTMLDetailsElement>(null);
   const moreDetails = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
       if ((event.target as Element).closest?.(".select-menu")) return;
-      for (const ref of [scopeDetails, moreDetails]) if (!ref.current?.contains(event.target as Node)) ref.current?.removeAttribute("open");
+      for (const ref of [moreDetails]) if (!ref.current?.contains(event.target as Node)) ref.current?.removeAttribute("open");
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      for (const ref of [scopeDetails, moreDetails]) if (ref.current?.open) {
+      for (const ref of [moreDetails]) if (ref.current?.open) {
         ref.current.removeAttribute("open"); ref.current.querySelector("summary")?.focus(); event.preventDefault();
       }
     };
@@ -416,7 +415,6 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
 
   const selectDocument = (id: string) => {
     flushPendingDocument();
-    scopeDetails.current?.removeAttribute("open");
     moreDetails.current?.removeAttribute("open");
     setSelectedId(id);
   };
@@ -458,38 +456,30 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
 
   const deleteFact = (id: string, content: string) => setDeletion({ kind: "fact", id, label: content });
 
-  const scopeOptions: Array<{ value: MemoryDocumentScope; label: string; icon: React.ReactNode }> = [
-    { value: "global", label: "Global", icon: <Globe2 size={14}/> },
-    { value: "channel", label: "Channel", icon: <Hash size={14}/> },
-    { value: "person", label: "Person", icon: <UserRound size={14}/> }
-  ];
-  const tokenEstimate = activeDocument ? Math.max(1, Math.ceil(activeDocument.content.length / 4)) : 0;
 
   return (
     <div className="workspace memory-workspace">
       {deletion && <ConfirmDialog title={deletion.kind === "document" ? `Delete ${deletion.label}?` : "Delete this memory?"} description={deletion.kind === "document" ? "This file will be permanently removed from this device." : `“${deletion.label}” will be permanently removed.`} onCancel={() => setDeletion(null)} onConfirm={async () => { if (deletion.kind === "document") await deleteDocument(); else onChange(await contextCueApi.deleteFact(deletion.id)); }}/>}
       <header className="workspace-header memory-header">
-        <div><h1>Memory files</h1><p>Local notes. Not used in Ask AI or writing sessions.</p></div>
+        <div><h1>Memory</h1><p>Your local notes. Excluded from Ask AI and writing sessions.</p></div>
 
       </header>
 
       <div className="memory-studio">
         <aside className="memory-file-rail" aria-label="Memory files">
-          <div className="memory-rail-heading"><div><span>FILES</span><strong>{documents.length} Markdown {documents.length === 1 ? "file" : "files"}</strong></div><button onClick={() => void addDocument()} aria-label="New memory file" title="New memory file"><Plus size={17}/></button></div>
+          <div className="memory-rail-heading"><div><strong>Files <span className="memory-count">{documents.length}</span></strong></div><button onClick={() => void addDocument()} aria-label="New memory file" title="New memory file"><Plus size={17}/></button></div>
           <div className="memory-file-list">
             {documents.map((document) => (
-              <button key={document.id} className={document.id === activeDocument?.id ? "memory-file--active" : ""} onClick={() => selectDocument(document.id)} aria-pressed={document.id === activeDocument?.id}>
+              <button key={document.id} title={document.filename} aria-label={document.filename} className={document.id === activeDocument?.id ? "memory-file--active" : ""} onClick={() => selectDocument(document.id)} aria-pressed={document.id === activeDocument?.id}>
                 <span className="memory-file-icon"><FileText size={16}/></span>
-                <span><strong>{document.filename}</strong><small>{scopeLabel(document)}</small></span>
-                <i className={document.enabled ? "is-enabled" : ""}/>
+                <span><strong>{document.filename}</strong>{document.scope !== "global" && <small>{scopeLabel(document)}</small>}</span>
               </button>
             ))}
           </div>
           <div className="memory-learned-nav">
-            <span>LEARNED</span>
             <button className={learnedSelected ? "memory-file--active" : ""} onClick={() => selectDocument("__learned__")} aria-pressed={learnedSelected}>
               <span className="memory-file-icon"><Brain size={16}/></span>
-              <span><strong>Learned facts</strong><small>Saved from AI suggestions</small></span>
+              <span><strong>Learned facts</strong></span>
               <b>{memory.facts.length}</b>
             </button>
           </div>
@@ -500,7 +490,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
           {learnedSelected ? (
             <div className="learned-memory-pane">
               <header>
-                <div><span className="eyebrow">LEARNED MEMORY</span><h2>Facts saved from suggestions</h2><p>These are explicitly accepted facts, kept separate from the Markdown files you write.</p></div>
+                <div><h2>Learned facts</h2><p>Facts you chose to keep from suggestions.</p></div>
                 <span className="learned-total"><strong>{memory.facts.length}</strong> saved</span>
               </header>
               <div className="learned-memory-list">
@@ -511,7 +501,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                     <button onClick={() => void deleteFact(fact.id, fact.content)} aria-label={`Remove ${fact.content}`} title="Remove learned fact"><Trash2 size={15}/></button>
                   </div>
                 ))}
-                {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>When ContextCue suggests something worth remembering, you decide whether to save it.</span></div>}
+                {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>Facts you choose to save will appear here.</span></div>}
               </div>
               <footer><span>{memory.acceptedReplies.length} previously accepted suggestions are retained locally, but excluded from page-only sessions.</span></footer>
             </div>
@@ -520,27 +510,21 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
               <header className="memory-document-header">
                 <div className="memory-filename"><FileText size={17}/><input ref={documentFilenameInputRef} value={activeDocument.filename} onChange={(event) => updateDocument({ filename: event.target.value })} onBlur={() => { if (!activeDocument.filename.trim()) updateDocument({ filename: "untitled.md" }); }} aria-label="Memory filename" spellCheck={false}/></div>
                 <div className="memory-document-tools">
-                  <details className="memory-scope-menu" ref={scopeDetails} onToggle={(event) => { if (event.currentTarget.open) moreDetails.current?.removeAttribute("open"); }}>
-                    <summary aria-label={`Change scope. Currently ${scopeLabel(activeDocument)}`}>{activeDocument.scope === "global" ? <Globe2 size={14}/> : activeDocument.scope === "channel" ? <Hash size={14}/> : <UserRound size={14}/>}<span>{scopeLabel(activeDocument)}</span><ChevronDown size={13}/></summary>
-                    <div className="memory-scope-popover">
-                      <span className="memory-popover-label">Saved scope</span>
-                      <div className="memory-scope-options">
-                        {scopeOptions.map((option) => <button key={option.value} className={activeDocument.scope === option.value ? "is-active" : ""} onClick={() => { updateDocument({ scope: option.value, scopeValue: option.value === "global" ? undefined : activeDocument.scope === option.value ? activeDocument.scopeValue : option.value === "channel" ? "other" : "" }); if (option.value === "global") scopeDetails.current?.removeAttribute("open"); }} aria-pressed={activeDocument.scope === option.value}>{option.icon}{option.label}</button>)}
-                      </div>
-                      {activeDocument.scope === "channel" && <label className="memory-scope-value"><span>Channel</span><SelectMenu label="Channel" value={activeDocument.scopeValue ?? "other"} onChange={(value) => updateDocument({ scopeValue: value })} options={Object.entries(CHANNEL_LABELS).map(([value, label]) => ({ value, label }))}/></label>}
-                      {activeDocument.scope === "person" && <label className="memory-scope-value"><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Exact contact name"/></label>}
-                      <p>Saved metadata only; not used in current sessions.</p>
-                    </div>
-                  </details>
-                  <button className={`memory-active-control ${activeDocument.enabled ? "is-active" : ""}`} onClick={() => updateDocument({ enabled: !activeDocument.enabled })} role="switch" aria-checked={activeDocument.enabled}><i/>{activeDocument.enabled ? "Active" : "Paused"}</button>
                   <div className="memory-view-switch" role="group" aria-label="Document view">
                     <button className={mode === "write" ? "is-active" : ""} onClick={() => setMode("write")} aria-pressed={mode === "write"}>Write</button>
                     <button className={mode === "preview" ? "is-active" : ""} onClick={() => setMode("preview")} aria-pressed={mode === "preview"}><Eye size={13}/> Preview</button>
                   </div>
-                  <span className={`memory-save-state memory-save-state--${saveState}`} aria-live="polite">{saveState === "saving" ? <span className="spinner"/> : saveState === "saved" ? <Check size={13}/> : <i/>}{saveState === "pending" ? "Unsaved" : saveState === "saving" ? "Saving" : saveState === "error" ? "Couldn’t save" : "Saved"}</span>
-                  <details className="memory-more-menu" ref={moreDetails} onToggle={(event) => { if (event.currentTarget.open) scopeDetails.current?.removeAttribute("open"); }}>
-                    <summary aria-label="File actions" title="File actions"><Ellipsis size={17}/></summary>
-                    <div><button onClick={() => { moreDetails.current?.removeAttribute("open"); setDeletion({ kind: "document", id: activeDocument.id, label: activeDocument.filename }); }}><Trash2 size={14}/> Delete file</button></div>
+                  <details className="memory-more-menu" ref={moreDetails}>
+                    <summary aria-label="File options" title="File options"><Ellipsis size={18}/></summary>
+                    <div className="memory-file-options">
+                      <h3>File options</h3>
+                      <label><span>Scope</span><SelectMenu label="Memory scope" value={activeDocument.scope} options={[{ value: "global", label: "All contexts" }, { value: "channel", label: "Channel" }, { value: "person", label: "Person" }]} onChange={(value) => { if (value !== activeDocument.scope) updateDocument({ scope: value as MemoryDocumentScope, scopeValue: value === "global" ? undefined : value === "channel" ? "other" : "" }); }}/></label>
+                      {activeDocument.scope === "channel" && <label><span>Channel</span><SelectMenu label="Channel" value={activeDocument.scopeValue ?? "other"} onChange={(value) => updateDocument({ scopeValue: value })} options={Object.entries(CHANNEL_LABELS).map(([value, label]) => ({ value, label }))}/></label>}
+                      {activeDocument.scope === "person" && <label><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Contact name"/></label>}
+                      <label className="memory-enabled-option"><span>Enabled</span><input type="checkbox" checked={activeDocument.enabled} onChange={(event) => updateDocument({ enabled: event.target.checked })}/></label>
+                      <p>Saved metadata only. Not used in current sessions.</p>
+                      <button className="memory-delete-option" onClick={() => { moreDetails.current?.removeAttribute("open"); setDeletion({ kind: "document", id: activeDocument.id, label: activeDocument.filename }); }}><Trash2 size={14}/>Delete file</button>
+                    </div>
                   </details>
                 </div>
               </header>
@@ -548,12 +532,13 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                 {mode === "write" ? (
                   <motion.div key="write" className="memory-editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <textarea value={activeDocument.content} onChange={(event) => updateDocument({ content: event.target.value })} aria-label={`Edit ${activeDocument.filename}`} placeholder="# What should ContextCue know?" spellCheck/>
-                    <footer><span>Markdown</span><span>~{tokenEstimate.toLocaleString()} tokens</span><span>Updated {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(activeDocument.updatedAt))}</span><span>{activeDocument.content.length.toLocaleString()} characters</span></footer>
+
                   </motion.div>
                 ) : (
                   <motion.div key="preview" className="memory-preview-scroll" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><MarkdownPreview content={activeDocument.content}/></motion.div>
                 )}
               </AnimatePresence>
+              <footer className="memory-document-footer"><span>Markdown</span><span className={`memory-save-state memory-save-state--${saveState}`} role="status">{saveState === "saving" ? <span className="spinner"/> : saveState === "saved" ? <Check size={13}/> : <i/>}{saveState === "pending" ? "Unsaved changes" : saveState === "saving" ? "Saving…" : saveState === "error" ? "Couldn’t save" : "Saved locally"}</span></footer>
             </>
           ) : (
             <div className="memory-no-document"><FileText size={28}/><h2>Create your first memory file</h2><p>Keep background, preferences, people, or project context in plain Markdown.</p><button className="button button--primary" onClick={() => void addDocument()}><Plus size={15}/> New file</button></div>
@@ -789,6 +774,7 @@ function ShortcutRecorder({
 function SettingsView({ settings, onChange, updateState, permissions, onPermissions, tab, onTabChange }: { tab: SettingsTab; onTabChange: (tab: SettingsTab) => void; settings: AppSettings | null; onChange: (settings: AppSettings) => void; updateState: AppUpdateState | null; permissions: PermissionStatus | null; onPermissions: (status: PermissionStatus) => void }) {
   const [form, setForm] = useState<AppSettings | null>(settings);
   const [selectedModelId, setSelectedModelId] = useState("");
+  const modelList = useRef<HTMLDivElement>(null);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [saveState, setSaveState] = useState<AutoSaveState>("saved");
   const [saveMessage, setSaveMessage] = useState("Saved automatically");
@@ -862,6 +848,24 @@ function SettingsView({ settings, onChange, updateState, permissions, onPermissi
     return () => window.clearTimeout(timeout);
   }, [apiKeys, form, onChange]);
 
+  useEffect(() => {
+    if (tab !== "models") return;
+    const revealSelection = () => {
+      const list = modelList.current;
+      const item = list?.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!list || !item) return;
+      const parent = list.getBoundingClientRect();
+      const child = item.getBoundingClientRect();
+      if (child.left < parent.left) list.scrollLeft -= parent.left - child.left;
+      else if (child.right > parent.right) list.scrollLeft += child.right - parent.right;
+      if (child.top < parent.top) list.scrollTop -= parent.top - child.top;
+      else if (child.bottom > parent.bottom) list.scrollTop += child.bottom - parent.bottom;
+    };
+    revealSelection();
+    window.addEventListener("resize", revealSelection);
+    return () => window.removeEventListener("resize", revealSelection);
+  }, [selectedModelId, tab]);
+
   if (!form) return <div className="workspace-loading"><span className="spinner"/> Loading settings…</div>;
   const selectedModel = form.models.find((model) => model.id === selectedModelId) ?? form.models[0];
   const activeModel = form.models.find((model) => model.id === form.activeModelId) ?? form.models[0];
@@ -907,7 +911,7 @@ function SettingsView({ settings, onChange, updateState, permissions, onPermissi
   const hasModelKey = Boolean(selectedModel && (selectedModel.apiKeyConfigured || apiKeys[selectedModel.id]?.trim()));
 
   return <div className="workspace settings-workspace">
-    <header className="workspace-header settings-header"><h1>Settings</h1><span className={`autosave-status autosave-status--${saveState}`} role="status">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveMessage}</span></header>
+    <header className="workspace-header settings-header"><h1>Settings</h1>{(tab === "general" || tab === "models" || saveState !== "saved") && <span className={`autosave-status autosave-status--${saveState}`} role="status">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveMessage}</span>}</header>
     <div className="settings-tabs" role="tablist" aria-label="Settings sections">{SETTINGS_TABS.map((item, index) => <button key={item.id} id={`tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls={`panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onClick={() => onTabChange(item.id)} onKeyDown={(event) => {
       const next = event.key === "ArrowRight" ? (index + 1) % SETTINGS_TABS.length : event.key === "ArrowLeft" ? (index + SETTINGS_TABS.length - 1) % SETTINGS_TABS.length : event.key === "Home" ? 0 : event.key === "End" ? SETTINGS_TABS.length - 1 : -1;
       if (next >= 0) { event.preventDefault(); onTabChange(SETTINGS_TABS[next].id); document.getElementById(`tab-${SETTINGS_TABS[next].id}`)?.focus(); }
@@ -916,39 +920,43 @@ function SettingsView({ settings, onChange, updateState, permissions, onPermissi
     {tab === "models" && <>
     <div className="model-settings-shell">
       <aside className="model-rail">
-        <div className="model-rail-heading"><div><span>YOUR MODELS</span><strong>{form.models.length} {form.models.length === 1 ? "model" : "models"}</strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
-        <div className="model-list" role="listbox" aria-label="Configured models">
-          {form.models.map((model, index) => <button key={model.id} role="option" aria-selected={selectedModel?.id === model.id} className={`model-list-item ${selectedModel?.id === model.id ? "model-list-item--selected" : ""}`} onClick={() => setSelectedModelId(model.id)}>
-            <span className="model-monogram">{model.name.trim().slice(0, 1).toUpperCase() || index + 1}</span>
+        <div className="model-rail-heading"><div><strong>Models <span className="model-count">{form.models.length}</span></strong></div><button aria-label="Add model" title="Add model" onClick={addModel}><Plus size={16}/></button></div>
+        <div ref={modelList} className="model-list" role="group" aria-label="Configured models">
+          {form.models.map((model) => <button key={model.id} aria-pressed={selectedModel?.id === model.id} title={model.name || "Untitled model"} className={`model-list-item ${selectedModel?.id === model.id ? "model-list-item--selected" : ""}`} onClick={() => setSelectedModelId(model.id)}>
             <span className="model-list-copy"><strong>{model.name || "Untitled model"}</strong>{model.model !== model.name && <small>{model.model || "Model ID needed"}</small>}</span>
             <span className={`model-health ${model.apiKeyConfigured && model.supportsImageInput ? "model-health--ready" : ""}`} title={!model.supportsImageInput ? "Image input required" : model.apiKeyConfigured ? "API key configured" : "API key needed"} aria-label={!model.supportsImageInput ? "Image input required" : model.apiKeyConfigured ? "API key configured" : "API key needed"}/>
-            {form.activeModelId === model.id && <span className="current-chip">DEFAULT</span>}
+            {form.activeModelId === model.id && <Check className="model-default-mark" size={14} aria-label="Default model"/>}
           </button>)}
         </div>
       </aside>
 
       <div className="settings-main">
-        <AnimatePresence mode="wait">
-          {selectedModel && <motion.section key={selectedModel.id} className="model-editor" initial={{ opacity: 0, y: 7 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: .18 }}>
+          {selectedModel && <section key={selectedModel.id} className="model-editor">
             <div className="model-editor-header">
-              <div className="model-title"><span><Bot size={19}/></span><div><h2>{selectedModel.name || "Untitled model"}</h2></div></div>
+              <div className="model-title"><div><h2>{selectedModel.name || "Untitled model"}</h2></div></div>
               <div className="model-editor-actions">
-                {form.activeModelId === selectedModel.id ? <span className={`active-model-label ${selectedModel.supportsImageInput ? "" : "active-model-label--warning"}`}><CircleDot size={15}/> {selectedModel.supportsImageInput ? "Default model" : "Default · text only"}</span> : <button className="use-model-button" disabled={!selectedModel.supportsImageInput} title={selectedModel.supportsImageInput ? "Set as default" : "ContextCue needs image input to read screenshots"} onClick={() => setForm({ ...form, activeModelId: selectedModel.id })}><CircleDot size={15}/> Set as default</button>}
-                <button className="remove-model-button" disabled={form.models.length === 1} onClick={removeModel} aria-label="Remove model" title={form.models.length === 1 ? "At least one model is required" : "Remove model"}><Trash2 size={15}/></button>
+                {form.activeModelId === selectedModel.id ? <span className={`active-model-label ${selectedModel.supportsImageInput ? "" : "active-model-label--warning"}`}><Check size={14}/> {selectedModel.supportsImageInput ? "Default" : "Default · text only"}</span> : <button className="use-model-button" disabled={!selectedModel.supportsImageInput} title={selectedModel.supportsImageInput ? "Set as default" : "ContextCue needs image input to read screenshots"} onClick={() => setForm({ ...form, activeModelId: selectedModel.id })}><CircleDot size={15}/> Set as default</button>}
+
               </div>
             </div>
-            <div className="model-form-grid">
+            <section className="model-config-section" aria-label="Model identity"><h3>Model details</h3>
+            <div className="model-form-grid model-identity-fields">
               <label><span>Display name</span><input value={selectedModel.name} onChange={(event) => updateModel({ name: event.target.value })} placeholder="e.g. OpenAI work"/></label>
               <label><span>Model ID</span><input value={selectedModel.model} onChange={(event) => { const model = event.target.value; updateModel({ model, supportsImageInput: inferImageInputSupport(model) }); }} placeholder="e.g. gpt-5.6"/></label>
-              <label className="model-url-field"><span>API base URL</span><input type="url" value={selectedModel.apiBaseUrl} onChange={(event) => updateModel({ apiBaseUrl: event.target.value })} placeholder="https://api.openai.com/v1"/></label>
-              <label className={`vision-capability ${selectedModel.supportsImageInput ? "vision-capability--enabled" : "vision-capability--warning"}`}><input type="checkbox" checked={selectedModel.supportsImageInput} onChange={(event) => updateModel({ supportsImageInput: event.target.checked })}/><Eye size={17}/><span><strong>Image input</strong></span><i>{selectedModel.supportsImageInput ? "Supported" : "Text only"}</i></label>
-              <label><span>API format</span><SelectMenu label="API format" value={selectedModel.apiProtocol} onChange={(value) => updateModel({ apiProtocol: value as LlmConfig["apiProtocol"] })} options={[{ value: "responses", label: "Responses API" }, { value: "chat-completions", label: "Chat Completions" }]}/></label>
-              <label><span>API key</span><input type="password" autoComplete="new-password" value={apiKeys[selectedModel.id] ?? ""} onChange={(event) => setApiKeys({ ...apiKeys, [selectedModel.id]: event.target.value })} placeholder={selectedModel.apiKeyConfigured ? "••••••••  Saved securely" : "Paste a key"}/></label>
             </div>
-            <div className="connection-row"><div className="security-line"><ShieldCheck size={15}/><span>{selectedModel.apiKeyConfigured ? "Key saved securely" : "Keys are encrypted on this device"}</span></div><button className="test-connection-button" disabled={!modelComplete || !hasModelKey || selectedConnection?.state === "testing"} onClick={() => void testConnection()}>{selectedConnection?.state === "testing" ? <span className="spinner spinner--dark"/> : <Wifi size={16}/>} {selectedConnection?.state === "testing" ? "Testing…" : "Test connection"}</button></div>
+            <label className="model-image-toggle toggle-row"><div><strong>Image input</strong><small>{selectedModel.supportsImageInput ? "Read screenshots with this model" : "Required to use this model with screen context"}</small></div><input type="checkbox" role="switch" aria-label="Image input" checked={selectedModel.supportsImageInput} onChange={(event) => updateModel({ supportsImageInput: event.target.checked })}/><i/></label>
+            </section>
+            <section className="model-config-section" aria-label="Model connection"><h3>Connection</h3>
+            <div className="model-form-grid model-connection-fields">
+              <label className="model-url-field"><span>API base URL</span><input type="url" value={selectedModel.apiBaseUrl} onChange={(event) => updateModel({ apiBaseUrl: event.target.value })} placeholder="https://api.openai.com/v1"/></label>
+
+              <label><span>API format</span><SelectMenu label="API format" value={selectedModel.apiProtocol} onChange={(value) => updateModel({ apiProtocol: value as LlmConfig["apiProtocol"] })} options={[{ value: "responses", label: "Responses API" }, { value: "chat-completions", label: "Chat Completions" }]}/></label>
+              <label className="model-key-field"><span>API key</span><input type="password" autoComplete="new-password" value={apiKeys[selectedModel.id] ?? ""} onChange={(event) => setApiKeys({ ...apiKeys, [selectedModel.id]: event.target.value })} placeholder={selectedModel.apiKeyConfigured ? "••••••••  Saved key" : "Paste a key"}/><small>{selectedModel.apiKeyConfigured ? "Leave blank to keep the saved key." : "Encrypted on this device."}</small></label>
+            </div>
+            </section>
+            <div className="connection-row"><button className="model-remove-action" disabled={form.models.length === 1} onClick={removeModel} title={form.models.length === 1 ? "At least one model is required" : "Remove model"}><Trash2 size={14}/>Remove model</button><button className="test-connection-button" disabled={!modelComplete || !hasModelKey || selectedConnection?.state === "testing"} onClick={() => void testConnection()}>{selectedConnection?.state === "testing" ? <span className="spinner spinner--dark"/> : <Wifi size={16}/>} {selectedConnection?.state === "testing" ? "Testing…" : "Test connection"}</button></div>
             {selectedConnection && selectedConnection.state !== "testing" && <div className={`connection-result connection-result--${selectedConnection.state}`} role="status">{selectedConnection.state === "success" ? <CheckCircle2 size={16}/> : <CircleHelp size={16}/>}<span><strong>{selectedConnection.state === "success" ? `Connected${selectedConnection.latencyMs ? ` · ${selectedConnection.latencyMs} ms` : ""}` : "Connection failed"}</strong><small>{selectedConnection.message}</small></span></div>}
-          </motion.section>}
-        </AnimatePresence>
+          </section>}
 
       </div>
     </div>
