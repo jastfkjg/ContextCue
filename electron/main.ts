@@ -55,6 +55,7 @@ import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./service
 import type { AppUpdateState } from "../src/shared/types";
 import { getFrontmostWindow, sameFrontmostWindow, sameNativeWindow, type FrontmostWindow } from "./services/front-window";
 import { prepareQuickContext } from "./services/quick-context";
+import { testWindowCapture } from "./services/capture-diagnostics";
 import { prepareQuickWindows } from "./services/quick-windows";
 import { OverlaySizer } from "./services/overlay-size";
 import { createPageSession, pageRequest, rememberPageTurn, type PageSession } from "./services/page-session";
@@ -975,6 +976,14 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle("capture:list", () => listCaptureSources());
+  ipcMain.handle("capture:test-window", (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error("Open Settings to test window capture.");
+    return testWindowCapture({
+      getWindow: getFrontmostWindow,
+      capture: captureQuickSource,
+      isOwnWindow: (frontmost) => mainWindow?.isFocused() === true || overlayWindow?.isFocused() === true || frontmost.processId === process.pid
+    });
+  });
   ipcMain.handle("capture:source", (_event, sourceId: string) => captureSource(sourceId));
   ipcMain.handle("permissions:get", () => ({
     screen: process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("screen") : "unknown",
@@ -1040,19 +1049,6 @@ function registerIpc(): void {
   ipcMain.on("overlay:resize-by", (event, edge: OverlayResizeEdge, deltaX: number, deltaY: number) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
     overlaySizer?.resizeBy(edge, deltaX, deltaY);
-  });
-  ipcMain.on("overlay:move-by", (event, deltaX: number, deltaY: number) => {
-    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
-    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) return;
-    const [currentX, currentY] = overlayWindow.getPosition();
-    const [width, height] = overlayWindow.getSize();
-    const pointer = screen.getCursorScreenPoint();
-    const { workArea } = screen.getDisplayNearestPoint(pointer);
-    const margin = 8;
-    const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum);
-    const nextX = clamp(Math.round(currentX + deltaX), workArea.x + margin, workArea.x + workArea.width - width - margin);
-    const nextY = clamp(Math.round(currentY + deltaY), workArea.y + margin, workArea.y + workArea.height - height - margin);
-    overlayWindow.setPosition(nextX, nextY, false);
   });
   ipcMain.handle("overlay:hide", () => hideQuickOverlay());
   ipcMain.handle("assist:revise", (event, request: ReviseSuggestionRequest) => {

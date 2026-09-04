@@ -294,6 +294,12 @@ export interface PermissionStatus {
   accessibility: boolean;
 }
 
+export interface CapturePreview {
+  name: string;
+  imageDataUrl: string;
+  capturedAt: string;
+}
+
 export interface OverlayStatus {
   state: "loading" | "error";
   message: string;
@@ -321,6 +327,7 @@ export interface ContextCueApi {
   onUpdateState: (callback: (state: AppUpdateState) => void) => () => void;
   onOpenUpdates: (callback: () => void) => () => void;
   getCaptureSources: () => Promise<CaptureSource[]>;
+  testWindowCapture: () => Promise<CapturePreview>;
   captureSource: (sourceId: string) => Promise<string>;
   generateReplies: (request: GenerateRequest) => Promise<GenerationResult>;
   generateAssistance: (request: GenerateRequest) => Promise<GenerationResult>;
@@ -357,7 +364,6 @@ export interface ContextCueApi {
   copyText: (text: string) => Promise<void>;
   onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
   onAskEvent: (callback: (event: AskStreamEvent) => void) => () => void;
-  moveOverlay: (deltaX: number, deltaY: number) => void;
   resizeOverlay: (height: number, newCandidate: boolean, expanded?: boolean) => void;
   resizeOverlayBy: (edge: OverlayResizeEdge, deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;

@@ -45,6 +45,8 @@ The Quick writing shortcut still generates 1–5 suggestions directly, without f
 
 The floating panel follows the originating native window. Switching to another application or window temporarily hides it; returning restores the session. Moving between text fields on the same page does not hide the panel. A detected page-title change in the original window, or the five-minute session limit, expires the captured context and cancels requests while preserving suggestions, instructions and visible Q&A for reading and copying. Return to Ask AI and refresh, or reopen ContextCue, to use AI or insert after expiry. Every new invocation captures a fresh page and starts a new session, even in the same window. Insertion validates the original target again before writing.
 
+Drag the Ask AI header or the suggestion panel’s top bar to move the window. Movement uses native window dragging across displays; buttons and resize handles stay interactive.
+
 Suggestions initially fit their content. Drag any edge or the bottom-right corner to resize. A subtle curved hint appears when that corner is hovered or keyboard-focused. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
 
 New installs use `⌘ ⇧ Space` / `Ctrl ⇧ Space` for Ask AI and `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` for Quick writing. Upgrades preserve existing shortcuts. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A. The header shows the captured page source; toggling it off displays **Page off**. **Summarize**, **Explain**, **Draft a reply**, and **Rewrite** fill the question field for review before sending. Enter sends and Shift + Enter adds a line.
@@ -133,6 +135,14 @@ The document names end in `.md`, but their contents are stored inside Electron's
 
 Page-only suggestions, revisions and Ask AI never load these documents, contacts, facts or accepted examples. Copying, inserting or revising in the floating panel no longer appends long-term accepted history. Existing data is preserved; provide any additional background explicitly in the current session. Legacy APIs and storage structures remain for compatibility.
 
+## Screen & permissions
+
+Open **Settings → Permissions**, also linked from Home. Screen recording status comes from the OS; “Test to verify” means the platform cannot report a definitive permission status. Accessibility is optional and used for insertion on macOS.
+
+Expand **Test window capture** and choose **Start test**, then switch to the target window during the three-second countdown. Keep it in front until capture finishes, then return to Settings for the named, timestamped preview. If ContextCue is still focused, the target is unavailable, or its tab changes during capture, the test reports an error rather than showing a different source. You can cancel before capture starts. Previews clear when you leave the Permissions tab.
+
+**Window diagnostics** is collapsed by default. Explicitly scan to see available windows and displays, with the scan time and separate permission, capture-failure, and empty-result messages. These local checks do not call the model, select Ask AI’s context, or alter an existing page session. Opening Home or Settings does not scan window thumbnails automatically.
+
 ## Token usage
 
 Open **Usage** to filter usage by model and the last 7 days, last 30 days, or all retained records. The page shows input/output totals, daily trends, model breakdowns, and recent request history. Counts come from provider responses; missing counts are shown as **Not reported**, not estimated. Usage records stay on your device and are not a provider billing statement.
@@ -192,7 +202,7 @@ The browser build uses a non-networked preview dataset for UI review. Real scree
 | `npm run dist` | Create platform installers |
 | `npm run dist:mac:beta -- --arm64` | Build an ad-hoc signed macOS beta; use `--x64` for Intel |
 
-ContextCue checks for updates 15 seconds after launch and every 6 hours while running. New releases appear in a system notification and the sidebar. You can also use **Settings → App updates** or **Check for Updates…** in the tray context menu.
+ContextCue checks for updates 15 seconds after launch and every 6 hours while running. New releases appear in a system notification and the sidebar. You can also use **Settings → About → App updates** or **Check for Updates…** in the tray context menu.
 
 Downloads start when you choose them and display progress. Developer ID signed and notarized macOS builds offer **Restart and update**. The default ad-hoc signed, unnotarized macOS beta builds download and verify a DMG inside the app; choose **Open installer**, quit ContextCue, and replace the app in Applications. Memory and settings live outside the app bundle.
 

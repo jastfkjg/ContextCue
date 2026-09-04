@@ -208,6 +208,7 @@ const browserDemoApi: ContextCueApi = {
   onUpdateState: () => () => undefined,
   onOpenUpdates: () => () => undefined,
   getCaptureSources: async () => demoSources,
+  testWindowCapture: async () => ({ name: demoSources[0].name, imageDataUrl: demoSources[0].thumbnail, capturedAt: new Date().toISOString() }),
   captureSource: async (id) => demoSources.find((source) => source.id === id)?.thumbnail ?? demoSources[0].thumbnail,
   generateReplies: async () => {
     await new Promise((resolve) => setTimeout(resolve, 900));
@@ -352,7 +353,6 @@ const browserDemoApi: ContextCueApi = {
       clearDemoAskTimers();
     };
   },
-  moveOverlay: () => undefined,
   resizeOverlay: () => undefined,
   resizeOverlayBy: () => undefined,
   hideOverlay: async () => undefined,

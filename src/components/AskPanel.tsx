@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
 import type { AskOverlayContext, OverlayResult } from "../shared/types";
 import { contextCueApi } from "../lib/api";
@@ -39,7 +39,6 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
-  const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const streaming = Boolean(activeRequest.current);
 
   const sourceLabel = context.windowTitle.trim() || context.applicationName.trim() || "Current page";
@@ -137,29 +136,6 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     window.setTimeout(() => setCopiedTurn((current) => current === turn.id ? "" : current), 1_500);
   };
 
-  const beginDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
-  };
-
-  const continueDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    const drag = windowDrag.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.screenX - drag.screenX;
-    const deltaY = event.screenY - drag.screenY;
-    if (deltaX || deltaY) {
-      contextCueApi.moveOverlay(deltaX, deltaY);
-      drag.screenX = event.screenX;
-      drag.screenY = event.screenY;
-    }
-  };
-
-  const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
   const refresh = async () => {
     if (refreshing) return;
     stop();
@@ -174,10 +150,6 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     <section className="ask-panel" aria-label="Ask AI" hidden={!active}>
       <header
         className="ask-header"
-        onPointerDown={beginDrag}
-        onPointerMove={continueDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
       >
         {context.canReturnToSuggestions ? (
           <button className="ask-back" onClick={onExit} aria-label="Back to suggestions" title="Back to suggestions">

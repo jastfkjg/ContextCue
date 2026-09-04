@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ExternalLink, KeyRound, ScanLine, ShieldCheck, Sparkles } from "lucide-react";
 import { contextCueApi, isBrowserDemo } from "../lib/api";
 import type { AppSettings, GenerationResult, LlmConfig, PermissionStatus } from "../shared/types";
+import { SelectMenu } from "./SelectMenu";
 import { MarkdownContent } from "./MarkdownContent";
 import { CandidateCarousel } from "./CandidateCarousel";
 
@@ -91,12 +92,12 @@ export function SetupGuide({ settings, onChange, onFinish, onDismiss }: {
         <h1 ref={heading} tabIndex={-1}>{step === 0 ? "Help with the screen you’re on." : step === 1 ? "Check your model and screen access." : "Try it on a fictional conversation."}</h1>
         <p className="setup-lead">{step === 0 ? "Choose a provider and connect an image-capable model. Your key is encrypted on this device." : step === 1 ? "We verify image input with a generated color test. Your windows are never sent for this check." : "Ask a question or describe a reply. This example uses only the fictional image below."}</p>
         {step === 0 && <form className="setup-form" onSubmit={(event) => { event.preventDefault(); void saveModel(); }}>
-          <label>Provider<select disabled={Boolean(busy)} value={provider} onChange={(event) => changeProvider(event.target.value)}><option value="existing">{model.name && provider === "existing" ? model.name : "Current configuration"}</option><option value="openai">OpenAI</option><option value="compatible">OpenAI-compatible provider</option><option value="local">Local server</option></select></label>
+          <label>Provider<SelectMenu label="Provider" disabled={Boolean(busy)} value={provider} onChange={changeProvider} options={[{ value: "existing", label: model.name && provider === "existing" ? `${model.name} (current)` : "Current configuration" }, { value: "openai", label: "OpenAI" }, { value: "compatible", label: "OpenAI-compatible provider" }, { value: "local", label: "Local server" }]}/></label>
           <label>Model ID<input disabled={Boolean(busy)} value={model.model} onChange={(event) => setModel({ ...model, model: event.target.value })} placeholder="The image-capable model ID from your provider" required/></label>
           <label>API key{provider === "local" && <small>Optional for a local server without authentication.</small>}<input disabled={Boolean(busy)} type="password" autoComplete="new-password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder={model.apiKeyConfigured ? "Saved securely · leave blank to keep" : "Paste your API key"}/></label>
           <details className="setup-advanced" open={provider === "compatible" || provider === "local" ? true : undefined}><summary>Connection details</summary>
             <label>API base URL<input type="url" disabled={Boolean(busy)} value={model.apiBaseUrl} onChange={(event) => setModel({ ...model, apiBaseUrl: event.target.value })} placeholder="https://your-provider.example/v1" required/></label>
-            <label>API format<select disabled={Boolean(busy)} value={model.apiProtocol} onChange={(event) => setModel({ ...model, apiProtocol: event.target.value as LlmConfig["apiProtocol"] })}><option value="responses">Responses API</option><option value="chat-completions">Chat Completions</option></select></label>
+            <label>API format<SelectMenu label="API format" disabled={Boolean(busy)} value={model.apiProtocol} onChange={(value) => setModel({ ...model, apiProtocol: value as LlmConfig["apiProtocol"] })} options={[{ value: "responses", label: "Responses API" }, { value: "chat-completions", label: "Chat Completions" }]}/></label>
           </details>
           <button className="button button--primary setup-next" disabled={Boolean(busy)}>{busy === "save" ? "Saving…" : "Save connection & continue"}<ArrowRight size={16}/></button>
         </form>}

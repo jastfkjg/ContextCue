@@ -10,6 +10,24 @@ function fixture() {
 }
 
 describe("resizable suggestion and Ask AI windows", () => {
+  it("keeps native drag positions on a display above the main screen and fits content there", () => {
+    let bounds = { x: 180, y: 140, width: 420, height: 140 };
+    const window = { getBounds: () => ({ ...bounds }), setBounds: (next: typeof bounds) => { bounds = next; } };
+    const sizer = new OverlaySizer(window, (current) => current.y < 0
+      ? { x: -202, y: -1080, width: 1920, height: 1080 }
+      : { x: 0, y: 0, width: 1470, height: 956 });
+    sizer.show("suggestions");
+    // The OS has moved the panel to the external display (1x instead of 2x).
+    window.setBounds({ ...bounds, x: -120, y: -400 });
+    sizer.fitContent(300, true);
+    expect(window.getBounds()).toEqual({ x: -120, y: -400, width: 420, height: 300 });
+    sizer.show("ask");
+    expect(window.getBounds()).toMatchObject({ x: -120, y: -400 });
+    window.setBounds({ ...bounds, x: 520, y: 220 });
+    sizer.show("suggestions");
+    sizer.fitContent(180, true);
+    expect(window.getBounds()).toEqual({ x: 520, y: 220, width: 420, height: 180 });
+  });
   it("caps expansion at the available space below without shifting position or width", () => {
     const { window, sizer } = fixture();
     window.setBounds({ x: 160, y: 690, width: 520, height: 140 });

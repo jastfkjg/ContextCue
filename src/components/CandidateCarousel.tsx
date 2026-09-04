@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, ChevronUp, Copy, CornerDownLeft, PencilLine, RotateCcw, Sparkles, Square } from "lucide-react";
 import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
@@ -39,7 +39,6 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
   const reviseButton = useRef<HTMLButtonElement>(null);
   const instructionField = useRef<HTMLTextAreaElement>(null);
   const pointerStart = useRef<number | null>(null);
-  const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const horizontalSwipe = useRef(createHorizontalSwipeTracker());
   const shell = useRef<HTMLElement | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
@@ -203,28 +202,6 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
     if (direction) move(index + direction);
   };
 
-  const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
-  };
-
-  const continueWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = windowDrag.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.screenX - drag.screenX;
-    const deltaY = event.screenY - drag.screenY;
-    if (!deltaX && !deltaY) return;
-    contextCueApi.moveOverlay(deltaX, deltaY);
-    drag.screenX = event.screenX;
-    drag.screenY = event.screenY;
-  };
-
-  const endWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
   const dots = <div className="candidate-dots" role="group" aria-label="Choose a suggestion">
     {candidates.map((_, dot) => <button key={dot} type="button" className={dot === index ? "active" : ""}
       aria-label={`Show suggestion ${dot + 1} of ${candidates.length}`} aria-pressed={dot === index}
@@ -246,10 +223,6 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
           <div
             className="candidate-drag-handle"
             aria-hidden="true"
-            onPointerDown={beginWindowDrag}
-            onPointerMove={continueWindowDrag}
-            onPointerUp={endWindowDrag}
-            onPointerCancel={endWindowDrag}
           >
             <span/>
           </div>

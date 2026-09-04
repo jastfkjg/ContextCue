@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CircleAlert, X } from "lucide-react";
 import type { AskOverlayContext, OverlayResult, OverlayStatus } from "./shared/types";
 import { contextCueApi } from "./lib/api";
@@ -15,29 +15,6 @@ export function OverlayApp() {
   const [askVisible, setAskVisible] = useState(false);
   const [expired, setExpired] = useState<{ sessionId: string; message: string } | null>(null);
   const eventRevision = useRef(0);
-  const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
-
-  const beginWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    windowDrag.current = { pointerId: event.pointerId, screenX: event.screenX, screenY: event.screenY };
-  };
-
-  const continueWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = windowDrag.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const deltaX = event.screenX - drag.screenX;
-    const deltaY = event.screenY - drag.screenY;
-    if (!deltaX && !deltaY) return;
-    contextCueApi.moveOverlay(deltaX, deltaY);
-    drag.screenX = event.screenX;
-    drag.screenY = event.screenY;
-  };
-
-  const endWindowDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (windowDrag.current?.pointerId === event.pointerId) windowDrag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-  };
 
   useEffect(() => {
     const stopReset = contextCueApi.onOverlayReset(() => {
@@ -159,10 +136,6 @@ export function OverlayApp() {
             className="overlay-processing"
             role="status"
             aria-label={`${status.message} Model: ${status.modelName || "Configured model"}`}
-            onPointerDown={beginWindowDrag}
-            onPointerMove={continueWindowDrag}
-            onPointerUp={endWindowDrag}
-            onPointerCancel={endWindowDrag}
           >
             <div>
               <strong>{status.message}</strong>

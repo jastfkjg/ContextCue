@@ -35,6 +35,7 @@ const api: ContextCueApi = {
     return () => ipcRenderer.removeListener("updates:open", listener);
   },
   getCaptureSources: () => ipcRenderer.invoke("capture:list"),
+  testWindowCapture: () => ipcRenderer.invoke("capture:test-window"),
   captureSource: (sourceId: string) => ipcRenderer.invoke("capture:source", sourceId),
   generateReplies: (request: GenerateRequest) => ipcRenderer.invoke("reply:generate", request),
   generateAssistance: (request: GenerateRequest) => ipcRenderer.invoke("assist:generate", request),
@@ -98,7 +99,6 @@ const api: ContextCueApi = {
     ipcRenderer.on("overlay:ask-event", listener);
     return () => ipcRenderer.removeListener("overlay:ask-event", listener);
   },
-  moveOverlay: (deltaX, deltaY) => ipcRenderer.send("overlay:move-by", deltaX, deltaY),
   resizeOverlay: (height, newCandidate, expanded) => ipcRenderer.send("overlay:resize", height, newCandidate, expanded),
   resizeOverlayBy: (edge, deltaX, deltaY) => ipcRenderer.send("overlay:resize-by", edge, deltaX, deltaY),
   hideOverlay: () => ipcRenderer.invoke("overlay:hide"),

@@ -51,6 +51,8 @@ The **Setup guide** walks you through adding a model and API key, verifying imag
 
 Use a model that supports **image input** for suggestions and page-aware questions. Text-only models work for questions, drafts, and subsequent draft revisions in **Ask AI** when page context is off. Model requests, including setup verification, may incur provider charges. [Provider and environment configuration →](./docs/guide.md#model-providers)
 
+Check screen recording and optional insertion access in **Settings → Permissions**. Test a window with a local screenshot preview, or expand Window diagnostics to scan sources. No model request is sent by these checks.
+
 ### 3. Open a window and call ContextCue
 
 | Action | macOS | Windows / Linux |

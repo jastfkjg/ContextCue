@@ -7,7 +7,14 @@
 3. Verify model sends a randomized six-color synthetic PNG. The expected order is not sent in the text prompt. An endpoint returning OK without reading the image fails this check. This is a narrow probe, not a guarantee of model quality.
 4. Screen access is checked locally. Recheck after changing OS permissions. Accessibility is optional: unrecognized fields and platforms without insertion support still use copying.
 5. The Ask AI example sends only the fictional conversation image and the question entered by the user. Explain and Draft a reply presets fill the input without submitting; answers render Markdown and writing results render practice candidates. It neither captures real pages nor inserts text. Provider charges may apply to both verification and generation.
-6. Completion is persisted in `settings.onboardingComplete`; Home then shows daily shortcuts and readiness. Setup guide remains available from the sidebar. Deferring does not mark it complete.
+6. Completion is persisted in `settings.onboardingComplete`. Completing or deferring opens the same concise Home with daily shortcuts and readiness; missing model requirements remain visible. Setup guide remains available from the sidebar. Deferring does not mark it complete.
+
+## Screen access diagnostics
+
+- Main navigation contains Home, Memory, Token usage and Settings. Home links directly to Settings → Permissions.
+- Permission states come from the OS; unknown access is labeled for testing. Accessibility remains optional for insertion.
+- Window-capture tests use a cancellable three-second countdown so the user can focus a target. Capture by its native ID and verify foreground identity again afterward; reject ContextCue, missing targets, capture errors and tab/window changes. Return only a local preview with source name and time, without a model call or page-session mutation. Discard late results and cancel pending countdowns when the Permissions tab unmounts.
+- Window diagnostics is collapsed, scan is explicit, all returned sources are reachable in a scrollable list. Show windows and displays as such, with a scan timestamp. Distinguish empty results from permission and backend errors. Home/Settings never auto-enumerate screenshots.
 
 ## Session boundary
 
@@ -39,6 +46,7 @@
 - Use an opaque reading surface, distinct question bubbles, a small ContextCue answer label and readable Markdown typography. Long answers scroll independently of the header and composer.
 - Keep a single input border and a subdued send button until text is entered. Enter submits, Shift + Enter inserts a newline, and the input grows up to 96px. Recalculate its height when the user changes window width so wrapped text remains visible.
 - Keep the Ask AI composer visually minimal: omit the persistent keyboard-hint row beneath the input. Enter still submits and Shift + Enter still inserts a newline.
+- Ask AI headers, candidate top bars and loading/error panels use native `-webkit-app-region: drag`. Do not move windows through per-pointer-event IPC or clamp movement to the cursor’s current display: that can jump the window at display boundaries and depends on renderer pointer capture surviving the move. Explicitly exclude buttons, inputs and resize handles with `no-drag`. Keep the close button discoverable without requiring hover over a native drag region.
 - All floating panels retain edge and corner resizing. Replace the permanent diagonal grip with a curved corner hint visible only on hover, drag or keyboard focus. Keep its 24px hit area, focus outline and arrow-key resizing; reserve space below the Ask AI input so the corner does not overlap text entry.
 
 ## Inline revision and candidate groups
@@ -80,3 +88,12 @@ Packaged-app acceptance still required on each supported OS:
 - Repeat across two windows of the same app, browser tabs with different titles, and closing/reopening the same page.
 - Confirm revised candidates insert only into the original validated control, never auto-send, and do not restore old results after closing.
 - Verify permission denial/regrant and a real image-capable provider, without using sensitive conversations as test data.
+
+- Native movement acceptance: drag repeatedly, release outside the original bounds, move between displays with different scaling/negative origins, and drag again after a Space / Split View transition. Check Ask AI, candidates and loading/error states; verify header buttons, candidate dots, close and resize grips afterward.
+
+## Management UI
+
+- Settings has General, Models, Permissions and About tabs. Keep form state while switching tabs; Home shortcuts open General, model management opens Models, screen checks open Permissions and update notices open About.
+- Use a plain background, readable labels and single-column settings rows. Keep routine status compact and reveal capture tests, diagnostics and contextual help on demand.
+- Use the shared SelectMenu for all in-app dropdowns, including onboarding, memory scope and usage filters. Popups must remain within the viewport, scroll long lists and support arrow keys, typeahead, Enter, Escape, Tab and outside dismissal.
+- Memory deletion uses an app-styled modal with initial Cancel focus, focus containment and focus restoration on close. No browser alert, confirm or native select menus in the renderer.
