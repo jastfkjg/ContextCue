@@ -4,7 +4,7 @@
   "private": true,
   "description": "A desktop AI assistant for understanding and writing from your current screen.",
   "author": "zilong",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "keywords": [
     "desktop",
     "screen-assistant",
@@ -19,6 +19,7 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
+    "icons": "node scripts/generate-icons.cjs",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
     "test": "vitest run",
@@ -71,7 +72,8 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE"
     ],
     "mac": {
       "category": "public.app-category.productivity",

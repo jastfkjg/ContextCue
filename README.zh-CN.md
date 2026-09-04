@@ -126,3 +126,9 @@ npm run package  # 生成未打包的应用目录
 | [产品路线](./TODO.md) | 当前重点与计划中的功能 |
 
 ContextCue 仍是早期桌面 MVP。遇到问题或有改进建议，欢迎[提交 Issue](https://github.com/jastfkjg/ContextCue/issues)。
+
+## 许可证
+
+ContextCue 使用 [MIT 许可证](./LICENSE)，允许商业使用、修改和再分发（包括用于闭源产品），但须保留版权声明和许可声明。软件不提供任何担保。
+
+第三方依赖和资源仍遵循各自的许可证，包括 Inter 字体（SIL Open Font License 1.1）。

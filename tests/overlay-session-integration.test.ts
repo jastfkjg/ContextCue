@@ -49,7 +49,10 @@ vi.mock("electron", () => {
     ipcMain: { handle: (name: string, fn: (...args: any[]) => any) => harness.handlers.set(name, fn), on: (name: string, fn: (...args: any[]) => any) => harness.handlers.set(name, fn) },
     globalShortcut: { unregisterAll: () => harness.shortcuts.clear(), register: (key: string, fn: () => void) => { harness.shortcuts.set(key, fn); return true; } },
     clipboard: { writeText: vi.fn() }, Menu: { buildFromTemplate: () => [] },
-    nativeImage: { createFromBuffer: () => ({ isEmpty: () => false, setTemplateImage() {} }) },
+    nativeImage: {
+      createFromBuffer: () => ({ isEmpty: () => false, setTemplateImage() {} }),
+      createEmpty: () => ({ addRepresentation() {}, isEmpty: () => false, setTemplateImage() {} })
+    },
     screen: {
       getCursorScreenPoint: () => harness.cursor,
       getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1400, height: 900 } }),

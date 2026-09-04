@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import trayIconData from "../build/tray-icon-data.json";
 import {
   app,
   BrowserWindow,
@@ -147,10 +148,11 @@ function toggleMainWindow(): void {
 }
 
 function createTrayIcon(): Electron.NativeImage {
-  // A monochrome version of the reply-assistant mark. macOS recolors template
-  // images automatically so the icon remains legible in either menu-bar theme.
-  const png = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAqDuP8AAAC8klEQVRYCe2WS4iOURjHX4z7ZURDRFHs1JRELhsbGysmKdaTrITEethMWUgjljbKJXYWdgorC2ShsCDjltxmCBF+/6/3fJ73vOe8l/HWN8VT/+88t/M/z7m853xJ8l9aK7CN32njaS2uUcz28VLQegr5AW6BGZ0sStt0FXwHv1K8oj0JloNC6SE6AO6AUeAIxtqK4x64DMQpHq3SabAWFEof0Y9grIOX9RP3CBgCOenyPCrmEpjg+Zs050Cmop+UkWqb6qzMC/L7U7ymLVsZP66xNGZUdGb8TjF7mNxeMDnFvhp9LafGjMpdIjY5prtiJhqmgxX7+pw64BmxZ0VfwqxMNG88x7UV3Ac/0/B8Wn0tdvnnYa8E00GRfCI4O5bgV+/b3+i4BtiVEZcmpQtupoEmtgjsBVpRn8vahMNik0L6I7r5xYSZ/ninoOrSuw1CnPJFJdbB+XXDboj2jge0gsuAbmXHZVvcYbFJMf0hXVd73XVedAPfTHGD9gLYDJxoZY+AEK/LybWhZN+ng+wXpcEOAK2gw1f0l2ATcLIERXGf08VzrZ8Ys0NFqaBQ/jkzigp/GsgzKUnSlbGqGToTK8BFcCrtonsoJIuNUxP5bOxSNTTDIp8GeJ9Ceih3wIw6Cf1dIM+kZNUQ4d/4rkCvS9PJRpQQn4u3WrtleiAXZqJ54w2uY2A4H2p7NKgO9GPwtu1NkkNGd6pu6qicJxKagfUdJkc38tQSaHus7Mf4AiyX9NxbZjvFltSS6GuqI3NJHgQfgOVxuj1jLV59MVbOYOyxDk/Xf6Dj4Jnnt6Y4u8EqsAUsBaFHewS/vlYdg7b4BelMnQW72xlZRTPTHyv9Hy4SbZneMT26/hjqJ54dQDd8JdlJlvbXLW2TrSbUV6mKQFJThYzCrQnqzPQExqnsKitIb1Z/ZbYGEosK0sFe18AYtShiBV2HZUEtpoaSQwWdgFtfY0fE3q56qXd1pAoz6FF0veQPQK/xd1TVLas/V/+m/Aagxb2ejhPzzgAAAABJRU5ErkJggg==";
-  const icon = nativeImage.createFromBuffer(Buffer.from(png, "base64"), { scaleFactor: 2 });
+  // Embed both densities so packaged builds need no external menu-bar asset.
+  // macOS recolors the monochrome CC mark for either menu-bar theme.
+  const icon = nativeImage.createEmpty();
+  icon.addRepresentation({ scaleFactor: 1, buffer: Buffer.from(trayIconData.png1x, "base64") });
+  icon.addRepresentation({ scaleFactor: 2, buffer: Buffer.from(trayIconData.png2x, "base64") });
   if (icon.isEmpty()) throw new Error("Could not create the ContextCue menu-bar icon.");
   icon.setTemplateImage(true);
   return icon;

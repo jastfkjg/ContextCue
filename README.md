@@ -126,3 +126,9 @@ npm run package  # Create an unpacked application
 | [Roadmap](./TODO.md) | Current priorities and planned features |
 
 ContextCue is an early desktop MVP. Found something that could work better? [Open an issue](https://github.com/jastfkjg/ContextCue/issues).
+
+## License
+
+ContextCue is licensed under the [MIT License](./LICENSE). Commercial use, modification, and redistribution are permitted, including in closed-source products, provided the copyright and permission notices are preserved. The software is provided without warranty.
+
+Third-party dependencies and assets remain subject to their respective licenses, including the Inter font (SIL Open Font License 1.1).

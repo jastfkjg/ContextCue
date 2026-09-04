@@ -1,16 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
   <title id="title">ContextCue app icon</title>
-  <desc id="description">A conversation bubble with a context sparkle on a vivid lime rounded square.</desc>
+  <desc id="description">A compact double-C monogram with softly finished diagonal tips on a lime rounded square.</desc>
   <defs>
-    <linearGradient id="surface" x1="174" y1="112" x2="850" y2="912" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#DFFF78"/><stop offset="0.52" stop-color="#C8FF3D"/><stop offset="1" stop-color="#A8E319"/></linearGradient>
-    <linearGradient id="bubble" x1="310" y1="278" x2="714" y2="744" gradientUnits="userSpaceOnUse"><stop stop-color="#2A2C25"/><stop offset="1" stop-color="#11120F"/></linearGradient>
-    <linearGradient id="reply" x1="370" y1="410" x2="644" y2="614" gradientUnits="userSpaceOnUse"><stop stop-color="#E3FF91"/><stop offset="1" stop-color="#B7EF2D"/></linearGradient>
-    <filter id="surface-shadow" x="16" y="22" width="992" height="1000" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#283500" flood-opacity="0.22"/></filter>
-    <filter id="bubble-shadow" x="188" y="218" width="680" height="630" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#1C2500" flood-opacity="0.2"/></filter>
+    <linearGradient id="surface" x1="173" y1="153" x2="1078" y2="1105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D5F84D"/>
+      <stop offset="0.52" stop-color="#D5F74B"/>
+      <stop offset="1" stop-color="#D1F348"/>
+    </linearGradient>
+    <linearGradient id="monogram" x1="325" y1="303" x2="893" y2="957" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#242520"/>
+      <stop offset="1" stop-color="#282923"/>
+    </linearGradient>
   </defs>
-  <g filter="url(#surface-shadow)"><rect x="72" y="56" width="880" height="880" rx="218" fill="url(#surface)"/><rect x="74" y="58" width="876" height="876" rx="216" fill="none" stroke="#668D00" stroke-opacity="0.2" stroke-width="4"/></g>
-  <g filter="url(#bubble-shadow)"><rect x="232" y="184" width="530" height="510" rx="130" fill="url(#bubble)"/><path d="M292 615h206L342 798c-20 16-50 2-50-24V615Z" fill="url(#bubble)"/></g>
-  <path d="M310 291c0-31 25-56 56-56h172" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-opacity="0.12" stroke-width="18"/>
-  <g fill="none" stroke="url(#reply)" stroke-linecap="round" stroke-linejoin="round" stroke-width="54"><path d="M384 425h198c36 0 65 29 65 65s-29 65-65 65H410"/><path d="M445 362l-63 63 63 63"/></g>
-  <g fill="#FFFFFF"><path d="M742 182c5-14 25-14 30 0l14 39c2 5 6 9 11 11l39 14c14 5 14 25 0 30l-39 14c-5 2-9 6-11 11l-14 39c-5 14-25 14-30 0l-14-39c-2-5-6-9-11-11l-39-14c-14-5-14-25 0-30l39-14c5-2 9-6 11-11l14-39Z"/><circle cx="838" cy="374" r="19" opacity="0.78"/></g>
+  <!-- Traced from icon-reference.png. Keep both Cs and the small tip radii together. -->
+  <g transform="translate(-66 -85) scale(.923)">
+    <rect x="173" y="153" width="905" height="952" rx="185" fill="url(#surface)"/>
+    <g id="monogram-shape" fill="url(#monogram)">
+      <path d="M449 303H749Q778 303 799 324L891 416Q894 422 888 422H526C482 422 451 453 451 501V784C451 829 478 860 524 860H882Q886 860 886 864C882 916 838 957 783 957H448C375 957 325 907 325 833V429C325 356 375 303 449 303Z"/>
+      <path d="M605 501H773Q801 501 819 519L883 585Q888 592 881 592H659C634 592 619 607 619 633V678C619 704 631 718 657 718H830C861 718 882 731 885 751C888 774 862 798 830 798H606C560 798 530 768 530 721V580C530 533 558 501 605 501Z"/>
+    </g>
+  </g>
 </svg>
