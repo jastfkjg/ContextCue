@@ -11,8 +11,11 @@ const harness = vi.hoisted(() => ({
   window: { applicationName: "WeChat", windowTitle: "Alice", windowId: "101", processId: 99 } as FrontmostWindow,
   cursor: { x: 20, y: 20 },
   poll: undefined as undefined | (() => Promise<void>),
-  getWindow: vi.fn(), getTarget: vi.fn(), generate: vi.fn(), answer: vi.fn()
+  getWindow: vi.fn(), getCapturedWindow: vi.fn(), capture: vi.fn(), execFile: vi.fn(), getTarget: vi.fn(), generate: vi.fn(), answer: vi.fn()
 }));
+
+// Integration tests must never activate real applications on the developer's desktop.
+vi.mock("node:child_process", () => ({ execFile: (...args: any[]) => harness.execFile(...args) }));
 
 vi.mock("electron", () => {
   class Window {
@@ -60,13 +63,14 @@ vi.mock("electron-updater", () => ({ default: { autoUpdater: {} } }));
 vi.mock("../electron/services/updater", () => ({ UpdateService: class { start() {} dispose() {} } }));
 vi.mock("../electron/services/front-window", async (importOriginal) => ({
   ...await importOriginal<typeof import("../electron/services/front-window")>(),
-  getFrontmostWindow: () => harness.getWindow()
+  getFrontmostWindow: () => harness.getWindow(),
+  getCapturedWindow: (expected: FrontmostWindow) => harness.getCapturedWindow(expected)
 }));
 vi.mock("../electron/services/input-target", async (importOriginal) => ({
   ...await importOriginal<typeof import("../electron/services/input-target")>(),
-  getFocusedInputTarget: () => harness.getTarget(), writeMacInputTarget: async () => false
+  getFocusedInputTarget: (processId?: number) => harness.getTarget(processId), writeMacInputTarget: async () => false
 }));
-vi.mock("../electron/services/capture", () => ({ captureQuickSource: async () => `data:image/png;base64,${harness.window.applicationName}`, captureSource: async () => "", listCaptureSources: async () => [] }));
+vi.mock("../electron/services/capture", () => ({ captureQuickSource: (id: string) => harness.capture(id), captureSource: async () => "", listCaptureSources: async () => [] }));
 vi.mock("../electron/services/model", () => ({ generateWithModel: harness.generate, streamAnswerWithModel: harness.answer, testModelConnection: vi.fn() }));
 vi.mock("../electron/services/memory-store", async (importOriginal) => {
   const original = await importOriginal<typeof import("../electron/services/memory-store")>();
@@ -106,6 +110,9 @@ beforeEach(() => {
   harness.cursor = { x: 20, y: 20 };
   harness.generate.mockReset(); harness.answer.mockReset();
   harness.getWindow.mockReset().mockImplementation(async () => ({ ...harness.window }));
+  harness.getCapturedWindow.mockReset().mockImplementation(() => harness.getWindow());
+  harness.capture.mockReset().mockImplementation(async () => `data:image/png;base64,${harness.window.applicationName}`);
+  harness.execFile.mockReset().mockImplementation((...args: any[]) => args.at(-1)(null, "", ""));
   harness.getTarget.mockReset().mockResolvedValue(null);
   harness.answer.mockResolvedValue({ answer: "A current answer", tokenUsage: { reported: false } });
 });
@@ -652,5 +659,84 @@ describe("Ask AI entry and draft workflow", () => {
     finish({ answer: "Old draft", draft: result, tokenUsage: { reported: false } });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(harness.events.filter((item) => item.channel === "overlay:ask-event" && item.payload.requestId === "late-draft" && item.payload.type === "complete")).toEqual([]);
+  });
+
+  it.runIf(process.platform === "darwin")("refreshes the bound window without hiding the panel or activating whichever app is underneath", async () => {
+    const context = await openAsk("Source", "101");
+    const original = { ...harness.window, windowTitle: "Updated source page" };
+    const overlay = harness.windows[1];
+    overlay.hide.mockClear();
+    harness.execFile.mockClear();
+    harness.window = { applicationName: "Other app", windowTitle: "Other page", windowId: "202", processId: 202 };
+    harness.getCapturedWindow.mockResolvedValue(original);
+    harness.capture.mockClear();
+    const refreshed = await invoke("ask:refresh", context.sessionId);
+    expect(refreshed.windowTitle).toBe("Updated source page");
+    expect(harness.capture).toHaveBeenCalledExactlyOnceWith("window:101:0");
+    expect(harness.execFile).not.toHaveBeenCalled();
+    expect(overlay.hide).not.toHaveBeenCalled();
+    expect(overlay.isVisible()).toBe(true);
+  });
+
+  it("keeps the conversation usable after a refresh failure and allows immediate close", async () => {
+    const context = await openAsk("Source", "101");
+    const resets = harness.events.filter((item) => item.channel === "overlay:reset").length;
+    harness.getCapturedWindow.mockRejectedValueOnce(new Error("Could not read the original window. Try again."));
+    await expect(invoke("ask:refresh", context.sessionId)).rejects.toThrow("Could not read the original window");
+    expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resets);
+    expect(harness.windows[1].isVisible()).toBe(true);
+    expect((await invoke("ask:open")).sessionId).toBe(context.sessionId);
+    // Native activation never calls back: closing still finishes synchronously.
+    harness.execFile.mockImplementation(() => {});
+    expect(invoke("overlay:hide")).toBeUndefined();
+    expect(harness.windows[1].isVisible()).toBe(false);
+    await harness.poll!();
+    expect(harness.windows[1].isVisible()).toBe(false);
+  });
+
+  it.runIf(process.platform === "darwin")("still checks the source application's sensitive field while the panel owns focus", async () => {
+    const context = await openAsk("Source", "101");
+    harness.capture.mockClear();
+    harness.getTarget.mockResolvedValue({ sensitive: true });
+    await expect(invoke("ask:refresh", context.sessionId)).rejects.toThrow("sensitive fields");
+    expect(harness.getTarget).toHaveBeenLastCalledWith(101);
+    expect(harness.capture).not.toHaveBeenCalled();
+    expect(harness.windows[1].isVisible()).toBe(true);
+  });
+
+  it.each(["success", "failure"])("does not reopen a closed panel after a late refresh %s", async (outcome) => {
+    const context = await openAsk("", "101");
+    let finish!: () => void;
+    harness.capture.mockImplementationOnce(() => new Promise((resolve, reject) => {
+      finish = () => outcome === "success" ? resolve("data:image/png;base64,new") : reject(new Error("Capture failed"));
+    }));
+    const opened = askOpen().length;
+    const pending = invoke("ask:refresh", context.sessionId);
+    const rejected = expect(pending).rejects.toThrow(outcome === "success" ? "session has ended" : "Capture failed");
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await invoke("overlay:hide");
+    finish();
+    await rejected;
+    await harness.poll!();
+    expect(askOpen()).toHaveLength(opened);
+    expect(harness.windows[1].isVisible()).toBe(false);
+  });
+
+  it("does not reveal refreshed content over another window after focus leaves the panel", async () => {
+    const context = await openAsk("Source", "101");
+    const original = { ...harness.window };
+    let finish!: (image: string) => void;
+    harness.getCapturedWindow.mockResolvedValue(original);
+    harness.capture.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = invoke("ask:refresh", context.sessionId);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    harness.windows[1].blur();
+    harness.window = { applicationName: "Other", windowTitle: "Other", windowId: "202", processId: 202 };
+    finish("data:image/png;base64,new");
+    await pending;
+    expect(harness.windows[1].isVisible()).toBe(false);
+    harness.window = original;
+    await harness.poll!();
+    expect(harness.windows[1].isVisible()).toBe(true);
   });
 });

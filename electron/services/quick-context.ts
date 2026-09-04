@@ -1,7 +1,7 @@
 import type { InputTarget } from "../../src/shared/types";
 import type { CaptureSourceRef } from "./capture";
 import { detectChannel } from "./channel";
-import { sameFrontmostWindow, type FrontmostWindow } from "./front-window";
+import { sameFrontmostWindow, sameNativeWindow, type FrontmostWindow } from "./front-window";
 
 interface ContextDependencies {
   getWindow: () => Promise<FrontmostWindow>;
@@ -29,11 +29,19 @@ export function sourceForWindow(window: FrontmostWindow): CaptureSourceRef | und
   };
 }
 
-export async function prepareQuickContext(deps: ContextDependencies, allowWithoutScreenshot: boolean): Promise<QuickContext> {
+export async function prepareQuickContext(deps: ContextDependencies, allowWithoutScreenshot: boolean, expectedWindow?: FrontmostWindow): Promise<QuickContext> {
   const [frontmost, candidateTarget] = await Promise.all([
-    deps.getWindow().catch(() => ({ applicationName: "", windowTitle: "" } as FrontmostWindow)),
+    deps.getWindow().catch((error) => {
+      // A refresh must preserve the actual lookup failure, not turn it into an
+      // empty window and later claim that the user switched applications.
+      if (expectedWindow) throw error;
+      return { applicationName: "", windowTitle: "" } as FrontmostWindow;
+    }),
     deps.getTarget().catch(() => null)
   ]);
+  if (expectedWindow && !sameNativeWindow(expectedWindow, frontmost)) {
+    throw new Error("Return to the original window to refresh, or use your shortcut on another window.");
+  }
   if (candidateTarget?.sensitive) throw new Error("ContextCue is disabled for passwords, verification codes, and other sensitive fields.");
   const target = candidateTarget && frontmost.appId === candidateTarget.appId
     && (!frontmost.windowTitle || !candidateTarget.windowTitle || frontmost.windowTitle === candidateTarget.windowTitle)

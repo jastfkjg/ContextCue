@@ -103,14 +103,6 @@ export function OverlayApp() {
   return (
     <main className={`overlay-root ${askVisible ? "overlay-root--ask" : !payload ? `overlay-root--${status.state}` : ""}`}>
       {(askContext || payload) && <OverlayWindowControls/>}
-      <button
-        className="overlay-hover-close"
-        onClick={() => void contextCueApi.hideOverlay()}
-        aria-label={askVisible ? "Close Ask AI" : "Close suggestions"}
-        title="Close"
-      >
-        <X size={17} />
-      </button>
       {askContext && <AskPanel key={`ask-${askContext.sessionId}`} context={askContext}
         active={askVisible} onDraft={showDraft}
         contextError={expired?.sessionId === askContext.sessionId ? expired.message : undefined} onExit={exitAsk}/>}
@@ -151,6 +143,16 @@ export function OverlayApp() {
           </div>
         )
       )}
+      {/* Keep native no-drag controls after content drag regions as well as on
+          top visually. A z-index alone does not define native hit testing. */}
+      <button
+        className="overlay-hover-close"
+        onClick={() => void contextCueApi.hideOverlay()}
+        aria-label={askVisible ? "Close Ask AI" : "Close suggestions"}
+        title="Close"
+      >
+        <X size={17} aria-hidden="true" />
+      </button>
     </main>
   );
 }

@@ -22,9 +22,11 @@ interface RawMacTarget {
   size?: unknown;
 }
 
-const MAC_TARGET_SCRIPT = String.raw`
+export const MAC_TARGET_SCRIPT = String.raw`
+function run(argv) {
 const systemEvents = Application("System Events");
-const processes = systemEvents.applicationProcesses.whose({ frontmost: true })();
+const requestedPid = Number(argv[0] || 0);
+const processes = systemEvents.applicationProcesses.whose(requestedPid ? { unixId: requestedPid } : { frontmost: true })();
 if (!processes.length) throw new Error("No frontmost application");
 const process = processes[0];
 function attribute(element, name) {
@@ -42,8 +44,11 @@ if (!focused) throw new Error("No focused control");
 let appId = "";
 let windowTitle = "";
 try { appId = text(process.bundleIdentifier()); } catch (_) {}
-try { windowTitle = process.windows.length ? text(process.windows[0].name()) : ""; } catch (_) {}
-JSON.stringify({
+try {
+  const window = attribute(focused, "AXWindow") || attribute(process, "AXFocusedWindow");
+  windowTitle = window ? text(attribute(window, "AXTitle")) : process.windows.length ? text(process.windows[0].name()) : "";
+} catch (_) {}
+return JSON.stringify({
   appId,
   applicationName: text(process.name()),
   windowTitle,
@@ -58,6 +63,7 @@ JSON.stringify({
   position: attribute(focused, "AXPosition"),
   size: attribute(focused, "AXSize")
 });
+}
 `;
 
 function stringValue(value: unknown): string {
@@ -114,10 +120,11 @@ export function normalizeMacInputTarget(raw: RawMacTarget): InputTarget | null {
   };
 }
 
-export async function getFocusedInputTarget(): Promise<InputTarget | null> {
+export async function getFocusedInputTarget(processId?: number): Promise<InputTarget | null> {
   if (process.platform !== "darwin") return null;
+  if (processId !== undefined && (!Number.isInteger(processId) || processId <= 0)) return null;
   try {
-    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_TARGET_SCRIPT], { timeout: 1500 });
+    const { stdout } = await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_TARGET_SCRIPT, "--", String(processId ?? 0)], { timeout: 1500 });
     return normalizeMacInputTarget(JSON.parse(stdout.trim()) as RawMacTarget);
   } catch {
     return null;

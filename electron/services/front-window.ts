@@ -19,6 +19,7 @@ ObjC.import("AppKit");
 ObjC.import("CoreGraphics");
 function run(argv) {
   const excludedPid = Number(argv[0]);
+  const requestedId = argv[1] || "";
   const front = $.NSWorkspace.sharedWorkspace.frontmostApplication;
   const pid = Number(front.processIdentifier);
   const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1 | 16, 0)));
@@ -29,7 +30,9 @@ function run(argv) {
   });
   // A tray/main-window invocation can leave ContextCue as the active process.
   // Find the frontmost external window without hiding our own fullscreen window.
-  const window = windows.find(function(w) { return pid === excludedPid || w.kCGWindowOwnerPID === pid; });
+  const window = windows.find(function(w) {
+    return requestedId ? String(w.kCGWindowNumber) === requestedId : pid === excludedPid || w.kCGWindowOwnerPID === pid;
+  });
   if (!window) return JSON.stringify({ applicationName: ObjC.unwrap(front.localizedName) || "", windowTitle: "" });
   const owner = $.NSRunningApplication.runningApplicationWithProcessIdentifier(window.kCGWindowOwnerPID);
   const b = window.kCGWindowBounds;
@@ -103,6 +106,23 @@ export async function getFrontmostWindow(excludedPid = process.pid): Promise<Fro
     console.warn("[window] native foreground lookup failed", (error as NodeJS.ErrnoException).code ?? "unavailable");
   }
   return { applicationName: "", windowTitle: "" };
+}
+
+// macOS can capture a specific window without activating its application (which
+// can select a different window or Space). Never fall back to another window.
+export async function getCapturedWindow(expected: FrontmostWindow, excludedPid = process.pid): Promise<FrontmostWindow> {
+  if (!expected.windowId || !/^[1-9]\d*$/.test(expected.windowId)) {
+    throw new Error("No original window is available. Use your shortcut on the page you want to capture.");
+  }
+  const current = process.platform === "darwin"
+    ? await execFileAsync("/usr/bin/osascript", ["-l", "JavaScript", "-e", MAC_FRONT_WINDOW_SCRIPT, "--", String(excludedPid), expected.windowId], { timeout: 2000 })
+      .then(({ stdout }) => normalizeFrontmostWindow(JSON.parse(stdout), excludedPid))
+      .catch(() => { throw new Error("Could not read the original window. Try again, or use your shortcut on that window."); })
+    : await getFrontmostWindow(excludedPid);
+  if (!sameNativeWindow(expected, current)) {
+    throw new Error("The original window is unavailable. Return to the original window and try again, or use your shortcut on another window.");
+  }
+  return current;
 }
 
 export function sameNativeWindow(expected: FrontmostWindow, current: FrontmostWindow): boolean {

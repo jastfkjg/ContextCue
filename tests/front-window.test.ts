@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { normalizeFrontmostWindow, sameFrontmostWindow, sameNativeWindow } from "../electron/services/front-window";
+import { runInNewContext } from "node:vm";
+import { MAC_FRONT_WINDOW_SCRIPT, normalizeFrontmostWindow, sameFrontmostWindow, sameNativeWindow } from "../electron/services/front-window";
 import { sourceForWindow } from "../electron/services/quick-context";
 
 describe("native foreground window identity", () => {
@@ -26,5 +27,31 @@ describe("native foreground window identity", () => {
     expect(sameNativeWindow(front, { ...front, processId: 42 })).toBe(false);
     expect(sameFrontmostWindow(front, { applicationName: "", windowTitle: "" })).toBe(false);
     expect(sameFrontmostWindow({ ...front, windowTitle: "" }, { ...front, windowTitle: "" })).toBe(true);
+  });
+});
+
+describe("macOS window-ID lookup script", () => {
+  function lookup(requestedId = "") {
+    const record = (id: number, pid: number) => ({
+      kCGWindowNumber: id, kCGWindowOwnerPID: pid, kCGWindowOwnerName: `App ${pid}`,
+      kCGWindowName: "Same title", kCGWindowLayer: 0, kCGWindowAlpha: 1,
+      kCGWindowBounds: { X: 0, Y: 0, Width: 420, Height: 340 }
+    });
+    const native = {
+      NSWorkspace: { sharedWorkspace: { frontmostApplication: { processIdentifier: 202, localizedName: "Other app" } } },
+      CGWindowListCopyWindowInfo: () => [record(999, 999), record(202, 202), record(101, 101)],
+      NSRunningApplication: { runningApplicationWithProcessIdentifier: (pid: number) => ({ bundleIdentifier: `app.${pid}` }) }
+    };
+    return JSON.parse(runInNewContext(`${MAC_FRONT_WINDOW_SCRIPT}\nrun(["999", ${JSON.stringify(requestedId)}]);`, {
+      $: native, ObjC: { import() {}, unwrap: (value: unknown) => value, deepUnwrap: (value: unknown) => value, castRefToObject: (value: unknown) => value }
+    }));
+  }
+  it("selects the original background window even when another same-title window is in front", () => {
+    expect(lookup("101")).toMatchObject({ windowId: "101", processId: 101, appId: "app.101" });
+    expect(lookup()).toMatchObject({ windowId: "202", processId: 202 });
+  });
+  it("never substitutes a foreground window for a missing or excluded ID", () => {
+    expect(lookup("303").windowId).toBeUndefined();
+    expect(lookup("999").windowId).toBeUndefined();
   });
 });

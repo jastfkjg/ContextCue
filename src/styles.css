@@ -447,7 +447,7 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 /* Floating overlay */
 .overlay-root { height: 100vh; overflow: hidden; border: 1px solid rgb(207 208 201 / 82%); border-radius: 20px; background: rgb(248 248 244 / 95%); backdrop-filter: blur(22px) saturate(1.08); -electron-corner-smoothing: system-ui; }
 .overlay-root--loading { border-color: transparent; background: linear-gradient(rgb(248 248 244 / 97%), rgb(248 248 244 / 97%)) padding-box, linear-gradient(105deg, #eef8d3 4%, #c9e887 32%, #efffd1 54%, #b9db6b 76%, #eef8d3 96%) border-box; background-size: auto, 220% 100%; animation: processing-border 2.8s linear infinite; }
-.overlay-hover-close { position: fixed; z-index: 6; top: 10px; right: 10px; width: 29px; height: 29px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #6f716a; background: rgb(215 216 211 / 88%); opacity: 0; pointer-events: none; transform: scale(.88); transition: opacity .16s ease, color .16s ease, background .16s ease, transform .16s ease; }
+.overlay-hover-close { position: fixed; z-index: 10; top: 10px; right: 10px; width: 29px; height: 29px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #6f716a; background: rgb(215 216 211 / 88%); opacity: 0; pointer-events: none; transform: scale(.88); transition: opacity .16s ease, color .16s ease, background .16s ease, transform .16s ease; }
 .overlay-root:hover .overlay-hover-close, .overlay-hover-close:focus-visible { opacity: 1; pointer-events: auto; transform: scale(1); }
 .overlay-hover-close:hover { color: #3d3f39; background: #ced0ca; }
 .overlay-resize-edge { position: fixed; z-index: 8; touch-action: none; user-select: none; }
@@ -504,13 +504,14 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 .overlay-root--ask .overlay-hover-close { top: 11px; right: 11px; opacity: 1; pointer-events: auto; transform: none; background: transparent; }
 .overlay-root--ask .overlay-hover-close:hover, .overlay-root--ask .overlay-hover-close:focus-visible { background: #e9ece2; color: #323a2a; }
 .ask-panel { height: 100%; display: grid; grid-template-rows: 52px minmax(0, 1fr) auto; animation: ask-enter .18s ease-out; }
-.ask-header { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 10px 50px 10px 12px; border-bottom: 1px solid #e4e6dd; cursor: grab; user-select: none; }
-.ask-header:active { cursor: grabbing; }
+.ask-header { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 10px 50px 10px 12px; border-bottom: 1px solid #e4e6dd; user-select: none; }
 .ask-back, .ask-mark { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; }
 .ask-back { padding: 0; border: 0; color: #606958; background: transparent; }
 .ask-back:hover { color: #2d3525; background: #e9ece2; }
 .ask-mark { color: #6b8535; }
-.ask-heading { min-width: 0; flex: 0 0 auto; }
+.ask-heading { min-width: max-content; flex: 1 0 auto; align-self: stretch; display: flex; align-items: center; }
+.ask-heading, .ask-mark { cursor: grab; }
+.ask-heading:active, .ask-mark:active { cursor: grabbing; }
 .ask-heading strong { color: #30362a; font-size: 14px; font-weight: 650; letter-spacing: -.02em; }
 .ask-context-chip { min-width: 0; max-width: 150px; height: 28px; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid transparent; border-radius: 7px; color: #717869; background: #eeefe9; font-size: 11px; }
 .ask-context-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -715,11 +716,11 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 
 /* Native window dragging: the OS owns pointer tracking, including display / Space changes.
    Interactive controls and our custom resize edges must remain outside the drag region. */
-.ask-header, .candidate-drag-handle, .overlay-processing, .overlay-empty--error {
+.ask-heading, .ask-mark, .candidate-drag-handle, .overlay-processing, .overlay-empty--error {
   -webkit-app-region: drag;
   user-select: none;
 }
-.overlay-root button, .overlay-root input, .overlay-root textarea,
+.ask-header, .overlay-root button, .overlay-root input, .overlay-root textarea,
 .overlay-resize-edge { -webkit-app-region: no-drag; }
 
 /* Screen access is a utility section, with diagnostics disclosed on demand. */

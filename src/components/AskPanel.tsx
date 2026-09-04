@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
 import type { AskOverlayContext, OverlayResult } from "../shared/types";
 import { contextCueApi } from "../lib/api";
+import { errorMessage } from "../lib/error-message";
 import { MarkdownContent } from "./MarkdownContent";
 
 const ASK_INPUT_MIN_HEIGHT = 44;
@@ -127,7 +128,12 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
   };
 
   const stop = () => {
-    if (activeRequest.current) contextCueApi.cancelAsk(activeRequest.current);
+    if (!activeRequest.current) return;
+    contextCueApi.cancelAsk(activeRequest.current);
+    // Cancellation can finish without a stream event (e.g. during a refresh).
+    // Release the composer immediately and ignore any late result for this turn.
+    activeRequest.current = null;
+    setTurns((current) => current.map((turn) => turn.status === "streaming" ? { ...turn, status: "stopped" } : turn));
   };
 
   const copyAnswer = async (turn: AskTurn) => {
@@ -142,7 +148,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     setRefreshing(true);
     setLocalError("");
     try { await contextCueApi.refreshAsk(context.sessionId); }
-    catch (error) { setLocalError(error instanceof Error ? error.message : String(error)); }
+    catch (error) { setLocalError(`${errorMessage(error)} Your conversation has been kept.`); }
     finally { setRefreshing(false); }
   };
 
@@ -254,7 +260,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
           <button
             className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
             onClick={streaming ? stop : () => submit()}
-            disabled={Boolean(contextError) || (!streaming && !question.trim())}
+            disabled={refreshing || Boolean(contextError) || (!streaming && !question.trim())}
             aria-label={streaming ? "Stop answering" : "Send question"}
             title={streaming ? "Stop" : "Send · Enter"}
           >

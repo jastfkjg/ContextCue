@@ -53,7 +53,7 @@ import electronUpdater from "electron-updater";
 import { UpdateService } from "./services/updater";
 import { downloadInstaller, macInstallerAsset, verifyInstaller } from "./services/installer-download";
 import type { AppUpdateState } from "../src/shared/types";
-import { getFrontmostWindow, sameFrontmostWindow, sameNativeWindow, type FrontmostWindow } from "./services/front-window";
+import { getCapturedWindow, getFrontmostWindow, sameFrontmostWindow, sameNativeWindow, type FrontmostWindow } from "./services/front-window";
 import { prepareQuickContext } from "./services/quick-context";
 import { testWindowCapture } from "./services/capture-diagnostics";
 import { prepareQuickWindows } from "./services/quick-windows";
@@ -313,7 +313,7 @@ function bindQuickOverlayContext(frontmost: FrontmostWindow): void {
   quickOverlayHiddenForContext = false;
 }
 
-async function prepareCurrentWindow(allowWithoutScreenshot: boolean, expectedWindow?: FrontmostWindow) {
+async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
   // Clear the old overlay before capture, preserving the main window's Space.
   await prepareQuickWindows({
     platform: process.platform,
@@ -325,14 +325,29 @@ async function prepareCurrentWindow(allowWithoutScreenshot: boolean, expectedWin
     }
   });
   return prepareQuickContext({
-    getWindow: async () => {
-      const current = await getFrontmostWindow();
-      if (expectedWindow && !sameNativeWindow(expectedWindow, current)) throw new Error("Return to the original window to refresh.");
-      return current;
-    },
+    getWindow: getFrontmostWindow,
     getTarget: getFocusedInputTarget,
     capture: captureQuickSource
   }, allowWithoutScreenshot);
+}
+
+async function prepareRefreshedWindow(expected: FrontmostWindow) {
+  // Window-ID capture on macOS excludes our panel. Keep it visible and clickable
+  // throughout the refresh, and avoid changing the foreground app / Space.
+  if (process.platform !== "darwin") {
+    await prepareQuickWindows({ platform: process.platform, main: mainWindow, overlay: overlayWindow, activateExternal: async () => {} });
+  }
+  return prepareQuickContext({
+    getWindow: () => getCapturedWindow(expected),
+    getTarget: async () => {
+      // Read the source process even while our composer owns focus, preserving
+      // sensitive-field checks and insertion targets without activating it.
+      if (process.platform === "darwin") return expected.processId ? getFocusedInputTarget(expected.processId) : null;
+      const current = await getFrontmostWindow();
+      return sameNativeWindow(expected, current) ? getFocusedInputTarget() : null;
+    },
+    capture: captureQuickSource
+  }, false, expected);
 }
 
 function cancelAskInFlight(requestId?: string): void {
@@ -581,10 +596,12 @@ async function refreshAsk(sessionId: string): Promise<AskOverlayContext> {
   cancelAskInFlight();
   cancelRevisionInFlight();
   try {
-    const context = await prepareCurrentWindow(true, previous.frontmost);
+    const context = await prepareRefreshedWindow(previous.frontmost);
     if (quickOverlaySession !== previous || invocation !== quickInvocation) throw new Error("This session has ended.");
-    if (!sameNativeWindow(previous.frontmost, context.frontmost)) throw new Error("Return to the original window to refresh, or use your shortcut on another window.");
     if (!context.screenshot) throw new Error(context.contextUnavailableReason || "Could not refresh the screenshot.");
+    const current = overlayWindow?.isFocused() ? null : await getFrontmostWindow();
+    if (quickOverlaySession !== previous || invocation !== quickInvocation) throw new Error("This session has ended.");
+    const reveal = Boolean(overlayWindow?.isFocused() || (current && sameNativeWindow(context.frontmost, current)));
     const session = createPageSession(context);
     clearQuickReplySession();
     quickOverlayActive = true;
@@ -593,12 +610,17 @@ async function refreshAsk(sessionId: string): Promise<AskOverlayContext> {
     quickInputTarget = context.target;
     quickReplyTargetApplication = context.frontmost.applicationName;
     bindQuickOverlayContext(context.frontmost);
-    return showAskOverlay(session);
+    if (reveal) return showAskOverlay(session);
+    const next = askContextForSession(session);
+    sendToOverlay("overlay:ask-open", next);
+    suspendQuickOverlay();
+    return next;
   } catch (error) {
     if (quickOverlaySession === previous && invocation === quickInvocation) {
       // Preserve all local drafts and answers. Only show over the source window.
-      const current = await getFrontmostWindow().catch(() => null);
-      if (quickOverlaySession === previous && current && sameNativeWindow(previous.frontmost, current)) {
+      const current = overlayWindow?.isFocused() ? null : await getFrontmostWindow().catch(() => null);
+      if (quickOverlaySession === previous && invocation === quickInvocation
+        && (overlayWindow?.isFocused() || (current && sameNativeWindow(previous.frontmost, current)))) {
         quickOverlayHiddenForContext = false;
         overlayWindow?.show();
         overlayWindow?.focus();
@@ -769,16 +791,15 @@ async function activateApplication(applicationName: string): Promise<void> {
   await execFileAsync("xdotool", ["search", "--name", applicationName, "windowactivate"]);
 }
 
-async function hideQuickOverlay(): Promise<void> {
-  overlayWindow?.hide();
-  if (!quickOverlayActive) return;
-  const target = quickReplyTargetApplication;
+function hideQuickOverlay(): void {
+  const target = quickOverlayActive ? quickReplyTargetApplication : "";
+  // Revoke pending capture / show work before changing native focus. Closing is
+  // immediate and must not wait for an external application's activation.
   clearQuickReplySession();
-  try {
-    await activateApplication(target);
-  } catch (error) {
+  overlayWindow?.hide();
+  void activateApplication(target).catch((error) => {
     console.warn("[quick-reply] could not restore the originating application", error);
-  }
+  });
 }
 
 async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: boolean; error?: string }> {

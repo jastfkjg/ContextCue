@@ -68,4 +68,24 @@ describe("quick suggestions and Ask AI page preparation", () => {
     deps.getWindow.mockResolvedValueOnce(front).mockResolvedValueOnce({ ...front, windowTitle: "Other tab" });
     await expect(prepareQuickContext(deps, true)).rejects.toThrow("changed");
   });
+
+  it("preserves lookup errors during refresh instead of reporting a window mismatch", async () => {
+    const deps = fixture();
+    deps.getWindow.mockRejectedValue(new Error("Native lookup timed out. Try again."));
+    await expect(prepareQuickContext(deps, false, front)).rejects.toThrow("Native lookup timed out");
+    expect(deps.capture).not.toHaveBeenCalled();
+  });
+
+  it("never captures a replacement window during refresh", async () => {
+    const deps = fixture();
+    deps.getWindow.mockResolvedValue({ ...front, windowId: "9999" });
+    await expect(prepareQuickContext(deps, false, front)).rejects.toThrow("original window");
+    expect(deps.capture).not.toHaveBeenCalled();
+  });
+
+  it("allows a new page title in the original window at the start of refresh", async () => {
+    const deps = fixture();
+    deps.getWindow.mockResolvedValue({ ...front, windowTitle: "New page" });
+    expect(await prepareQuickContext(deps, false, front)).toMatchObject({ frontmost: { windowTitle: "New page" }, screenshot: "data:image/jpeg;base64,snapshot" });
+  });
 });
