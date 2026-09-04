@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, Copy, CornerDownLeft, PencilLine, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, ChevronUp, Copy, CornerDownLeft, PencilLine, RotateCcw, Sparkles, Square } from "lucide-react";
 import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { candidateRevisionReducer, createCandidateRevisionState, visibleCandidates } from "../lib/candidate-revision";
@@ -44,6 +44,7 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
   const shell = useRef<HTMLElement | null>(null);
   const stage = useRef<HTMLDivElement | null>(null);
   const content = useRef<HTMLDivElement | null>(null);
+  const composer = useRef<HTMLFormElement | null>(null);
   const measurementKey = `${selection.group}-${index}-${composerOpen}-${candidateText}`;
   const lastMeasurement = useRef("");
 
@@ -85,10 +86,12 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
       const padding = Number.parseFloat(getComputedStyle(shell.current).paddingTop) || 0;
       const actions = shell.current.querySelector<HTMLElement>(".candidate-actions")?.offsetHeight ?? 0;
       const note = shell.current.querySelector<HTMLElement>(".candidate-feedback")?.offsetHeight ?? 0;
-      onHeightChange(Math.ceil(padding + node.offsetHeight + actions + note + 2), reset, composerOpen);
+      const revisionHeight = composer.current ? composer.current.offsetHeight + 14 : 0;
+      onHeightChange(Math.ceil(padding + node.offsetHeight + revisionHeight + actions + note + 2), reset, composerOpen);
     };
     const observer = new ResizeObserver(() => measure());
     observer.observe(node);
+    if (composer.current) observer.observe(composer.current);
     const note = shell.current.querySelector(".candidate-feedback");
     if (note) observer.observe(note);
     measure(newCandidate);
@@ -98,12 +101,8 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
   useEffect(() => {
     if (!composerOpen || !active) return;
     instructionField.current?.focus({ preventScroll: true });
-    // Wait for the native content-fit resize before revealing the input. Only
-    // scroll on opening, never when another candidate arrives in the stream.
-    let frame = window.requestAnimationFrame(() => {
-      frame = window.requestAnimationFrame(() => instructionField.current?.scrollIntoView({ block: "nearest" }));
-    });
-    return () => window.cancelAnimationFrame(frame);
+    // The composer has its own scroll area. Focusing it must never scroll the
+    // selected suggestion out of view or move controls beneath the window close.
   }, [composerOpen, active]);
 
   const move = (next: number) => {
@@ -262,72 +261,75 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
           <span>{index + 1} / {candidates.length}</span>
         </div>
       )}
-      <div
-        ref={stage}
-        className="candidate-stage"
-        tabIndex={compact ? 0 : undefined}
-        role={compact ? "region" : undefined}
-        aria-label={compact ? `Suggestion ${index + 1} of ${candidates.length}` : undefined}
-        onWheel={handleTrackpadSwipe}
-        onPointerDown={(event) => {
-          if (compact) return;
-          pointerStart.current = event.clientX;
-        }}
-        onPointerUp={(event) => {
-          if (compact) return;
-          if (pointerStart.current === null) return;
-          const delta = event.clientX - pointerStart.current;
-          if (Math.abs(delta) > 48) move(index + (delta < 0 ? 1 : -1));
-          pointerStart.current = null;
-        }}
-        onPointerCancel={(event) => {
-          if (compact) return;
-          pointerStart.current = null;
-        }}
-      >
-        <div ref={content} className="candidate-content">
-          <motion.div
-            key={`${selection.group}-${index}-${candidateText}`}
-            initial={reduceMotion ? false : { opacity: 0, x: direction * 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.14 }}
-            className="candidate-copy"
-          >
-            <p>{candidateText}</p>
-            {!compact && <span className="tone-label">{candidate.tone}</span>}
-          </motion.div>
-          {selection.revised && <div className="revision-group-switch">
-            <button type="button" disabled={revising || applying} onClick={() => {
-              dispatch({ type: "group", group: selection.group === "revised" ? "original" : "revised" });
-              setStatus("idle"); setFeedback("");
-            }}><RotateCcw size={12}/>{selection.group === "revised" ? "Back to original suggestions" : "Show revised suggestions"}</button>
-          </div>}
-          {composerOpen && <form className="revision-composer" aria-label="Revise suggestion" aria-busy={revising}
-            onSubmit={(event) => { event.preventDefault(); void revise(); }}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return;
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void revise(); }
-            }}>
-            <div className="revision-label-row">
-              <label htmlFor="revision-instruction">How should this change?</label>
-              <button type="button" className="revision-dismiss" aria-label="Close revision instructions" onClick={closeComposer}><X size={14}/></button>
-            </div>
-            <textarea ref={instructionField} id="revision-instruction" rows={2} value={instruction} maxLength={2_000}
-              readOnly={revising} onChange={(event) => setInstruction(event.target.value)} placeholder="e.g. More casual, and mention I’m free on Friday…"/>
-            <div className="revision-presets">{[["Shorter", "Make it shorter"], ["Warmer", "Make it warmer"], ["More direct", "Be more direct"]].map(([label, text]) => {
-              const nextInstruction = instruction.trim() ? `${instruction.trimEnd()}\n${text}` : text;
-              return <button key={text} type="button" disabled={revising || Boolean(contextError) || nextInstruction.length > 2_000} onClick={() => { setInstruction(nextInstruction); instructionField.current?.focus(); }}>{label}</button>;
-            })}</div>
-            <div className="revision-submit-row">
-              <span className="revision-progress" role="status">{revising ? <><span className="spinner spinner--dark" aria-hidden="true"/>{selection.pending?.received ? `${selection.pending.received} ready · generating more…` : "Revising this suggestion…"}</> : "⌘ / Ctrl + Enter to revise"}</span>
-              <button type={revising ? "button" : "submit"} className={`button ${revising ? "button--quiet" : "button--primary"}`}
-                disabled={!revising && (Boolean(contextError) || !instruction.trim())}
-                onClick={(event) => { if (revising) { event.preventDefault(); stopRevision(); } }}>
-                {revising ? <><Square size={12}/> Stop</> : <><PencilLine size={14} aria-hidden="true"/> Revise</>}
-              </button>
-            </div>
-          </form>}
+      <div className={`candidate-body ${composerOpen ? "candidate-body--revising" : ""}`}>
+        <div
+          ref={stage}
+          className="candidate-stage"
+          tabIndex={compact ? 0 : undefined}
+          role={compact ? "region" : undefined}
+          aria-label={compact ? `Suggestion ${index + 1} of ${candidates.length}` : undefined}
+          onWheel={handleTrackpadSwipe}
+          onPointerDown={(event) => {
+            if (compact) return;
+            pointerStart.current = event.clientX;
+          }}
+          onPointerUp={(event) => {
+            if (compact) return;
+            if (pointerStart.current === null) return;
+            const delta = event.clientX - pointerStart.current;
+            if (Math.abs(delta) > 48) move(index + (delta < 0 ? 1 : -1));
+            pointerStart.current = null;
+          }}
+          onPointerCancel={(event) => {
+            if (compact) return;
+            pointerStart.current = null;
+          }}
+        >
+          <div ref={content} className="candidate-content">
+            {composerOpen && <div className="revision-source-label">Current suggestion</div>}
+            <motion.div
+              key={`${selection.group}-${index}-${candidateText}`}
+              initial={reduceMotion ? false : { opacity: 0, x: direction * 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.14 }}
+              className="candidate-copy"
+            >
+              <p>{candidateText}</p>
+              {!compact && <span className="tone-label">{candidate.tone}</span>}
+            </motion.div>
+            {selection.revised && <div className="revision-group-switch">
+              <button type="button" disabled={revising || applying} onClick={() => {
+                dispatch({ type: "group", group: selection.group === "revised" ? "original" : "revised" });
+                setStatus("idle"); setFeedback("");
+              }}><RotateCcw size={12}/>{selection.group === "revised" ? "Back to original suggestions" : "Show revised suggestions"}</button>
+            </div>}
+          </div>
         </div>
+        {composerOpen && <div className="revision-pane"><form ref={composer} className="revision-composer" aria-label="Revise suggestion" aria-busy={revising}
+          onSubmit={(event) => { event.preventDefault(); void revise(); }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void revise(); }
+          }}>
+          <div className="revision-label-row">
+            <label htmlFor="revision-instruction">How should this change?</label>
+            <button type="button" className="revision-dismiss" aria-label="Collapse revision instructions" onClick={closeComposer}><ChevronUp size={13} aria-hidden="true"/><span>Collapse</span></button>
+          </div>
+          <textarea ref={instructionField} id="revision-instruction" rows={2} value={instruction} maxLength={2_000}
+            readOnly={revising} onChange={(event) => setInstruction(event.target.value)} placeholder="e.g. More casual, and mention I’m free on Friday…"/>
+          <div className="revision-presets">{[["Shorter", "Make it shorter"], ["Warmer", "Make it warmer"], ["More direct", "Be more direct"]].map(([label, text]) => {
+            const nextInstruction = instruction.trim() ? `${instruction.trimEnd()}\n${text}` : text;
+            return <button key={text} type="button" disabled={revising || Boolean(contextError) || nextInstruction.length > 2_000} onClick={() => { setInstruction(nextInstruction); instructionField.current?.focus(); }}>{label}</button>;
+          })}</div>
+          <div className="revision-submit-row">
+            <span className="revision-progress" role="status">{revising ? <><span className="spinner spinner--dark" aria-hidden="true"/>{selection.pending?.received ? `${selection.pending.received} ready · generating more…` : "Revising this suggestion…"}</> : "⌘ / Ctrl + Enter to revise"}</span>
+            <button type={revising ? "button" : "submit"} className={`button ${revising ? "button--quiet" : "button--primary"}`}
+              disabled={!revising && (Boolean(contextError) || !instruction.trim())}
+              onClick={(event) => { if (revising) { event.preventDefault(); stopRevision(); } }}>
+              {revising ? <><Square size={12}/> Stop</> : <><PencilLine size={14} aria-hidden="true"/> Revise</>}
+            </button>
+          </div>
+        </form></div>}
       </div>
       {!compact && dots}
       <div className="candidate-actions">

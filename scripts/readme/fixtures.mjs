@@ -25,9 +25,9 @@ export const examples = {
     footer: "Fictional conversation · Actual ContextCue interface",
     label: "ContextCue · writing suggestions", askLabel: "ContextCue · Ask AI",
     scenes: {
-      reply: { eyebrow: "01 / WRITE IN CONTEXT", title: "The right words. Right here.", subtitle: "Turn the conversation on your screen into a reply you can use.", tip: "Choose a reply. Copy it when you’re ready.", shortcut: "⌘ ⇧ Space" },
-      revise: { eyebrow: "02 / MAKE IT YOURS", title: "A little shorter. A little warmer.", subtitle: "Tell ContextCue what to change, without starting over.", tip: "One instruction → multiple alternatives", shortcut: "⌘ / Ctrl + Enter" },
-      ask: { eyebrow: "03 / ASK ABOUT THIS PAGE", title: "From conversation to clarity.", subtitle: "Ask a question using the page you already have open.", tip: "Page context is optional. You control what’s included.", shortcut: "⌘ ⇧ Enter" }
+      reply: { eyebrow: "02 / WRITE IN CONTEXT", title: "The right words. Right here.", subtitle: "Turn the conversation on your screen into a reply you can use.", tip: "Choose a reply. Copy it when you’re ready.", shortcut: "⌘ ⇧ Enter" },
+      revise: { eyebrow: "03 / MAKE IT YOURS", title: "A little shorter. A little warmer.", subtitle: "Tell ContextCue what to change, without starting over.", tip: "One instruction → multiple alternatives", shortcut: "⌘ / Ctrl + Enter" },
+      ask: { eyebrow: "01 / ASK ABOUT THIS PAGE", title: "From conversation to clarity.", subtitle: "Ask a question using the page you already have open.", tip: "Page context is optional. You control what’s included.", shortcut: "⌘ ⇧ Space" }
     }
   },
   "zh-CN": {
@@ -55,9 +55,9 @@ export const examples = {
     footer: "虚构示例对话 · ContextCue 真实界面",
     label: "ContextCue · 写作建议", askLabel: "ContextCue · 页面问答",
     scenes: {
-      reply: { eyebrow: "01 / 看懂上下文", title: "想说的话，就在当前窗口。", subtitle: "根据屏幕上的对话，给你几种合适的回复。", tip: "挑一条合适的，确认后再复制使用。", shortcut: "⌘ ⇧ Space" },
-      revise: { eyebrow: "02 / 调整成你的语气", title: "短一点，亲切一点。", subtitle: "直接说出修改要求，不必从头再写。", tip: "一句修改要求，生成多个新候选", shortcut: "⌘ / Ctrl + Enter" },
-      ask: { eyebrow: "03 / 直接问当前页面", title: "从一段对话，到清晰的下一步。", subtitle: "不用搬运上下文，就能针对当前页面提问。", tip: "可随时关闭页面上下文，由你决定是否使用。", shortcut: "⌘ ⇧ Enter" }
+      reply: { eyebrow: "02 / 就地写作", title: "想说的话，就在当前窗口。", subtitle: "根据屏幕上的对话，给你几种合适的回复。", tip: "挑一条合适的，确认后再复制使用。", shortcut: "⌘ ⇧ Enter" },
+      revise: { eyebrow: "03 / 调整成你的语气", title: "短一点，亲切一点。", subtitle: "直接说出修改要求，不必从头再写。", tip: "一句修改要求，生成多个新候选", shortcut: "⌘ / Ctrl + Enter" },
+      ask: { eyebrow: "01 / 直接问当前页面", title: "从一段对话，到清晰的下一步。", subtitle: "不用搬运上下文，就能针对当前页面提问。", tip: "可随时关闭页面上下文，由你决定是否使用。", shortcut: "⌘ ⇧ Space" }
     }
   }
 };

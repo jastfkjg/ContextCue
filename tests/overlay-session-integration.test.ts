@@ -82,7 +82,7 @@ const result: GenerationResult = { candidates: [{ text: "Current draft", tone: "
 const latest = <T>(channel: string): T => harness.events.filter((event) => event.channel === channel).at(-1)!.payload;
 const event = () => ({ sender: harness.windows[1].webContents });
 const invoke = (channel: string, payload?: unknown) => harness.handlers.get(channel)!(event(), payload);
-const shortcut = (ask: boolean) => harness.shortcuts.get(ask ? "CommandOrControl+Shift+Enter" : "CommandOrControl+Shift+Space")!();
+const shortcut = (ask: boolean) => harness.shortcuts.get(ask ? "CommandOrControl+Shift+Space" : "CommandOrControl+Shift+Enter")!();
 const askOpen = () => harness.events.filter((item) => item.channel === "overlay:ask-open");
 
 async function openAsk(applicationName: string, windowId: string) {
@@ -269,7 +269,7 @@ describe("overlay clicks during asynchronous context checks", () => {
     expect(overlay.isVisible()).toBe(true);
     expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
     await expect(reviseCurrent()).rejects.toThrow("expired");
-    await expect(invoke("ask:open")).rejects.toThrow("expired");
+    expect(await invoke("ask:open")).toMatchObject({ hasPageContext: false });
   });
 
   it("does not resurrect a manually closed panel when returning to its source window", async () => {
@@ -578,5 +578,79 @@ describe("Electron overlay session boundaries", () => {
     expect(harness.generate.mock.calls[1][2]).toMatchObject({ contextPolicy: "page-only", revision: { text: "Edited draft", instruction: "Shorter" } });
     await openAsk("Different browser", "303");
     await expect(invoke("assist:revise", { sessionId: suggestion.sessionId, requestId: crypto.randomUUID(), text: "Old draft", instruction: "Shorter" })).rejects.toThrow("expired");
+  });
+});
+
+describe("Ask AI entry and draft workflow", () => {
+  it("opens Ask AI from the primary shortcut without generating unsolicited drafts", async () => {
+    await openAsk("WeChat", "101");
+    expect(harness.generate).not.toHaveBeenCalled();
+    expect(harness.answer).not.toHaveBeenCalled();
+  });
+
+  it("turns a writing request into revisable drafts with the original target", async () => {
+    const context = await openAsk("WeChat", "101");
+    harness.answer.mockResolvedValue({ answer: "Current draft", draft: result, tokenUsage: { reported: false } });
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "draft", question: "Draft a reply declining", includeContext: true });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event").draft?.candidates).toEqual(result.candidates));
+    await invoke("ask:show-draft", context.sessionId);
+    harness.generate.mockResolvedValue(result);
+    await invoke("assist:revise", { sessionId: context.sessionId, requestId: "revise-draft", text: "Current draft", instruction: "Shorter" });
+    expect(harness.generate.mock.calls[0][3]).toContain("WeChat");
+    const back = await invoke("ask:open");
+    expect(back.sessionId).toBe(context.sessionId);
+    expect(back.canReturnToSuggestions).toBe(true);
+  });
+
+  it("does not reattach the screenshot or metadata when revising a page-off draft", async () => {
+    const context = await openAsk("WeChat", "101");
+    harness.answer.mockResolvedValue({ answer: "Current draft", draft: result, tokenUsage: { reported: false } });
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "off-draft", question: "Write a greeting", includeContext: false });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event").requestId).toBe("off-draft"));
+    harness.generate.mockResolvedValue(result);
+    await invoke("assist:revise", { sessionId: context.sessionId, requestId: "off-revise", text: "Hello", instruction: "Warmer" });
+    const call = harness.generate.mock.calls[0];
+    expect(call[3]).toBe("");
+    expect(call[2]).toMatchObject({ contextPolicy: "page-only", withoutPageContext: true });
+    expect(call[2].target).toBeUndefined();
+    expect(call[2].pageContext).toBeUndefined();
+  });
+
+  it("refreshes a changed title in the original window into an empty session", async () => {
+    const context = await openAsk("WeChat", "101");
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "before-refresh", question: "Explain", includeContext: true });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event")).toMatchObject({ requestId: "before-refresh", type: "complete" }));
+    harness.window.windowTitle = "Updated page";
+    const refreshed = await invoke("ask:refresh", context.sessionId);
+    expect(refreshed.sessionId).not.toBe(context.sessionId);
+    expect(refreshed.windowTitle).toBe("Updated page");
+    expect(refreshed.canReturnToSuggestions).toBe(false);
+    invoke("ask:start", { sessionId: refreshed.sessionId, requestId: "after-refresh", question: "Explain again", includeContext: true });
+    await vi.waitFor(() => expect(harness.answer).toHaveBeenCalledTimes(2));
+    expect(harness.answer.mock.calls[1][4]).toEqual([]);
+  });
+
+  it("keeps the original session after a refresh tries to capture another window", async () => {
+    const context = await openAsk("WeChat", "101");
+    const resets = harness.events.filter((item) => item.channel === "overlay:reset").length;
+    harness.window = { applicationName: "Safari", windowTitle: "Other", windowId: "202", processId: 202 };
+    await expect(invoke("ask:refresh", context.sessionId)).rejects.toThrow("original window");
+    expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resets);
+    harness.window = { applicationName: "WeChat", windowTitle: "WeChat page", windowId: "101", processId: 101 };
+    await harness.poll!();
+    expect(harness.windows[1].visible).toBe(true);
+    expect((await invoke("ask:open")).sessionId).toBe(context.sessionId);
+  });
+
+  it("discards a draft arriving after refresh", async () => {
+    const context = await openAsk("WeChat", "101");
+    let finish!: (value: unknown) => void;
+    harness.answer.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "late-draft", question: "Draft a reply", includeContext: true });
+    await vi.waitFor(() => expect(harness.answer).toHaveBeenCalledTimes(1));
+    await invoke("ask:refresh", context.sessionId);
+    finish({ answer: "Old draft", draft: result, tokenUsage: { reported: false } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(harness.events.filter((item) => item.channel === "overlay:ask-event" && item.payload.requestId === "late-draft" && item.payload.type === "complete")).toEqual([]);
   });
 });

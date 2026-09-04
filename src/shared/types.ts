@@ -100,6 +100,8 @@ export interface GenerateRequest {
   /** Page-scoped flows never include stored memory or accepted replies. */
   contextPolicy?: "page-only";
   revision?: { text: string; instruction: string };
+  /** Explicitly omit the captured page for text-only draft revisions. */
+  withoutPageContext?: boolean;
 }
 
 export type OverlayResult = GenerationResult & { sessionId?: string; channel: ChannelId; contact: string; target?: InputTarget };
@@ -140,11 +142,12 @@ export interface AskOverlayContext {
   hasPageContext: boolean;
   contextUnavailableReason?: string;
   canReturnToSuggestions: boolean;
+  capturedAt?: number;
 }
 
 export type AskStreamEvent =
   | { type: "delta"; sessionId: string; requestId: string; delta: string }
-  | { type: "complete"; sessionId: string; requestId: string; answer: string }
+  | { type: "complete"; sessionId: string; requestId: string; answer: string; draft?: OverlayResult }
   | { type: "cancelled"; sessionId: string; requestId: string }
   | { type: "error"; sessionId: string; requestId: string; message: string };
 
@@ -333,6 +336,7 @@ export interface ContextCueApi {
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: SaveSettingsRequest) => Promise<AppSettings>;
   testModelConnection: (request: TestModelConnectionRequest) => Promise<TestModelConnectionResult>;
+  askExample: (imageDataUrl: string, question: string) => Promise<{ answer: string; draft?: GenerationResult }>;
   generateExample: (imageDataUrl: string) => Promise<GenerationResult>;
   completeSetup: () => Promise<AppSettings>;
   useReply: (request: UseReplyRequest) => Promise<UseReplyResult>;
@@ -345,6 +349,8 @@ export interface ContextCueApi {
   onOverlayExpired: (callback: (event: { sessionId: string; message: string }) => void) => () => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   openAsk: () => Promise<AskOverlayContext>;
+  refreshAsk: (sessionId: string) => Promise<AskOverlayContext>;
+  showDraft: (sessionId: string) => Promise<void>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;
   startAsk: (request: AskRequest) => void;
   cancelAsk: (requestId: string) => void;

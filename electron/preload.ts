@@ -53,6 +53,7 @@ const api: ContextCueApi = {
     ipcRenderer.invoke("settings:save", settings),
   testModelConnection: (request: TestModelConnectionRequest) =>
     ipcRenderer.invoke("settings:test-model", request),
+  askExample: (imageDataUrl, question) => ipcRenderer.invoke("setup:ask-example", imageDataUrl, question),
   generateExample: (imageDataUrl) => ipcRenderer.invoke("setup:example", imageDataUrl),
   completeSetup: () => ipcRenderer.invoke("setup:complete"),
   useReply: (request: UseReplyRequest) => ipcRenderer.invoke("reply:use", request),
@@ -81,6 +82,8 @@ const api: ContextCueApi = {
     return () => ipcRenderer.removeListener("overlay:status", listener);
   },
   openAsk: () => ipcRenderer.invoke("ask:open"),
+  refreshAsk: (sessionId) => ipcRenderer.invoke("ask:refresh", sessionId),
+  showDraft: (sessionId) => ipcRenderer.invoke("ask:show-draft", sessionId),
   exitAsk: (returnToSuggestions: boolean) => ipcRenderer.invoke("ask:exit", returnToSuggestions),
   startAsk: (request: AskRequest) => ipcRenderer.send("ask:start", request),
   cancelAsk: (requestId: string) => ipcRenderer.send("ask:cancel", requestId),

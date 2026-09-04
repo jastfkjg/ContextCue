@@ -1,10 +1,10 @@
 import "./styles.css";
 
 const translations = {
-  zh: {
-    "meta.title": "ContextCue — 回复始终跟着当前对话",
-    "meta.description": "ContextCue 是一款本地优先的 Mac 回复助手。停留在当前对话，按一下快捷键，得到自然、可直接使用的候选回复。",
-    "meta.ogDescription": "无需切换窗口，让 ContextCue 在你正在输入的地方提供回复。",
+  "zh": {
+    "meta.title": "ContextCue — 就着当前屏幕，问清楚、写出来",
+    "meta.description": "ContextCue 是当前屏幕上的 AI 助手。无需复制背景，按下快捷键，理解信息、起草回复或改写文字。",
+    "meta.ogDescription": "不离开当前窗口，问清楚、写出来。",
     "skip": "跳到主要内容",
     "home.aria": "ContextCue 首页",
     "nav.aria": "主要导航",
@@ -12,12 +12,12 @@ const translations = {
     "nav.privacy": "隐私",
     "nav.install": "安装",
     "download.short": "下载测试版",
-    "hero.title": "回复始终跟着<br />当前对话。",
-    "hero.lede": "停留在微信、Slack、飞书或任何聊天窗口。按一下快捷键，ContextCue 就在输入框旁给出几条真正贴合上下文的回复。",
+    "hero.title": "看懂屏幕。<br />写出想法。",
+    "hero.lede": "不必复制背景，也不用切换工具。唤起 Ask AI，问一个问题，或说说你想怎么写。当前窗口就是上下文。",
     "hero.download": "下载 Mac 测试版",
     "hero.how": "看看它如何工作",
     "hero.release": "当前为未经 Apple 公证的内测版 · Apple Silicon / Intel",
-    "demo.aria": "ContextCue 在聊天窗口旁生成候选回复的产品界面演示",
+    "demo.aria": "ContextCue 根据当前窗口回答问题的界面示意",
     "demo.online": "在线",
     "demo.today": "今天 15:42",
     "demo.incoming1": "周四同一时间可以吗？",
@@ -26,25 +26,25 @@ const translations = {
     "demo.composer": "输入消息…",
     "demo.switch": "切换",
     "demo.insert": "插入",
-    "demo.caption": "只有主动按下快捷键后，ContextCue 才会读取当前窗口。",
+    "demo.caption": "主动唤起才截图。页面变了，点击刷新即可开始新会话。",
     "signals.aria": "产品特点",
     "signals.invoke": "一次唤起",
-    "signals.candidates": "多条候选",
+    "signals.candidates": "理解与表达",
     "signals.insert": "插入但不发送",
-    "signals.local": "记忆留在本机",
+    "signals.local": "自选模型",
     "workflow.title": "少一次切换，<br />多一点上下文。",
-    "workflow.body": "ContextCue 不需要接管你的聊天工具。它只在需要时出现，完成后安静退回后台。",
-    "workflow.one.title": "留在当前对话",
-    "workflow.one.body": "把需要回复的聊天窗口放在最前面，不用复制粘贴，也不用跳去另一个 AI 页面。",
-    "workflow.two.title": "按下全局快捷键",
-    "workflow.two.body": "ContextCue 截取一次可见窗口，并组合与你、联系人和当前渠道相关的本地记忆。",
-    "workflow.three.title": "选择，然后插入",
-    "workflow.three.body": "在不同策略之间切换，把选中的回复放进输入框。发送之前，决定权始终在你手里。",
-    "context.title": "不只改写一句话。<br />而是理解你在和谁说话。",
-    "context.body": "ContextCue 会参考你明确保存的写作偏好、联系人关系和真正采用过的回复，让候选语气逐渐接近你。",
-    "context.one": "匹配当前对话语言",
-    "context.two": "区分不同回复策略",
-    "context.three": "不把模型建议自动写进记忆",
+    "workflow.body": "看文档、读邮件、回消息。需要帮助时唤起，用完继续手上的事。",
+    "workflow.one.title": "留在当前窗口",
+    "workflow.one.body": "打开需要理解的页面或待回复的消息，让相关内容保持可见。",
+    "workflow.two.title": "唤起 Ask AI",
+    "workflow.two.body": "新安装默认按 ⌘ ⇧ Space。问一个问题，或说明写作目标；也可点选总结、解释、回复或改写。",
+    "workflow.three.title": "读明白，或写出来",
+    "workflow.three.body": "解释直接阅读；草稿可以继续修改，再复制或插入。熟练后可用单独的快捷键直接生成写作建议。",
+    "context.title": "背景在屏幕上。<br />意图由你说清楚。",
+    "context.body": "同一条消息，你可能想同意，也可能想婉拒。告诉 ContextCue 你的目标，再用“更简短”或自己的要求调整草稿。",
+    "context.one": "先说明立场，再组织表达",
+    "context.two": "候选可切换，修改可对照",
+    "context.three": "检查后复制或插入，由你发送",
     "context.aria": "三条不同回复策略的示例",
     "card.one.tone": "清晰 · 周到",
     "card.one.strategy": "同时确认两件事",
@@ -60,13 +60,13 @@ const translations = {
     "privacy.title": "它只在你叫它时出现。",
     "privacy.body": "不是后台录屏，也不会自动发送。ContextCue 把边界做成产品行为，而不只是一段承诺。",
     "privacy.one.title": "主动触发",
-    "privacy.one.body": "只有按下快捷键后才读取当前可见会话的一张截图。",
-    "privacy.two.title": "本地记忆",
-    "privacy.two.body": "个人资料、关系和偏好保存在本机，只选择本次需要的少量内容。",
+    "privacy.one.body": "主动唤起或点击刷新时，才截取一次当前可见窗口。不会持续录屏。",
+    "privacy.two.title": "会话隔离",
+    "privacy.two.body": "当前会话不读取长期记忆或历史采用回复。刷新截图会开启新会话。",
     "privacy.three.title": "自选模型",
-    "privacy.three.body": "截图会发送给你配置的视觉模型服务商，API Key 由系统钥匙串加密。",
+    "privacy.three.body": "需要页面上下文时，截图会发送到你选择的模型接口。可关闭页面上下文，API Key 通过系统能力加密。",
     "privacy.four.title": "从不代发",
-    "privacy.four.body": "候选回复只会插入输入框，最后的检查和发送永远由你完成。",
+    "privacy.four.body": "草稿由你检查后复制或插入支持的输入框，最后的发送或提交由你完成。",
     "install.title": "先从 Mac 测试版开始。",
     "install.body": "当前为未经 Apple 公证的内测版，首次打开可能被 macOS 拦截。",
     "install.download": "前往下载",
@@ -78,9 +78,9 @@ const translations = {
     "install.two.title": "首次打开",
     "install.two.body": "如被拦截，前往“系统设置 → 隐私与安全性”查看“仍要打开”。若无此选项或仍提示损坏，请联系开发者。",
     "install.three.title": "允许权限",
-    "install.three.body": "按引导开启屏幕录制与辅助功能权限，再回到 ContextCue。",
-    "final.title": "别离开对话。<br />直接回复。",
-    "footer.tagline": "回复始终跟着当前对话。",
+    "install.three.body": "配置支持图片输入的模型，按引导开启屏幕权限。辅助功能权限可选，用于跨应用插入。",
+    "final.title": "不用搬运背景。<br />就在这里，开始。",
+    "footer.tagline": "当前屏幕上的理解与表达助手。",
     "footer.privacy": "隐私说明",
     "footer.install": "安装指南",
     "download.title": "选择你的 Mac",
@@ -91,12 +91,15 @@ const translations = {
     "download.intel.title": "Intel",
     "download.intel.body": "适用于搭载 Intel 处理器的 Mac",
     "download.unsigned": "未经 Apple 公证的内测版。首次启动如被拦截，请查看“隐私与安全性 → 仍要打开”；若无法放行，请联系开发者。",
-    "download.all": "查看所有版本 ↗"
+    "download.all": "查看所有版本 ↗",
+    "demo.question": "开会之前，我需要做什么？",
+    "demo.answer": "提前发送更新后的方案。对方还提出把会议改到周四同一时间，等待你确认。",
+    "demo.placeholder": "问个问题，或说说想怎么写…"
   },
-  en: {
-    "meta.title": "ContextCue — replies that stay with the conversation",
-    "meta.description": "ContextCue is a local-first reply assistant for Mac. Stay in the conversation, press one shortcut, and get natural replies grounded in what is visible.",
-    "meta.ogDescription": "Stay where you are typing and get replies that fit the conversation.",
+  "en": {
+    "meta.title": "ContextCue — ask and write from your screen",
+    "meta.description": "Your AI assistant for the current screen. Ask questions, draft replies, and rewrite text without copying the background.",
+    "meta.ogDescription": "Understand and write without leaving your current window.",
     "skip": "Skip to main content",
     "home.aria": "ContextCue home",
     "nav.aria": "Main navigation",
@@ -104,12 +107,12 @@ const translations = {
     "nav.privacy": "Privacy",
     "nav.install": "Install",
     "download.short": "Download beta",
-    "hero.title": "Replies that stay<br />with the conversation.",
-    "hero.lede": "Stay in WeChat, Slack, Lark, or any conversation. Press one shortcut and ContextCue places a few context-aware replies beside the input field.",
+    "hero.title": "Your screen.<br />Ask. Write.",
+    "hero.lede": "Skip copying the background. Open Ask AI, ask a question, or describe what to write. Your current window supplies the context.",
     "hero.download": "Download for Mac",
     "hero.how": "See how it works",
     "hero.release": "Not Apple notarized · Apple Silicon / Intel",
-    "demo.aria": "Product demo showing ContextCue generating reply candidates beside a conversation",
+    "demo.aria": "Illustration of ContextCue answering a question about the current window",
     "demo.online": "Online",
     "demo.today": "Today 15:42",
     "demo.incoming1": "Could we move the sync to Thursday?",
@@ -118,25 +121,25 @@ const translations = {
     "demo.composer": "Write a message…",
     "demo.switch": "choose",
     "demo.insert": "insert",
-    "demo.caption": "ContextCue reads the current window only after you press the shortcut.",
+    "demo.caption": "Capture on invocation. Refresh when the page changes to start a new conversation.",
     "signals.aria": "Product highlights",
     "signals.invoke": "One shortcut",
-    "signals.candidates": "Multiple replies",
+    "signals.candidates": "Understand and write",
     "signals.insert": "Insert, never send",
-    "signals.local": "Memory stays local",
+    "signals.local": "Your choice of model",
     "workflow.title": "Less switching.<br />More context.",
-    "workflow.body": "ContextCue never takes over your chat app. It appears when you need it, then quietly returns to the background.",
-    "workflow.one.title": "Stay in the conversation",
-    "workflow.one.body": "Keep the conversation you want to answer in front. No copying, pasting, or switching to another AI page.",
-    "workflow.two.title": "Press the global shortcut",
-    "workflow.two.body": "ContextCue captures the visible window once and combines it with a small amount of relevant local memory.",
-    "workflow.three.title": "Choose and insert",
-    "workflow.three.body": "Move between different strategies and insert the reply you want. You always review and send it yourself.",
-    "context.title": "More than a rewrite.<br />It knows who you are talking to.",
-    "context.body": "ContextCue uses the writing preferences, relationships, and accepted replies you explicitly save, so suggestions gradually sound more like you.",
-    "context.one": "Match the conversation language",
-    "context.two": "Offer distinct reply strategies",
-    "context.three": "Never turn model suggestions into memory",
+    "workflow.body": "Read a document, review an email, or reply to a message. Get help where you are, then carry on.",
+    "workflow.one.title": "Stay in your window",
+    "workflow.one.body": "Keep the page or message you need help with visible on screen.",
+    "workflow.two.title": "Open Ask AI",
+    "workflow.two.body": "New installs use ⌘ ⇧ Space. Ask a question, describe a draft, or start with Summarize, Explain, Draft a reply, or Rewrite.",
+    "workflow.three.title": "Read it, or use a draft",
+    "workflow.three.body": "Read an explanation, or revise a draft before copying or inserting it. A separate shortcut takes you straight to writing suggestions.",
+    "context.title": "Your screen gives context.<br />You give the intent.",
+    "context.body": "The same message might call for agreement or a polite decline. Describe your goal, then refine a draft with “Shorter” or your own instructions.",
+    "context.one": "Set the intent before choosing the words",
+    "context.two": "Compare candidates and revisions",
+    "context.three": "Review, copy or insert, then send yourself",
     "context.aria": "Three examples of distinct reply strategies",
     "card.one.tone": "Clear · thoughtful",
     "card.one.strategy": "Confirm both requests",
@@ -152,13 +155,13 @@ const translations = {
     "privacy.title": "It appears only when you ask.",
     "privacy.body": "No background recording. No automatic sending. ContextCue makes privacy boundaries part of the product behavior.",
     "privacy.one.title": "You invoke it",
-    "privacy.one.body": "It reads one screenshot of the visible conversation only after you press the shortcut.",
-    "privacy.two.title": "Memory stays local",
-    "privacy.two.body": "Your profile, relationships, and preferences remain on this Mac. Only a small relevant subset is selected.",
+    "privacy.one.body": "Capture one visible window when you invoke or refresh. No continuous screen recording.",
+    "privacy.two.title": "Separate sessions",
+    "privacy.two.body": "Current sessions exclude saved memory and accepted replies. Refreshing the screenshot starts a new conversation.",
     "privacy.three.title": "Bring your model",
-    "privacy.three.body": "The screenshot goes to the vision model provider you configure. Your API key is protected by the system keychain.",
+    "privacy.three.body": "Page context goes to the model endpoint you choose. You can turn page context off. API keys use operating-system encryption.",
     "privacy.four.title": "It never sends",
-    "privacy.four.body": "ContextCue only inserts a candidate into the input field. You always review and send it yourself.",
+    "privacy.four.body": "Review each draft, then copy or insert it into a supported field. You send or submit it yourself.",
     "install.title": "Start with the Mac beta.",
     "install.body": "This early-access build is not Apple notarized. macOS may block it on first launch.",
     "install.download": "Go to download",
@@ -170,9 +173,9 @@ const translations = {
     "install.two.title": "Open it once",
     "install.two.body": "If blocked, check System Settings → Privacy & Security for Open Anyway. If unavailable or the app is still reported as damaged, contact the developer.",
     "install.three.title": "Allow access",
-    "install.three.body": "Follow the prompts for Screen Recording and Accessibility, then return to ContextCue.",
-    "final.title": "Stay in the conversation.<br />Reply right there.",
-    "footer.tagline": "Replies that stay with the conversation.",
+    "install.three.body": "Connect an image-capable model and allow screen access. Accessibility is optional, for inserting into other apps.",
+    "final.title": "Leave the background<br />where it is.",
+    "footer.tagline": "Understand and write from your current screen.",
     "footer.privacy": "Privacy",
     "footer.install": "Install guide",
     "download.title": "Choose your Mac",
@@ -183,46 +186,21 @@ const translations = {
     "download.intel.title": "Intel",
     "download.intel.body": "For Macs with an Intel processor",
     "download.unsigned": "Not Apple notarized. If blocked, check Privacy & Security → Open Anyway. If you cannot proceed, contact the developer.",
-    "download.all": "View all releases ↗"
+    "download.all": "View all releases ↗",
+    "demo.question": "What do I need to do before we meet?",
+    "demo.answer": "Send the updated deck beforehand. They also proposed Thursday at the same time and are waiting for your confirmation.",
+    "demo.placeholder": "Ask a question or describe a draft…"
   }
 };
 
-const replySets = {
-  zh: [
-    { text: "周四同一时间可以。我会更新日程，并在会前把新版方案发给你。", tone: "清晰 · 周到", strategy: "同时确认两件事" },
-    { text: "周四可以。我会调整邀请，并在见面前把更新后的方案发给你。", tone: "温和 · 简洁", strategy: "简短确认" },
-    { text: "周四同一时间没问题。我会先发新版方案，再更新日历邀请。", tone: "平静 · 有条理", strategy: "说明行动顺序" }
-  ],
-  en: [
-    { text: "Thursday at the same time works. I’ll update the invite and send the revised deck beforehand.", tone: "Clear · thoughtful", strategy: "Confirm both requests" },
-    { text: "Thursday works. I’ll move the invite and get the updated deck to you before we meet.", tone: "Warm · concise", strategy: "Brief confirmation" },
-    { text: "Thursday at the same time works for me. I’ll share the updated deck first, then update the invite.", tone: "Calm · structured", strategy: "State the sequence" }
-  ]
-};
-
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const replyElement = document.querySelector("[data-reply]");
-const toneElement = document.querySelector("[data-reply-tone]");
-const strategyElement = document.querySelector("[data-reply-strategy]");
-const countElement = document.querySelector("[data-candidate-count]");
 const platformNote = document.querySelector("[data-platform-note]");
 const downloadDialog = document.querySelector("[data-download-dialog]");
 const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
 let activeLanguage = "zh";
-let replyIndex = 0;
 let downloadTrigger = null;
 
 const translation = (key) => translations[activeLanguage][key] ?? key;
-
-const renderReply = (index) => {
-  const replies = replySets[activeLanguage];
-  const reply = replies[index];
-  if (!replyElement || !toneElement || !strategyElement || !countElement) return;
-  replyElement.textContent = reply.text;
-  toneElement.textContent = reply.tone;
-  strategyElement.textContent = reply.strategy;
-  countElement.textContent = `${index + 1} / ${replies.length}`;
-};
 
 const updatePlatformNote = () => {
   if (!platformNote) return;
@@ -254,7 +232,6 @@ const setLanguage = (language, { persist = false, updateUrl = false } = {}) => {
     button.setAttribute("aria-pressed", String(selected));
   });
 
-  renderReply(replyIndex);
   updatePlatformNote();
 
   if (persist) localStorage.setItem("contextcue-language", activeLanguage);
@@ -339,20 +316,4 @@ if (scene && !reduceMotion.matches && window.matchMedia("(pointer: fine)").match
       layer.style.setProperty("--depth-y", "0px");
     });
   });
-}
-
-const showReply = (index) => {
-  if (!replyElement || !toneElement || !strategyElement) return;
-  [replyElement, toneElement, strategyElement].forEach((element) => element.classList.add("is-switching"));
-  window.setTimeout(() => {
-    renderReply(index);
-    [replyElement, toneElement, strategyElement].forEach((element) => element.classList.remove("is-switching"));
-  }, 180);
-};
-
-if (!reduceMotion.matches) {
-  window.setInterval(() => {
-    replyIndex = (replyIndex + 1) % replySets[activeLanguage].length;
-    showReply(replyIndex);
-  }, 4200);
 }

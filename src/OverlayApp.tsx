@@ -12,6 +12,7 @@ export function OverlayApp() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [status, setStatus] = useState<OverlayStatus>({ state: "loading", message: "Reading the current window…" });
   const [askContext, setAskContext] = useState<AskOverlayContext | null>(null);
+  const [askVisible, setAskVisible] = useState(false);
   const [expired, setExpired] = useState<{ sessionId: string; message: string } | null>(null);
   const eventRevision = useRef(0);
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
@@ -42,6 +43,7 @@ export function OverlayApp() {
     const stopReset = contextCueApi.onOverlayReset(() => {
       eventRevision.current += 1;
       setAskContext(null);
+      setAskVisible(false);
       setPayload(null);
       setExpired(null);
       setStatus({ state: "loading", message: "Reading the current window…" });
@@ -49,12 +51,14 @@ export function OverlayApp() {
     const stopResult = contextCueApi.onOverlayResult((result) => {
       eventRevision.current += 1;
       setAskContext(null);
+      setAskVisible(false);
       setPayload(result);
       setExpired(null);
     });
     const stopStatus = contextCueApi.onOverlayStatus((next) => {
       eventRevision.current += 1;
       setAskContext(null);
+      setAskVisible(false);
       setPayload(null);
       setStatus(next);
     });
@@ -62,6 +66,7 @@ export function OverlayApp() {
       eventRevision.current += 1;
       setPayload((current) => current?.sessionId === context.sessionId ? current : null);
       setAskContext(context);
+      setAskVisible(true);
     });
     const stopExpired = contextCueApi.onOverlayExpired((event) => {
       eventRevision.current += 1;
@@ -81,20 +86,21 @@ export function OverlayApp() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
-      if (!askContext) {
+      if (!askVisible) {
         void contextCueApi.hideOverlay();
         return;
       }
-      const returnToSuggestions = Boolean(payload && askContext.canReturnToSuggestions);
-      void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext((current) => current?.sessionId === askContext.sessionId ? null : current));
+      const returnToSuggestions = Boolean(payload && askContext?.canReturnToSuggestions);
+      const revision = eventRevision.current;
+      void contextCueApi.exitAsk(returnToSuggestions).then(() => { if (revision === eventRevision.current) setAskVisible(false); });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [askContext, payload]);
+  }, [askContext, askVisible, payload]);
 
   const enterAsk = () => {
     const revision = eventRevision.current;
-    return contextCueApi.openAsk().then((context) => { if (revision === eventRevision.current) setAskContext(context); }).catch((error) => {
+    return contextCueApi.openAsk().then((context) => { if (revision === eventRevision.current) { setAskContext(context); setAskVisible(true); } }).catch((error) => {
       if (revision !== eventRevision.current) return;
       // A click can race with switching away. Surface the error in the existing
       // carousel rather than unmounting the user's selected draft and composer.
@@ -104,39 +110,50 @@ export function OverlayApp() {
 
   const exitAsk = () => {
     const returnToSuggestions = Boolean(payload && askContext?.canReturnToSuggestions);
-    void contextCueApi.exitAsk(returnToSuggestions).then(() => setAskContext((current) => current?.sessionId === askContext?.sessionId ? null : current));
+    const revision = eventRevision.current;
+    void contextCueApi.exitAsk(returnToSuggestions).then(() => { if (revision === eventRevision.current) setAskVisible(false); });
+  };
+
+  const showDraft = async (draft: OverlayResult) => {
+    const revision = eventRevision.current;
+    await contextCueApi.showDraft(draft.sessionId!);
+    if (revision !== eventRevision.current) return;
+    setPayload(draft);
+    setAskContext((current) => current ? { ...current, canReturnToSuggestions: true } : current);
+    setAskVisible(false);
   };
 
   return (
-    <main className={`overlay-root ${askContext ? "overlay-root--ask" : !payload ? `overlay-root--${status.state}` : ""}`}>
+    <main className={`overlay-root ${askVisible ? "overlay-root--ask" : !payload ? `overlay-root--${status.state}` : ""}`}>
       {(askContext || payload) && <OverlayWindowControls/>}
       <button
         className="overlay-hover-close"
         onClick={() => void contextCueApi.hideOverlay()}
-        aria-label={askContext ? "Close Ask AI" : "Close suggestions"}
+        aria-label={askVisible ? "Close Ask AI" : "Close suggestions"}
         title="Close"
       >
         <X size={17} />
       </button>
       {askContext && <AskPanel key={`ask-${askContext.sessionId}`} context={askContext}
+        active={askVisible} onDraft={showDraft}
         contextError={expired?.sessionId === askContext.sessionId ? expired.message : undefined} onExit={exitAsk}/>}
       {payload && (
         <CandidateCarousel
-          key={`suggestions-${payload.sessionId ?? payload.generatedAt}`}
+          key={`suggestions-${payload.sessionId}-${payload.generatedAt}`}
           sessionId={payload.sessionId}
           contextError={expired?.sessionId === payload.sessionId ? expired?.message : undefined}
-          active={!askContext}
+          active={!askVisible}
           candidates={payload.candidates}
           channel={payload.channel}
           contact={payload.contact}
           scenario={payload.scenario}
           target={payload.target}
           compact
-          onAsk={expired?.sessionId === payload.sessionId ? undefined : enterAsk}
+          onAsk={enterAsk}
           onHeightChange={contextCueApi.resizeOverlay}
         />
       )}
-      {!askContext && !payload && (
+      {!askVisible && !payload && (
         status.state === "loading" ? (
           <div
             className="overlay-processing"
@@ -155,7 +172,7 @@ export function OverlayApp() {
         ) : (
           <div className="overlay-empty overlay-empty--error">
             <span className="overlay-state-icon"><CircleAlert size={24}/></span>
-            <strong>Couldn’t open suggestions</strong>
+            <strong>Couldn’t open ContextCue</strong>
             <p>{status.message}</p>
             <button onClick={() => void contextCueApi.hideOverlay()}>Close</button>
           </div>

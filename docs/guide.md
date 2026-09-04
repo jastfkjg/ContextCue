@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · [简体中文](./guide.zh-CN.md)
 
-Invoke ContextCue from the current app or browser window to generate writing suggestions or open a lightweight AI conversation. Every invocation starts a fresh page-only session using its screenshot, explicit input and in-session content—not previous windows, saved memory or accepted replies. Ask AI can also exclude page context. An editable field is not required: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied. You review the text and decide what to use—ContextCue never submits or sends it automatically.
+Invoke ContextCue from the current app or browser window to open Ask AI: ask for understanding or describe what to write. A separate Quick writing shortcut generates suggestions directly. Every invocation starts a fresh page-only session using its screenshot, explicit input and in-session content—not previous windows, saved memory or accepted replies. Ask AI can also exclude page context. An editable field is not required: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied. You review the text and decide what to use—ContextCue never submits or sends it automatically.
 
 Local-first means memory and settings are stored on your device, not that model inference necessarily runs locally. Screenshots and relevant context are sent to your configured model provider when used in a request.
 
@@ -14,7 +14,7 @@ Local-first means memory and settings are stored on your device, not that model 
 | | Capability | What it does |
 |---|---|---|
 | ⚡ | **Any-window invocation** | Press one global shortcut from an app or browser page, with or without an input field. |
-| ✦ | **Streaming Ask AI** | Open a compact question panel with a second shortcut or from the suggestion panel, with optional page context. |
+| ✦ | **Streaming Ask AI** | Use the main entry for streamed answers or usable drafts, with optional page context. |
 | ✦ | **Task-aware drafts** | Generate replies, form-field text, new drafts, rewrites, search queries, and text completions. |
 | ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
 | ↵ | **Apply without submitting** | On macOS, validate the original control before inserting or replacing text. |
@@ -31,27 +31,31 @@ Search assistance drafts search queries; it does not execute a web search.
 
 ## How it works
 
-Quick suggestions use the following flow:
+The main entry follows this flow:
 
 ```text
 Current app or browser window
-  └─ global shortcut
-      └─ capture that exact window once; optionally read focused-control metadata
-          └─ create an isolated page session (no stored memory)
-              └─ classify the writing task and call the vision model
-                  └─ validate 1–5 suggestions
-                      └─ swipe · copy · apply
+  └─ Ask AI shortcut → capture the visible window, create an isolated session
+      └─ user question or writing intent → one model request
+          ├─ understanding → streamed answer → follow-up question
+          └─ writing → validated drafts → revise → copy or insert
 ```
 
-The floating panel follows the originating native window. Switching to another application or window temporarily hides it; returning restores the session. Moving between text fields on the same page does not hide the panel. A detected page-title change in the original window, or the five-minute session limit, expires the captured context and cancels requests while preserving suggestions, instructions and visible Q&A for reading and copying. Reopen ContextCue to use AI or insert after expiry. Every new invocation captures a fresh page and starts a new session, even in the same window. Insertion validates the original target again before writing.
+The Quick writing shortcut still generates 1–5 suggestions directly, without first typing a question.
+
+The floating panel follows the originating native window. Switching to another application or window temporarily hides it; returning restores the session. Moving between text fields on the same page does not hide the panel. A detected page-title change in the original window, or the five-minute session limit, expires the captured context and cancels requests while preserving suggestions, instructions and visible Q&A for reading and copying. Return to Ask AI and refresh, or reopen ContextCue, to use AI or insert after expiry. Every new invocation captures a fresh page and starts a new session, even in the same window. Insertion validates the original target again before writing.
 
 Suggestions initially fit their content. Drag any edge or the bottom-right corner to resize. A subtle curved hint appears when that corner is hovered or keyboard-focused. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
 
-Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A. The header shows the captured page source; toggling it off displays **Page off**. **Summarize**, **Explain** and **Draft a reply** fill the question field for review before sending. Enter sends and Shift + Enter adds a line.
+New installs use `⌘ ⇧ Space` / `Ctrl ⇧ Space` for Ask AI and `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` for Quick writing. Upgrades preserve existing shortcuts. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A. The header shows the captured page source; toggling it off displays **Page off**. **Summarize**, **Explain**, **Draft a reply**, and **Rewrite** fill the question field for review before sending. Enter sends and Shift + Enter adds a line.
 
-Candidate dots share a compact header with the count and are keyboard accessible with Tab then Enter / Space. Choose **Revise** in the home toolbar to open **How should this change?** below the visible candidate. The panel keeps its position and width, expands downwards up to 540px, and scrolls internally when the screen leaves less room. **Shorter**, **Warmer** and **More direct** append to your instructions without replacing background you have entered. Enter adds a line; arrows inside the field move the caret; `Cmd / Ctrl + Enter` starts revision. Escape closes the composer first.
+The refresh button beside the page source captures the original window again and starts a new session, clearing old answers, candidates, and unsent input. Hover the source for the capture time. Failed refreshes preserve existing content; a refresh cannot capture another native window. Invoke with the shortcut in another window to use it instead.
 
-Revision uses the candidate selected when you submit, your instruction and the session's original screenshot. It requests the configured candidate count (1–5, normally 3) in one streaming request. Each complete, validated candidate appears as soon as it is ready; subsequent arrivals do not change your selection. **Revised · 1/3** identifies the new group. A provider that returns ordinary JSON instead of a stream shows its validated group once the response completes. Initial suggestion generation still waits for its complete response.
+Candidate dots share a compact header with the count and are keyboard accessible with Tab then Enter / Space. Choose **Revise** in the home toolbar to open **How should this change?** below the visible candidate. The panel keeps its position and width, expands downwards up to 540px, and keeps the current candidate visible above the instructions when the screen leaves less room. Long candidate text and the composer scroll independently; focusing the instruction field does not scroll the candidate away. **Collapse** closes only the composer and keeps your instructions; the top-right **X** closes the whole panel. **Shorter**, **Warmer** and **More direct** append to your instructions without replacing background you have entered. Enter adds a line; arrows inside the field move the caret; `Cmd / Ctrl + Enter` starts revision. Escape closes the composer first.
+
+Explicit writing requests open the candidate panel once the complete result is validated. When intent is unclear, the model should ask a brief question. The model chooses the output type in the same request, without a separate classification call. Returning to Ask AI preserves the visible conversation; **Open draft** reopens the latest draft.
+
+Revision uses the selected candidate, your instruction and the original snapshot. Drafts generated with page context off keep it off for subsequent revisions, omit page metadata, and work with text-only models. It requests the configured candidate count (1–5, normally 3) in one streaming request. Each complete, validated candidate appears as soon as it is ready; subsequent arrivals do not change your selection. **Revised · 1/3** identifies the new group. A provider that returns ordinary JSON instead of a stream shows its validated group once the response completes. Initial suggestion generation still waits for its complete response.
 
 Success closes the composer automatically; there is no separate Edit page or Save draft step. **Back to original suggestions** and **Show revised suggestions** switch between the original group and the latest revision, without accumulating every past variant. **Stop** keeps completed candidates and your instructions. Failure restores the group shown before that request and keeps the instructions for retry. Copy / Insert remains a separate explicit action; neither generation nor revision sends a message. Returning from Ask AI preserves the candidate group and selection.
 
@@ -75,16 +79,16 @@ npm install
 npm run dev
 ```
 
-### First suggestion
+### First question or draft
 
 1. First launch opens **Setup guide**. Choose a provider, enter an image-capable model ID and API key, and expand **Connection details** if needed. Advanced model management remains in **Settings**.
 2. Choose **Verify model** to check connection and image understanding using a synthetic color image, not your windows. Check screen access, grant permissions in system settings if needed, then **Check again**. macOS insertion permission is optional; copying works without it.
-3. Generate a reply to the fictional example, select a dot or copy a candidate, then **Start using ContextCue** to enter the daily home. Verification and example requests may incur provider charges. Setup can be deferred or reopened from the sidebar. Completion persists; existing configured installs are not forced through setup again.
+3. Ask about the fictional example, or choose Draft a reply to prefill an explicit writing intent. Read the answer or choose a draft, then **Start using ContextCue** to enter the daily home. Verification and example requests may incur provider charges. Setup can be deferred or reopened from the sidebar. Completion persists; existing configured installs are not forced through setup again.
 4. Open an app or page. Optionally focus a text field for direct insertion.
 5. Press `⌘ ⇧ Space` on macOS or `Ctrl ⇧ Space` on Windows / Linux.
-6. Swipe between candidates and copy one, or insert it into a recognized field. ContextCue never submits automatically.
+6. Type a question or describe what to write, then submit. Read an explanation or revise, copy, or insert a draft. ContextCue never submits automatically.
 
-To ask a quick question instead, press `⌘ ⇧ Enter` / `Ctrl ⇧ Enter`, or choose **Ask AI** from the suggestion panel. Both shortcuts can be changed in Settings. If either registration fails, ContextCue keeps both previous shortcuts.
+For immediate writing suggestions, press `⌘ ⇧ Enter` / `Ctrl ⇧ Enter`. On upgraded installs, use the shortcuts shown in Settings. **Ask AI** in the candidate panel returns to the same conversation. Both shortcuts can be changed in Settings. If either registration fails, ContextCue keeps both previous shortcuts.
 
 ### Environment variables
 
@@ -135,7 +139,7 @@ Open **Usage** to filter usage by model and the last 7 days, last 30 days, or al
 
 ## Privacy boundaries
 
-- Page snapshots are captured on explicit invocation. Window lists and permission checks also read local thumbnails without uploading them. Setup verification and examples upload only synthetic images.
+- Page snapshots are captured on explicit invocation or refresh. Window lists and permission checks also read local thumbnails without uploading them. Setup verification and examples upload only synthetic images.
 - Screenshots are sent to the configured model provider when used for suggestions or page-aware Q&A, but are not written to the long-term memory file. Turning off Ask AI page context excludes the snapshot and page metadata from the question request; it does not undo the snapshot already captured when opening the panel.
 - Text inside screenshots and page metadata is treated as untrusted data, not as instructions.
 - Long-term memory remains local and is excluded from page-only suggestion, revision and question requests.
@@ -203,6 +207,6 @@ The release workflow supports optional signing/notarization and generates a comb
 - Channel support is based on visible windows, not historical OAuth message sync.
 - Field-neighborhood cropping, richer nearby accessibility text, local OCR/redaction, voice input, and calendar actions are planned.
 - The memory file is permission-restricted but not fully encrypted at rest; API keys are encrypted separately.
-- Sessions use a static invocation-time snapshot, not a live page feed. Changes without a window-title change, including same-title tabs, cannot be reliably distinguished; invoke again after navigating. Sessions currently expire five minutes after creation. See [interaction flows and acceptance checks](./interaction-flows.md).
+- Sessions use a static invocation-time snapshot, not a live page feed. Changes without a window-title change, including same-title tabs, cannot be reliably distinguished; refresh or invoke again after navigating. Sessions currently expire five minutes after creation. See [interaction flows and acceptance checks](./interaction-flows.md).
 
 ContextCue is an early desktop MVP, inspired by OKEight's in-conversation reply workflow. See the [roadmap](../TODO.md) for production work and planned features.

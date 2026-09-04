@@ -116,13 +116,13 @@ function HomeView({
   const activeModel = settings?.models.find((model) => model.id === settings.activeModelId) ?? settings?.models[0];
   const modelReady = Boolean(activeModel?.apiKeyConfigured && activeModel.supportsImageInput && activeModel.model.trim());
   const screenReady = isBrowserDemo || permissions?.screen === "granted" || permissions?.screen === "unknown";
-  const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Space";
-  const askShortcut = settings?.askShortcut || "CommandOrControl+Shift+Enter";
+  const shortcut = settings?.globalShortcut || "CommandOrControl+Shift+Enter";
+  const askShortcut = settings?.askShortcut || "CommandOrControl+Shift+Space";
   const readyCount = [modelReady, screenReady, sources.length > 0].filter(Boolean).length;
 
   if (settings?.onboardingComplete) return <div className="workspace daily-workspace">
-    <header className="workspace-header"><div><span className="eyebrow">YOUR WORKSPACE</span><h1>Ready when you need a hand.</h1><p>Open a page, then call ContextCue. Every invocation starts a fresh session.</p></div><StatusPill configured={modelReady && Boolean(screenReady)}/></header>
-    <div className="daily-actions"><section><MessageSquareText size={25}/><h2>Write from this page</h2><p>Choose a suggestion, edit it, or describe a change in one sentence.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">{shortcutParts(shortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section><section><Sparkles size={25}/><h2>Ask about this page</h2><p>Ask a question with optional page context. Other windows never join the conversation.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">{shortcutParts(askShortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section></div>
+    <header className="workspace-header"><div><span className="eyebrow">YOUR WORKSPACE</span><h1>Ask or write from your screen.</h1><p>Open a window and press your Ask AI shortcut. Tell ContextCue what you need.</p></div><StatusPill configured={modelReady && Boolean(screenReady)}/></header>
+    <div className="daily-actions"><section className="daily-primary"><Sparkles size={25}/><h2>Ask AI</h2><p>Understand what you see, or describe what to write. Your current window supplies the context.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">{shortcutParts(askShortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section><section className="daily-secondary"><MessageSquareText size={21}/><h2>Quick writing</h2><p>Already know you need a draft? Jump straight to suggestions.</p><button className="home-shortcut" onClick={onOpenSettings} aria-label="Change quick writing shortcut">{shortcutParts(shortcut).map((part, index) => <kbd key={index}>{part}</kbd>)}<span>Change</span></button></section></div>
     <section className="daily-status"><div><Cpu size={18}/><span><strong>{activeModel?.name || "Model needed"}</strong><small>{activeModel?.model || "Configure a model"}</small></span><button className="text-button" onClick={onOpenSettings}>Manage model<ChevronRight size={14}/></button></div><div><ScanLine size={18}/><span><strong>{screenReady ? "Screen access available" : "Screen access needed"}</strong><small>{sources.length} visible windows · copying always available</small></span><button className="text-button" onClick={onOpenChannels}>Check windows<ChevronRight size={14}/></button></div></section>
     <p className="daily-privacy"><ShieldCheck size={17}/>Only this page and this session. No past conversations or saved memory are sent. You decide what to copy or insert.</p>
   </div>;
@@ -132,7 +132,7 @@ function HomeView({
       <header className="workspace-header home-header">
         <div>
           <span className="eyebrow">QUICK ASSIST</span>
-          <h1>Write from the page you’re on.</h1>
+          <h1>Ask or write from your screen.</h1>
           <p>Keep ContextCue in the background. Call it from any app or browser window.</p>
         </div>
         <span className={`home-readiness ${readyCount === 3 ? "home-readiness--ready" : ""}`}><i />{readyCount === 3 ? "Ready to use" : `${readyCount} of 3 ready`}</span>
@@ -141,17 +141,17 @@ function HomeView({
       <section className="home-command-stage">
         <div className="home-command-copy">
           <span className="home-command-label"><Command size={14}/> Global shortcuts</span>
-          <h2>Choose or ask.<br/>Right where you’re working.</h2>
-          <p>For instant writing suggestions, press:</p>
-          <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change global shortcut">
-            {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
+          <h2>Ask AI.<br/>Right where you’re working.</h2>
+          <p>To ask a question or describe a draft, press:</p>
+          <button className="home-shortcut" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">
+            {shortcutParts(askShortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
             <span>Change</span>
           </button>
           <button className="home-ask-hint" onClick={onOpenSettings} aria-label="Change Ask AI shortcut">
-            <Sparkles size={13}/><span>Ask AI</span>
-            {shortcutParts(askShortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
+            <MessageSquareText size={13}/><span>Quick writing</span>
+            {shortcutParts(shortcut).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
           </button>
-          <small>ContextCue reads the current window to suggest a reply, draft, or prompt. Copy it, or insert into a recognized field.</small>
+          <small>Ask for an explanation, summary, reply, or rewrite. Review any draft before copying or inserting it.</small>
         </div>
 
         <div className="home-overlay-demo" aria-hidden="true">
@@ -1022,7 +1022,7 @@ function SettingsView({ settings, onChange, updateState }: { settings: AppSettin
     </div>
     <div className="preference-grid">
       <section className="preference-section"><div className="settings-heading"><MessageSquareText size={20}/><div><h2>Suggestion behavior</h2><p>Used by every configured model.</p></div></div><div className="preference-control"><span className="field-title">Candidates</span><div className="choice-group choice-group--count" role="group" aria-label="Candidate count">{[2, 3, 4, 5].map((count) => <button type="button" key={count} className={form.candidateCount === count ? "choice-button--active" : ""} aria-pressed={form.candidateCount === count} onClick={() => setForm({ ...form, candidateCount: count })}>{count}</button>)}</div></div><div className="preference-control"><span className="field-title">Writing language</span><div className="choice-group choice-group--language" role="group" aria-label="Writing language">{([{ value: "auto", label: "Match context" }, { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" }] as const).map((option) => <button type="button" key={option.value} className={form.locale === option.value ? "choice-button--active" : ""} aria-pressed={form.locale === option.value} onClick={() => setForm({ ...form, locale: option.value })}>{option.label}</button>)}</div></div><label className="toggle-row"><div><strong>Show floating candidates</strong><span>Open the compact panel after generation.</span></div><input type="checkbox" checked={form.autoShowOverlay} onChange={(e) => setForm({ ...form, autoShowOverlay: e.target.checked })}/><i/></label></section>
-      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Use suggestions instantly, or open the lightweight Ask AI panel.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Smart suggestions" description="Generate a reply, draft, or prompt from the current window"/><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Open a quick conversation with optional page context"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
+      <section className="preference-section"><div className="settings-heading"><Command size={20}/><div><h2>Global shortcuts</h2><p>Ask AI is your main entry. Keep quick writing as a direct shortcut.</p></div></div><div className="shortcut-list"><ShortcutRecorder value={form.askShortcut} onChange={(askShortcut) => setForm({ ...form, askShortcut })} label="Ask AI" description="Ask or write with your current window as context"/><ShortcutRecorder value={form.globalShortcut} onChange={(globalShortcut) => setForm({ ...form, globalShortcut })} label="Quick writing" description="Generate writing suggestions immediately"/></div><p className="shortcut-help">Each shortcut must include a modifier and the two shortcuts must be different. If registration fails, ContextCue keeps both previous shortcuts.</p></section>
     </div>
     <AppUpdates state={updateState}/>
     <section className="privacy-strip"><ShieldCheck size={20}/><div><strong>This page only</strong><span>Requests use this page and this session, never saved memory or other windows.</span></div><ul><li><Check size={15}/>No background recording</li><li><Check size={15}/>No automatic sending</li></ul></section>
@@ -1070,7 +1070,7 @@ export function App() {
 
   useEffect(() => {
     document.querySelector(".main-surface")?.scrollTo({ top: 0, behavior: "auto" });
-  }, [view]);
+  }, [view, setupOpen, setupDismissed, settings?.onboardingComplete]);
 
   useEffect(() => {
     const receive = (next: AppUpdateState) => setUpdateState((current) => !current || next.revision >= current.revision ? next : current);

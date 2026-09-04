@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ExternalLink, KeyRound, ScanLine, ShieldCheck, Sparkles } from "lucide-react";
 import { contextCueApi, isBrowserDemo } from "../lib/api";
 import type { AppSettings, GenerationResult, LlmConfig, PermissionStatus } from "../shared/types";
+import { MarkdownContent } from "./MarkdownContent";
 import { CandidateCarousel } from "./CandidateCarousel";
 
 function exampleImage(): string {
@@ -25,6 +26,8 @@ export function SetupGuide({ settings, onChange, onFinish, onDismiss }: {
   onFinish: (settings: AppSettings) => void;
   onDismiss: () => void;
 }) {
+  const [exampleQuestion, setExampleQuestion] = useState("What is Sam asking me to do?");
+  const [exampleAnswer, setExampleAnswer] = useState("");
   const [step, setStep] = useState(0);
   const [model, setModel] = useState<LlmConfig>(() => settings.models.find((item) => item.id === settings.activeModelId) ?? settings.models[0]);
   const [provider, setProvider] = useState("existing");
@@ -38,7 +41,7 @@ export function SetupGuide({ settings, onChange, onFinish, onDismiss }: {
   const [imageDataUrl] = useState(exampleImage);
   const heading = useRef<HTMLHeadingElement>(null);
   const screenReady = permissions?.screen === "granted" || screenChecked;
-  const labels = ["Connect a model", "Verify access", "Try a suggestion"];
+  const labels = ["Connect a model", "Verify access", "Try Ask AI"];
 
   useEffect(() => {
     let live = true;
@@ -85,8 +88,8 @@ export function SetupGuide({ settings, onChange, onFinish, onDismiss }: {
     <ol className="setup-progress" aria-label="Setup progress">{labels.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined} className={index <= step ? "is-active" : ""}><span>{index < step ? <Check size={14}/> : index + 1}</span>{label}</li>)}</ol>
     <div className="setup-layout">
       <section className="setup-main" aria-busy={Boolean(busy)}>
-        <h1 ref={heading} tabIndex={-1}>{step === 0 ? "Your first useful suggestion starts here." : step === 1 ? "Check once. Write with confidence." : "Try it on a fictional conversation."}</h1>
-        <p className="setup-lead">{step === 0 ? "Choose a provider and connect an image-capable model. Your key is encrypted on this device." : step === 1 ? "We verify image input with a generated color test. Your windows are never sent for this check." : "Generate a reply, choose a candidate, then copy it. This example never reads your apps or inserts into them."}</p>
+        <h1 ref={heading} tabIndex={-1}>{step === 0 ? "Help with the screen you’re on." : step === 1 ? "Check your model and screen access." : "Try it on a fictional conversation."}</h1>
+        <p className="setup-lead">{step === 0 ? "Choose a provider and connect an image-capable model. Your key is encrypted on this device." : step === 1 ? "We verify image input with a generated color test. Your windows are never sent for this check." : "Ask a question or describe a reply. This example uses only the fictional image below."}</p>
         {step === 0 && <form className="setup-form" onSubmit={(event) => { event.preventDefault(); void saveModel(); }}>
           <label>Provider<select disabled={Boolean(busy)} value={provider} onChange={(event) => changeProvider(event.target.value)}><option value="existing">{model.name && provider === "existing" ? model.name : "Current configuration"}</option><option value="openai">OpenAI</option><option value="compatible">OpenAI-compatible provider</option><option value="local">Local server</option></select></label>
           <label>Model ID<input disabled={Boolean(busy)} value={model.model} onChange={(event) => setModel({ ...model, model: event.target.value })} placeholder="The image-capable model ID from your provider" required/></label>
@@ -105,10 +108,17 @@ export function SetupGuide({ settings, onChange, onFinish, onDismiss }: {
         </div>}
         {step === 2 && <div className="setup-example">
           <img src={imageDataUrl} alt="Fictional message from Sam: Can we move the design review to Friday at 10 am? Please let me know if that works for you."/>
-          <p>Your intent: agree to Friday at 10 am, briefly.</p>
-          {!result ? <button className="button button--primary" disabled={Boolean(busy)} onClick={() => void run("example", async () => { setResult(await contextCueApi.generateExample(imageDataUrl)); })}><Sparkles size={16}/>{busy === "example" ? "Generating your first suggestions…" : "Generate example suggestions"}</button> : <CandidateCarousel candidates={result.candidates} channel="other" contact="" practice/>}
+          <form className="setup-ask-form" onSubmit={(event) => { event.preventDefault(); void run("example", async () => {
+            const response = await contextCueApi.askExample(imageDataUrl, exampleQuestion);
+            setExampleAnswer(response.answer); setResult(response.draft ?? null);
+          }); }}>
+            <label htmlFor="example-question">Ask AI</label>
+            <div className="setup-question-row"><input id="example-question" value={exampleQuestion} maxLength={2_000} disabled={Boolean(busy)} onChange={(event) => setExampleQuestion(event.target.value)}/><button className="button button--primary" disabled={Boolean(busy) || !exampleQuestion.trim()}><Sparkles size={15}/>{busy === "example" ? "Thinking…" : "Ask"}</button></div>
+            <div className="ask-starters"><button type="button" disabled={Boolean(busy)} onClick={() => setExampleQuestion("What is Sam asking me to do?")}>Explain</button><button type="button" disabled={Boolean(busy)} onClick={() => setExampleQuestion("Draft a brief reply agreeing to Friday at 10 am.")}>Draft a reply</button></div>
+          </form>
+          {result ? <CandidateCarousel key={result.generatedAt} candidates={result.candidates} channel="other" contact="" practice/> : exampleAnswer && <MarkdownContent content={exampleAnswer} className="setup-answer"/>}
           <small>Only this fictional image and the example instruction are sent to {model.name}. No memory or previous conversations are included.{isBrowserDemo ? " Browser preview uses simulated results." : ""}</small>
-          <div className="setup-footer"><button className="text-button" disabled={Boolean(busy)} onClick={() => { setError(""); setStep(1); }}><ArrowLeft size={14}/>Back</button><button className="button button--primary" disabled={!result || Boolean(busy)} onClick={() => void run("finish", async () => onFinish(await contextCueApi.completeSetup()))}>{busy === "finish" ? "Finishing…" : "Start using ContextCue"}<ArrowRight size={15}/></button></div>
+          <div className="setup-footer"><button className="text-button" disabled={Boolean(busy)} onClick={() => { setError(""); setStep(1); }}><ArrowLeft size={14}/>Back</button><button className="button button--primary" disabled={!exampleAnswer || Boolean(busy)} onClick={() => void run("finish", async () => onFinish(await contextCueApi.completeSetup()))}>{busy === "finish" ? "Finishing…" : "Start using ContextCue"}<ArrowRight size={15}/></button></div>
         </div>}
         {error && <div className="setup-error" role="alert">{error}</div>}
       </section>

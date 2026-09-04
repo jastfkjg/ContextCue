@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
-import type { AskOverlayContext } from "../shared/types";
+import type { AskOverlayContext, OverlayResult } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -15,18 +15,25 @@ interface AskTurn {
   answer: string;
   status: TurnStatus;
   error?: string;
+  draft?: OverlayResult;
 }
 
 interface Props {
   context: AskOverlayContext;
   contextError?: string;
   onExit: () => void;
+  active?: boolean;
+  onDraft?: (draft: OverlayResult) => Promise<void>;
 }
 
-export function AskPanel({ context, contextError, onExit }: Props) {
+export function AskPanel({ context, contextError, onExit, active = true, onDraft }: Props) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<AskTurn[]>([]);
   const [includeContext, setIncludeContext] = useState(context.hasPageContext);
+  const [refreshing, setRefreshing] = useState(false);
+  const [localError, setLocalError] = useState("");
+  const onDraftRef = useRef(onDraft);
+  onDraftRef.current = onDraft;
   const [copiedTurn, setCopiedTurn] = useState("");
   const activeRequest = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -36,13 +43,14 @@ export function AskPanel({ context, contextError, onExit }: Props) {
   const streaming = Boolean(activeRequest.current);
 
   const sourceLabel = context.windowTitle.trim() || context.applicationName.trim() || "Current page";
+  const capturedTime = context.capturedAt ? new Date(context.capturedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   const contextTitle = contextError || (!context.hasPageContext
     ? context.contextUnavailableReason || "No page snapshot available"
-    : `${includeContext ? "Using" : "Not using"} captured page: ${sourceLabel}. Click to ${includeContext ? "exclude" : "include"} it.`);
+    : `${includeContext ? "Using" : "Not using"} captured page: ${sourceLabel}${capturedTime ? ` at ${capturedTime}` : ""}. Screenshot stays fixed until refreshed. Click to ${includeContext ? "exclude" : "include"} it.`);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [context.sessionId]);
+    if (active) inputRef.current?.focus();
+  }, [context.sessionId, active]);
 
   useEffect(() => {
     if (!contextError) return;
@@ -81,8 +89,9 @@ export function AskPanel({ context, contextError, onExit }: Props) {
     activeRequest.current = null;
     if (event.type === "complete") {
       setTurns((current) => current.map((turn) => turn.id === event.requestId
-        ? { ...turn, answer: event.answer || turn.answer, status: "complete" }
-        : turn));
+        ? { ...turn, answer: event.answer || turn.answer, draft: event.draft, status: "complete" }
+        : event.draft ? { ...turn, draft: undefined } : turn));
+      if (event.draft) void onDraftRef.current?.(event.draft).catch((error) => setLocalError(String(error)));
     } else if (event.type === "cancelled") {
       setTurns((current) => current.map((turn) => turn.id === event.requestId
         ? { ...turn, status: "stopped" }
@@ -103,12 +112,13 @@ export function AskPanel({ context, contextError, onExit }: Props) {
 
   const submit = (override?: string) => {
     const nextQuestion = (override ?? question).trim();
-    if (!nextQuestion || activeRequest.current || contextError) return;
+    if (!active || refreshing || !nextQuestion || activeRequest.current || contextError) return;
     const requestId = crypto.randomUUID();
     activeRequest.current = requestId;
     followOutput.current = true;
     setTurns((current) => [...current, { id: requestId, question: nextQuestion, answer: "", status: "streaming" }]);
     setQuestion("");
+    setLocalError("");
     contextCueApi.startAsk({
       sessionId: context.sessionId,
       requestId,
@@ -150,8 +160,18 @@ export function AskPanel({ context, contextError, onExit }: Props) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const refresh = async () => {
+    if (refreshing) return;
+    stop();
+    setRefreshing(true);
+    setLocalError("");
+    try { await contextCueApi.refreshAsk(context.sessionId); }
+    catch (error) { setLocalError(error instanceof Error ? error.message : String(error)); }
+    finally { setRefreshing(false); }
+  };
+
   return (
-    <section className="ask-panel" aria-label="Ask AI">
+    <section className="ask-panel" aria-label="Ask AI" hidden={!active}>
       <header
         className="ask-header"
         onPointerDown={beginDrag}
@@ -176,6 +196,11 @@ export function AskPanel({ context, contextError, onExit }: Props) {
             {includeContext ? <Eye size={13} aria-hidden="true"/> : <EyeOff size={13} aria-hidden="true"/>}
             <span>{contextError ? "Page expired" : includeContext ? sourceLabel : context.hasPageContext ? "Page off" : "No page"}</span>
           </button>
+          <button className="ask-refresh" disabled={refreshing} onClick={() => void refresh()}
+            aria-label="Refresh screenshot and start a new conversation"
+            title="Refresh screenshot · starts a new conversation">
+            <RefreshCw size={14} className={refreshing ? "icon-spinning" : ""} aria-hidden="true"/>
+          </button>
       </header>
 
       <div
@@ -190,13 +215,14 @@ export function AskPanel({ context, contextError, onExit }: Props) {
       >
         {turns.length === 0 ? (
           <div className="ask-empty">
-            <strong>{includeContext ? "Ask about this page" : "Ask anything"}</strong>
-            <p>{includeContext ? "Get a summary, an explanation, or help with a reply." : "Ask a question or describe what you’re working on."}</p>
+            <strong>{includeContext ? "What can I help with?" : "Ask or write anything"}</strong>
+            <p>{includeContext ? "Ask about this screen, or tell me what to write." : "Ask a question or describe what you’re working on."}</p>
             {includeContext && <div className="ask-starters" aria-label="Question starters">
               {[
                 ["Summarize", "Summarize the key points on this page."],
                 ["Explain", "Help me understand what is happening on this page."],
-                ["Draft a reply", "Help me draft a reply based on this page."]
+                ["Draft a reply", "Help me draft a reply. My intent: "],
+                ["Rewrite", "Rewrite the text on this page. Make it "]
               ].map(([label, prompt]) => <button key={label} type="button" onClick={() => {
                 setQuestion(prompt);
                 inputRef.current?.focus();
@@ -221,7 +247,8 @@ export function AskPanel({ context, contextError, onExit }: Props) {
                   <button disabled={streaming || Boolean(contextError)} onClick={() => submit(turn.question)}><RefreshCw size={12}/> Retry</button>
                 </div>
               )}
-              {turn.answer && turn.status !== "streaming" && (
+              {turn.draft && onDraft && <button className="ask-copy" onClick={() => void onDraft(turn.draft!).catch((error) => setLocalError(String(error)))}>Open draft →</button>}
+              {turn.answer && !turn.draft && turn.status !== "streaming" && (
                 <button className="ask-copy" onClick={() => void copyAnswer(turn)}>
                   {copiedTurn === turn.id ? <Check size={13}/> : <Copy size={13}/>}
                   {copiedTurn === turn.id ? "Copied" : "Copy"}
@@ -233,7 +260,9 @@ export function AskPanel({ context, contextError, onExit }: Props) {
       </div>
 
       <div className="ask-composer">
-        {contextError && <p className="ask-context-notice" role="status">{contextError}</p>}
+        {contextError && <p className="ask-context-notice" role="status">Screenshot expired. Refresh above to continue. Your text is still available.</p>}
+        {localError && <p className="ask-context-notice" role="alert">{localError}</p>}
+        {refreshing && <p className="ask-context-notice" role="status">Refreshing screenshot…</p>}
         <label className="visually-hidden" htmlFor="ask-question">Ask AI a question</label>
         <div className="ask-input-frame">
           <textarea
@@ -242,7 +271,7 @@ export function AskPanel({ context, contextError, onExit }: Props) {
             value={question}
             rows={1}
             maxLength={2_000}
-            placeholder={includeContext ? "Ask about this page…" : "Ask a quick question…"}
+            placeholder={includeContext ? "Ask a question or describe a draft…" : "Ask or describe what to write…"}
             onChange={(event) => setQuestion(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
@@ -260,7 +289,6 @@ export function AskPanel({ context, contextError, onExit }: Props) {
             {streaming ? <Square size={12} fill="currentColor" aria-hidden="true"/> : <ArrowUp size={17} aria-hidden="true"/>}
           </button>
         </div>
-        <div className="ask-composer-hint"><span>Enter to send</span><span>Shift + Enter for a new line</span></div>
       </div>
     </section>
   );

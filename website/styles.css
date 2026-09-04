@@ -297,3 +297,11 @@ footer a:hover { color: #f5f6ef; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .reveal { opacity: 1; transform: none; }
 }
+
+.cue-window--ask .site-ask-question { width: fit-content; max-width: 88%; margin: 20px 20px 20px auto; padding: 10px 14px; border-radius: 14px 14px 4px 14px; background: #eaf0df; color: #414a36; font-size: 14px; line-height: 1.55; }
+.cue-window--ask .site-answer-label { display: block; padding: 0 24px; color: #738164; font-size: 11px; }
+.cue-window--ask p { min-height: 0; margin-top: 8px; font-size: 16px; line-height: 1.65; }
+.site-ask-composer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 18px 18px; padding: 12px; border: 1px solid #d8dece; border-radius: 12px; color: #7a826f; font-size: 12px; }
+.site-ask-composer i { display: grid; place-items: center; flex-shrink: 0; width: 27px; height: 27px; border-radius: 8px; background: #c8f556; color: #344422; font-style: normal; }
+
+.cue-window--ask .site-answer-label, .cue-window--ask .site-ask-composer { color: #bcc8b0; }

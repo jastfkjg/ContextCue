@@ -2,12 +2,12 @@
   "name": "contextcue",
   "version": "0.1.7",
   "private": true,
-  "description": "A local-first desktop reply assistant for WeChat, Slack, Lark, and any visible conversation.",
+  "description": "A desktop AI assistant for understanding and writing from your current screen.",
   "author": "zilong",
   "license": "UNLICENSED",
   "keywords": [
     "desktop",
-    "reply-assistant",
+    "screen-assistant",
     "electron",
     "local-first"
   ],
@@ -81,7 +81,7 @@
         "zip"
       ],
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "ContextCue uses screenshots you select to understand the visible conversation and draft replies.",
+        "NSScreenCaptureUsageDescription": "ContextCue uses screenshots you select to answer questions and draft text from the visible window.",
         "NSAppleEventsUsageDescription": "ContextCue uses system automation only when you choose to insert a reply into another application."
       }
     },

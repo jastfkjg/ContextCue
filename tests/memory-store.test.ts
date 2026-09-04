@@ -258,3 +258,30 @@ describe("MemoryStore", () => {
     expect(await importLegacyBrandData(currentPath, legacyPath)).toBe(false);
   });
 });
+
+describe("Ask-first shortcuts", () => {
+  it("uses Ask AI as the primary shortcut on a fresh install and keeps it after reload", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-shortcuts-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    expect(store.getData().settings.askShortcut).toBe("CommandOrControl+Shift+Space");
+    expect(store.getData().settings.globalShortcut).toBe("CommandOrControl+Shift+Enter");
+    const reloaded = new MemoryStore(path);
+    await reloaded.load();
+    expect(reloaded.getData().settings).toEqual(store.getData().settings);
+  });
+  it("preserves existing custom shortcuts", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "contextcue-shortcuts-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "data.json");
+    const store = new MemoryStore(path);
+    await store.load();
+    await store.saveSettings({ ...store.getData().settings, globalShortcut: "Alt+Shift+R", askShortcut: "Alt+Shift+A" });
+    const reloaded = new MemoryStore(path);
+    await reloaded.load();
+    expect(reloaded.getData().settings.globalShortcut).toBe("Alt+Shift+R");
+    expect(reloaded.getData().settings.askShortcut).toBe("Alt+Shift+A");
+  });
+});

@@ -9,6 +9,7 @@ export interface PageSession extends QuickContext {
   createdAt: number;
   history: AskHistoryMessage[];
   result?: GenerationResult;
+  draftUsesPage?: boolean;
   contextExpiredReason?: string;
 }
 

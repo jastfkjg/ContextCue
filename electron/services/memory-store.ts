@@ -94,8 +94,8 @@ export const DEFAULT_DATA: AppData = {
     activeModelId: "openai-default",
     candidateCount: 3,
     locale: "auto",
-    globalShortcut: "CommandOrControl+Shift+Space",
-    askShortcut: "CommandOrControl+Shift+Enter",
+    globalShortcut: "CommandOrControl+Shift+Enter",
+    askShortcut: "CommandOrControl+Shift+Space",
     autoShowOverlay: true,
     onboardingComplete: false
   }
@@ -158,6 +158,8 @@ function migrate(input: LegacyAppData): AppData {
     settings: {
       ...defaults.settings,
       ...(legacySettings ?? {}),
+      globalShortcut: legacySettings?.globalShortcut ?? "CommandOrControl+Shift+Space",
+      askShortcut: legacySettings?.askShortcut ?? (legacySettings?.globalShortcut === "CommandOrControl+Shift+Enter" ? "CommandOrControl+Shift+Space" : "CommandOrControl+Shift+Enter"),
       onboardingComplete: legacySettings?.onboardingComplete ?? Boolean(input.encryptedApiKey || Object.keys(input.encryptedApiKeys ?? {}).length || input.tokenUsage?.length),
       models: configuredModels,
       activeModelId

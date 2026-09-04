@@ -162,8 +162,8 @@ function createTray(): Tray {
   nextTray.on("right-click", () => {
     nextTray.popUpContextMenu(Menu.buildFromTemplate([
       { label: "Open ContextCue", click: showMainWindow },
-      { label: "Smart suggestions", click: () => void showQuickReply() },
       { label: "Ask AI", click: () => requestQuickAsk() },
+      { label: "Quick writing", click: () => void showQuickReply() },
       { type: "separator" },
       { label: "Check for Updates…", click: () => { showUpdates(); void updates.check(); } },
       { type: "separator" },
@@ -312,7 +312,7 @@ function bindQuickOverlayContext(frontmost: FrontmostWindow): void {
   quickOverlayHiddenForContext = false;
 }
 
-async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
+async function prepareCurrentWindow(allowWithoutScreenshot: boolean, expectedWindow?: FrontmostWindow) {
   // Clear the old overlay before capture, preserving the main window's Space.
   await prepareQuickWindows({
     platform: process.platform,
@@ -324,7 +324,11 @@ async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
     }
   });
   return prepareQuickContext({
-    getWindow: () => getFrontmostWindow(),
+    getWindow: async () => {
+      const current = await getFrontmostWindow();
+      if (expectedWindow && !sameNativeWindow(expectedWindow, current)) throw new Error("Return to the original window to refresh.");
+      return current;
+    },
     getTarget: getFocusedInputTarget,
     capture: captureQuickSource
   }, allowWithoutScreenshot);
@@ -379,6 +383,7 @@ async function syncQuickOverlayWithFrontmostWindow(): Promise<void> {
   }
   if (
     quickContextCheckInFlight
+    || quickReplyInFlight
     || !quickOverlayActive
     || !quickReplyContext
     || !overlayWindow
@@ -434,7 +439,8 @@ function askContextForSession(session: QuickOverlaySession): AskOverlayContext {
     channel: session.source?.channel ?? "other",
     hasPageContext: Boolean(session.screenshot),
     contextUnavailableReason: session.contextUnavailableReason,
-    canReturnToSuggestions: session.hasSuggestions
+    canReturnToSuggestions: session.hasSuggestions,
+    capturedAt: session.screenshot ? session.createdAt : undefined
   };
 }
 
@@ -490,7 +496,7 @@ function cancelRevisionInFlight(requestId?: string): void {
 
 async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<CandidateReply[]> {
   const session = usableQuickOverlaySession();
-  if (!session || request.sessionId !== session.id || !session.result || !session.screenshot) {
+  if (!session || request.sessionId !== session.id || !session.result || (session.draftUsesPage !== false && !session.screenshot)) {
     throw new Error("This suggestion has expired. Open ContextCue again on the current page.");
   }
   if (typeof request.requestId !== "string" || !request.requestId || request.requestId.length > 128
@@ -507,8 +513,11 @@ async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<Candi
     await assertSessionCurrent(session);
     if (!current()) throw new Error("Revision cancelled.");
     const snapshot = store.getData();
-    const generation = { ...pageRequest(session, snapshot.settings.locale), revision: { text: request.text, instruction: request.instruction } };
-    const result = await generateWithModel(snapshot, readApiKey(), generation, session.screenshot, fetch, controller.signal, (candidate) => {
+    const generation: GenerateRequest = session.draftUsesPage === false
+      ? { channel: "other", locale: snapshot.settings.locale, quick: true, scenario: session.result.scenario, contextPolicy: "page-only", withoutPageContext: true }
+      : pageRequest(session, snapshot.settings.locale);
+    generation.revision = { text: request.text, instruction: request.instruction };
+    const result = await generateWithModel(snapshot, readApiKey(), generation, session.draftUsesPage === false ? "" : session.screenshot!, fetch, controller.signal, (candidate) => {
       if (current()) sendToOverlay("overlay:revision-candidate", { sessionId: session.id, requestId: request.requestId, candidate });
     });
     if (!current()) throw new Error("Revision cancelled.");
@@ -556,6 +565,44 @@ async function showQuickAsk(): Promise<AskOverlayContext> {
     return showAskOverlay(session);
   } catch (error) {
     if (invocation === quickInvocation) clearQuickReplySession();
+    throw error;
+  } finally {
+    if (invocation === quickInvocation) quickReplyInFlight = false;
+  }
+}
+
+async function refreshAsk(sessionId: string): Promise<AskOverlayContext> {
+  const previous = quickOverlaySession;
+  if (!previous || previous.id !== sessionId || quickReplyInFlight) throw new Error("Open ContextCue on the window you want to use.");
+  const invocation = quickInvocation;
+  quickReplyInFlight = true;
+  quickOverlayHiddenForContext = true;
+  cancelAskInFlight();
+  cancelRevisionInFlight();
+  try {
+    const context = await prepareCurrentWindow(true, previous.frontmost);
+    if (quickOverlaySession !== previous || invocation !== quickInvocation) throw new Error("This session has ended.");
+    if (!sameNativeWindow(previous.frontmost, context.frontmost)) throw new Error("Return to the original window to refresh, or use your shortcut on another window.");
+    if (!context.screenshot) throw new Error(context.contextUnavailableReason || "Could not refresh the screenshot.");
+    const session = createPageSession(context);
+    clearQuickReplySession();
+    quickOverlayActive = true;
+    quickOverlayPositioned = true;
+    quickOverlaySession = session;
+    quickInputTarget = context.target;
+    quickReplyTargetApplication = context.frontmost.applicationName;
+    bindQuickOverlayContext(context.frontmost);
+    return showAskOverlay(session);
+  } catch (error) {
+    if (quickOverlaySession === previous && invocation === quickInvocation) {
+      // Preserve all local drafts and answers. Only show over the source window.
+      const current = await getFrontmostWindow().catch(() => null);
+      if (quickOverlaySession === previous && current && sameNativeWindow(previous.frontmost, current)) {
+        quickOverlayHiddenForContext = false;
+        overlayWindow?.show();
+        overlayWindow?.focus();
+      }
+    }
     throw error;
   } finally {
     if (invocation === quickInvocation) quickReplyInFlight = false;
@@ -837,6 +884,7 @@ async function startAsk(request: AskRequest): Promise<void> {
     });
     return;
   }
+  if (typeof request.question !== "string" || typeof request.requestId !== "string" || !request.requestId || request.requestId.length > 128 || typeof request.includeContext !== "boolean") return;
   const question = request.question.trim().slice(0, 2_000);
   if (!question) {
     sendAskEvent({ type: "error", sessionId: session.id, requestId: request.requestId, message: "Type a question first." });
@@ -872,7 +920,13 @@ async function startAsk(request: AskRequest): Promise<void> {
     await rememberAskTokenUsage(result.tokenUsage, session.source?.channel ?? "other", snapshot);
     if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
     rememberPageTurn(session, question, result.answer);
-    sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer });
+    if (result.draft) {
+      session.result = result.draft;
+      session.hasSuggestions = true;
+      session.draftUsesPage = request.includeContext;
+    }
+    sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer,
+      draft: result.draft ? { ...result.draft, sessionId: session.id, channel: session.source?.channel ?? "other", contact: "", target: session.target ?? undefined } : undefined });
   } catch (error) {
     if (quickOverlaySession !== session) return;
     const cancelled = controller.signal.aborted || (error instanceof Error && error.name === "AbortError");
@@ -1011,9 +1065,19 @@ function registerIpc(): void {
   ipcMain.handle("ask:open", async (event) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Ask AI is available from the floating panel.");
     const session = usableQuickOverlaySession();
-    if (!session && quickOverlaySession) throw new Error("This page context expired. Open ContextCue again.");
+    if (!session && quickOverlaySession) return showAskOverlay(quickOverlaySession);
     if (session) await assertSessionCurrent(session);
     return session ? showAskOverlay(session) : showQuickAsk();
+  });
+  ipcMain.handle("ask:refresh", (event, sessionId: string) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating panel to refresh.");
+    return refreshAsk(sessionId);
+  });
+  ipcMain.handle("ask:show-draft", async (event, sessionId: string) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
+    if (quickOverlaySession?.id !== sessionId || !quickOverlaySession.hasSuggestions) throw new Error("No draft in this session.");
+    // Reading/copying existing drafts remains available after expiry.
+    overlaySizer?.show("suggestions");
   });
   ipcMain.handle("ask:exit", (event, returnToSuggestions: boolean) => {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) return;
@@ -1059,6 +1123,15 @@ function registerIpc(): void {
       });
     }
     return result;
+  });
+  ipcMain.handle("setup:ask-example", async (event, imageDataUrl: string, question: string) => {
+    requireMainWindow(event);
+    if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,") || imageDataUrl.length > 500_000
+      || typeof question !== "string" || !question.trim() || question.length > 2_000) throw new Error("Enter a question for the fictional example.");
+    const snapshot = store.getData();
+    const result = await streamAnswerWithModel(snapshot, readApiKey(), question, imageDataUrl, [], undefined, () => {}, new AbortController().signal);
+    await rememberAskTokenUsage(result.tokenUsage, "other", snapshot);
+    return { answer: result.answer, draft: result.draft };
   });
   ipcMain.handle("setup:example", async (event, imageDataUrl: string) => {
     requireMainWindow(event);

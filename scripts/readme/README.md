@@ -1,6 +1,6 @@
 # README screenshots
 
-These six illustrated demos render the **actual React suggestion and Ask AI panels** in a browser, over a fictional team conversation. The surrounding chat window is a documentation illustration, not a third-party integration. Replies are deterministic fixtures, not examples measured from a live model. No personal data, OS screenshots, API keys, or model calls are used.
+These six illustrated demos render the **actual React suggestion and Ask AI panels** in a browser, over a fictional team conversation. The surrounding chat window is a documentation illustration, not a third-party integration. The Ask AI image leads the README; displayed shortcuts are the defaults for new installs (upgrades preserve saved shortcuts). Replies are deterministic fixtures, not examples measured from a live model. No personal data, OS screenshots, API keys, or model calls are used.
 
 - `fixtures.mjs`: parallel English / Simplified Chinese conversations, candidates, instructions, questions, and answers.
 - `preview.mjs`: injects fixture responses into the existing browser demo API before mounting `src/main.tsx`. It does not change application source or local user data.
@@ -8,7 +8,7 @@ These six illustrated demos render the **actual React suggestion and Ask AI pane
 - `capture-playwright.js`: captures each scene at 1200 × 760 CSS pixels and 2× resolution, checks for clipped panel text, and exercises revision and return-to-original behavior.
 - `capture.mjs`: runs the capture through Playwright CLI, then copies the results from `output/playwright/` to `docs/images/readme/`.
 
-The Chinese images use Chinese conversations and generated content. Controls retain their current English labels; these images do not imply that the app has a fully localized interface. Match this disclosure in both READMEs when refreshing the images.
+The Chinese images use Chinese conversations and generated content. Controls retain their current English labels; these images do not imply that the app has a fully localized interface. Keep screenshot provenance and reproduction details in this document so the product READMEs stay focused on features and getting started.
 
 ## Regenerate
 

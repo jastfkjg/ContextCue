@@ -2,6 +2,7 @@ import type {
   AppSettings,
   AppUpdateState,
   AskStreamEvent,
+  AskOverlayContext,
   RevisionCandidateEvent,
   CandidateReply,
   CaptureSource,
@@ -113,8 +114,8 @@ let demoSettings: AppSettings = {
   activeModelId: "openai-default",
   candidateCount: 3,
   locale: "auto",
-  globalShortcut: "CommandOrControl+Shift+Space",
-  askShortcut: "CommandOrControl+Shift+Enter",
+  globalShortcut: "CommandOrControl+Shift+Enter",
+  askShortcut: "CommandOrControl+Shift+Space",
   autoShowOverlay: true,
   onboardingComplete: false
 };
@@ -182,6 +183,9 @@ const demoResult: GenerationResult = {
 
 let demoAskListener: ((event: AskStreamEvent) => void) | null = null;
 let demoAskTimers: number[] = [];
+let demoAskContext: AskOverlayContext = { sessionId: "demo-ask-session", applicationName: "WeChat", windowTitle: "Lin Yue", channel: "wechat", hasPageContext: true, canReturnToSuggestions: false, capturedAt: Date.now() };
+let demoAskOpenListener: ((context: AskOverlayContext) => void) | null = null;
+let demoResetListener: (() => void) | null = null;
 
 function clearDemoAskTimers(): void {
   demoAskTimers.forEach((timer) => window.clearTimeout(timer));
@@ -261,6 +265,9 @@ const browserDemoApi: ContextCueApi = {
     if (!apiKey && !model.apiKeyConfigured) throw new Error("Add an API key before testing this connection.");
     return { ok: true, latencyMs: 642, message: `${model.apiProtocol === "responses" ? "Responses" : "Chat Completions"} endpoint accepted the request.` };
   },
+  askExample: async (_image, question) => /draft|reply|写|回复/i.test(question)
+    ? { answer: "Friday at 10 works for me. See you then!", draft: { ...demoResult, candidates: [{ text: "Friday at 10 works for me. See you then!", tone: "Brief", strategy: "Confirm" }] } }
+    : { answer: "Sam wants to move the design review to **Friday at 10 am** and needs your confirmation." },
   generateExample: async () => {
     await new Promise((resolve) => setTimeout(resolve, 450));
     return { ...demoResult, candidates: [
@@ -277,11 +284,11 @@ const browserDemoApi: ContextCueApi = {
   getPermissions: async () => ({ screen: "granted", accessibility: true }),
   onOverlayResult: (callback) => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") !== "overlay" || params.get("preview") === "loading") return () => undefined;
+    if (params.get("mode") !== "overlay" || ["loading", "ask"].includes(params.get("preview") ?? "")) return () => undefined;
     const timeout = window.setTimeout(() => callback({ ...demoResult, sessionId: "demo-ask-session", channel: "wechat", contact: demoResult.detectedContact }), 650);
     return () => window.clearTimeout(timeout);
   },
-  onOverlayReset: () => () => undefined,
+  onOverlayReset: (callback) => { demoResetListener = callback; return () => { demoResetListener = null; }; },
   onOverlayExpired: () => () => undefined,
   onOverlayStatus: (callback) => {
     if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
@@ -292,24 +299,32 @@ const browserDemoApi: ContextCueApi = {
     }), 0);
     return () => window.clearTimeout(timeout);
   },
-  openAsk: async () => ({
-    sessionId: "demo-ask-session",
-    applicationName: "WeChat",
-    windowTitle: "Lin Yue",
-    channel: "wechat",
-    hasPageContext: true,
-    canReturnToSuggestions: true
-  }),
+  openAsk: async () => ({ ...demoAskContext, canReturnToSuggestions: true }),
+  refreshAsk: async () => {
+    clearDemoAskTimers();
+    demoAskContext = { ...demoAskContext, sessionId: crypto.randomUUID(), capturedAt: Date.now(), canReturnToSuggestions: false };
+    demoResetListener?.();
+    demoAskOpenListener?.(demoAskContext);
+    return demoAskContext;
+  },
+  showDraft: async () => undefined,
   exitAsk: async () => undefined,
   startAsk: (request) => {
     clearDemoAskTimers();
+    if (/draft|reply|rewrite|写|回复|改写/i.test(request.question)) {
+      demoAskTimers.push(window.setTimeout(() => demoAskListener?.({ type: "complete", sessionId: request.sessionId, requestId: request.requestId,
+        answer: demoResult.candidates[0].text,
+        draft: { ...demoResult, generatedAt: request.requestId, sessionId: request.sessionId, channel: "wechat", contact: "" }
+      }), 600));
+      return;
+    }
     const answer = [
       "**The meeting is moving to Thursday at the same time.**",
       "",
       "- Update the calendar invite",
       "- Send the revised deck before the meeting"
     ].join("\n");
-    const chunks = answer.match(/.{1,8}/g) ?? [answer];
+    const chunks = answer.match(/[\s\S]{1,8}/g) ?? [answer];
     chunks.forEach((delta, index) => {
       demoAskTimers.push(window.setTimeout(() => {
         demoAskListener?.({ type: "delta", sessionId: request.sessionId, requestId: request.requestId, delta });
@@ -321,20 +336,14 @@ const browserDemoApi: ContextCueApi = {
   },
   cancelAsk: (requestId) => {
     clearDemoAskTimers();
-    demoAskListener?.({ type: "cancelled", sessionId: "demo-ask-session", requestId });
+    demoAskListener?.({ type: "cancelled", sessionId: demoAskContext.sessionId, requestId });
   },
   copyText: async (text) => { await navigator.clipboard?.writeText(text); },
   onAskOpen: (callback) => {
-    if (new URLSearchParams(window.location.search).get("preview") !== "ask") return () => undefined;
-    const timeout = window.setTimeout(() => callback({
-      sessionId: "demo-ask-session",
-      applicationName: "WeChat",
-      windowTitle: "Lin Yue",
-      channel: "wechat",
-      hasPageContext: true,
-      canReturnToSuggestions: false
-    }), 0);
-    return () => window.clearTimeout(timeout);
+    demoAskOpenListener = callback;
+    const timeout = new URLSearchParams(window.location.search).get("preview") === "ask"
+      ? window.setTimeout(() => callback(demoAskContext), 0) : undefined;
+    return () => { window.clearTimeout(timeout); demoAskOpenListener = null; };
   },
   onAskEvent: (callback) => {
     demoAskListener = callback;
