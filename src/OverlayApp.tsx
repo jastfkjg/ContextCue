@@ -66,6 +66,7 @@ export function OverlayApp() {
     const stopExpired = contextCueApi.onOverlayExpired((event) => {
       eventRevision.current += 1;
       setExpired(event);
+      setStatus({ state: "error", message: event.message });
     });
     return () => {
       stopResult();
@@ -93,10 +94,11 @@ export function OverlayApp() {
 
   const enterAsk = () => {
     const revision = eventRevision.current;
-    void contextCueApi.openAsk().then((context) => { if (revision === eventRevision.current) setAskContext(context); }).catch((error) => {
+    return contextCueApi.openAsk().then((context) => { if (revision === eventRevision.current) setAskContext(context); }).catch((error) => {
       if (revision !== eventRevision.current) return;
-      setPayload(null);
-      setStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
+      // A click can race with switching away. Surface the error in the existing
+      // carousel rather than unmounting the user's selected draft and composer.
+      throw error;
     });
   };
 
@@ -116,7 +118,8 @@ export function OverlayApp() {
       >
         <X size={17} />
       </button>
-      {askContext && <AskPanel key={`ask-${askContext.sessionId}`} context={askContext} onExit={exitAsk}/>}
+      {askContext && <AskPanel key={`ask-${askContext.sessionId}`} context={askContext}
+        contextError={expired?.sessionId === askContext.sessionId ? expired.message : undefined} onExit={exitAsk}/>}
       {payload && (
         <CandidateCarousel
           key={`suggestions-${payload.sessionId ?? payload.generatedAt}`}

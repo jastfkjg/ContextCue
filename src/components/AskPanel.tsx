@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowLeft, Check, Copy, Eye, EyeOff, RefreshCw, Send, Sparkles, Square } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
 import type { AskOverlayContext } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { MarkdownContent } from "./MarkdownContent";
@@ -19,10 +19,11 @@ interface AskTurn {
 
 interface Props {
   context: AskOverlayContext;
+  contextError?: string;
   onExit: () => void;
 }
 
-export function AskPanel({ context, onExit }: Props) {
+export function AskPanel({ context, contextError, onExit }: Props) {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<AskTurn[]>([]);
   const [includeContext, setIncludeContext] = useState(context.hasPageContext);
@@ -34,22 +35,39 @@ export function AskPanel({ context, onExit }: Props) {
   const windowDrag = useRef<{ pointerId: number; screenX: number; screenY: number } | null>(null);
   const streaming = Boolean(activeRequest.current);
 
-  const sourceLabel = useMemo(() => {
-    const label = context.windowTitle.trim() || context.applicationName.trim() || "Current page";
-    return label.length > 28 ? `${label.slice(0, 27)}…` : label;
-  }, [context.applicationName, context.windowTitle]);
+  const sourceLabel = context.windowTitle.trim() || context.applicationName.trim() || "Current page";
+  const contextTitle = contextError || (!context.hasPageContext
+    ? context.contextUnavailableReason || "No page snapshot available"
+    : `${includeContext ? "Using" : "Not using"} captured page: ${sourceLabel}. Click to ${includeContext ? "exclude" : "include"} it.`);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, [context.sessionId]);
 
+  useEffect(() => {
+    if (!contextError) return;
+    activeRequest.current = null;
+    setTurns((current) => current.map((turn) => turn.status === "streaming" ? { ...turn, status: "stopped" } : turn));
+  }, [contextError]);
+
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    input.style.height = "0px";
-    const nextHeight = Math.min(ASK_INPUT_MAX_HEIGHT, Math.max(ASK_INPUT_MIN_HEIGHT, input.scrollHeight));
-    input.style.height = `${nextHeight}px`;
-    input.style.overflowY = input.scrollHeight > ASK_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+    const fit = () => {
+      input.style.height = "0px";
+      const nextHeight = Math.min(ASK_INPUT_MAX_HEIGHT, Math.max(ASK_INPUT_MIN_HEIGHT, input.scrollHeight));
+      input.style.height = `${nextHeight}px`;
+      input.style.overflowY = input.scrollHeight > ASK_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+    };
+    fit();
+    let width = input.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (input.clientWidth === width) return;
+      width = input.clientWidth;
+      fit();
+    });
+    observer.observe(input);
+    return () => observer.disconnect();
   }, [question]);
 
   useEffect(() => contextCueApi.onAskEvent((event) => {
@@ -85,7 +103,7 @@ export function AskPanel({ context, onExit }: Props) {
 
   const submit = (override?: string) => {
     const nextQuestion = (override ?? question).trim();
-    if (!nextQuestion || activeRequest.current) return;
+    if (!nextQuestion || activeRequest.current || contextError) return;
     const requestId = crypto.randomUUID();
     activeRequest.current = requestId;
     followOutput.current = true;
@@ -143,21 +161,21 @@ export function AskPanel({ context, onExit }: Props) {
       >
         {context.canReturnToSuggestions ? (
           <button className="ask-back" onClick={onExit} aria-label="Back to suggestions" title="Back to suggestions">
-            <ArrowLeft size={15}/>
+            <ArrowLeft size={16} aria-hidden="true"/>
           </button>
-        ) : <span className="ask-mark"><Sparkles size={14}/></span>}
-        <div className="ask-heading"><strong>Ask AI</strong><span>Only this page · fresh session</span></div>
-        {context.hasPageContext && (
+        ) : <span className="ask-mark"><Sparkles size={16} aria-hidden="true"/></span>}
+        <div className="ask-heading"><strong>Ask AI</strong></div>
           <button
-            className={`ask-context-chip ${includeContext ? "ask-context-chip--active" : ""}`}
+            className={`ask-context-chip ${includeContext && !contextError ? "ask-context-chip--active" : ""}`}
             onClick={() => setIncludeContext((current) => !current)}
             aria-pressed={includeContext}
-            title={includeContext ? "Current-page context is included" : "Current-page context is excluded"}
+            aria-label="Include captured page context"
+            disabled={!context.hasPageContext || Boolean(contextError)}
+            title={contextTitle}
           >
-            {includeContext ? <Eye size={13}/> : <EyeOff size={13}/>}
-            <span>{sourceLabel}</span>
+            {includeContext ? <Eye size={13} aria-hidden="true"/> : <EyeOff size={13} aria-hidden="true"/>}
+            <span>{contextError ? "Page expired" : includeContext ? sourceLabel : context.hasPageContext ? "Page off" : "No page"}</span>
           </button>
-        )}
       </header>
 
       <div
@@ -172,14 +190,25 @@ export function AskPanel({ context, onExit }: Props) {
       >
         {turns.length === 0 ? (
           <div className="ask-empty">
-            <Sparkles size={18}/>
-            <strong>What would you like to know?</strong>
-            <span>{includeContext ? "Ask about the captured page or anything else." : context.contextUnavailableReason || "Ask a quick question without page context."}</span>
+            <strong>{includeContext ? "Ask about this page" : "Ask anything"}</strong>
+            <p>{includeContext ? "Get a summary, an explanation, or help with a reply." : "Ask a question or describe what you’re working on."}</p>
+            {includeContext && <div className="ask-starters" aria-label="Question starters">
+              {[
+                ["Summarize", "Summarize the key points on this page."],
+                ["Explain", "Help me understand what is happening on this page."],
+                ["Draft a reply", "Help me draft a reply based on this page."]
+              ].map(([label, prompt]) => <button key={label} type="button" onClick={() => {
+                setQuestion(prompt);
+                inputRef.current?.focus();
+              }}>{label}</button>)}
+            </div>}
+            {!context.hasPageContext && context.contextUnavailableReason && <small>{context.contextUnavailableReason}</small>}
           </div>
         ) : turns.map((turn) => (
           <article className="ask-turn" key={turn.id}>
             <p className="ask-question">{turn.question}</p>
             <div className={`ask-answer ask-answer--${turn.status}`}>
+              <div className="ask-answer-label"><Sparkles size={12} aria-hidden="true"/><span>ContextCue</span></div>
               {turn.answer
                 ? <MarkdownContent content={turn.answer} className="ask-markdown"/>
                 : turn.status === "streaming"
@@ -189,7 +218,7 @@ export function AskPanel({ context, onExit }: Props) {
               {turn.status === "error" && (
                 <div className="ask-error" role="alert">
                   <span>{turn.error}</span>
-                  <button onClick={() => submit(turn.question)}><RefreshCw size={12}/> Retry</button>
+                  <button disabled={streaming || Boolean(contextError)} onClick={() => submit(turn.question)}><RefreshCw size={12}/> Retry</button>
                 </div>
               )}
               {turn.answer && turn.status !== "streaming" && (
@@ -204,30 +233,34 @@ export function AskPanel({ context, onExit }: Props) {
       </div>
 
       <div className="ask-composer">
+        {contextError && <p className="ask-context-notice" role="status">{contextError}</p>}
         <label className="visually-hidden" htmlFor="ask-question">Ask AI a question</label>
-        <textarea
-          id="ask-question"
-          ref={inputRef}
-          value={question}
-          rows={1}
-          maxLength={2_000}
-          placeholder={includeContext ? "Ask about this page…" : "Ask a quick question…"}
-          onChange={(event) => setQuestion(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-            event.preventDefault();
-            submit();
-          }}
-        />
-        <button
-          className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
-          onClick={streaming ? stop : () => submit()}
-          disabled={!streaming && !question.trim()}
-          aria-label={streaming ? "Stop answering" : "Send question"}
-          title={streaming ? "Stop" : "Send · Enter"}
-        >
-          {streaming ? <Square size={13} fill="currentColor"/> : <Send size={15}/>} 
-        </button>
+        <div className="ask-input-frame">
+          <textarea
+            id="ask-question"
+            ref={inputRef}
+            value={question}
+            rows={1}
+            maxLength={2_000}
+            placeholder={includeContext ? "Ask about this page…" : "Ask a quick question…"}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              submit();
+            }}
+          />
+          <button
+            className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
+            onClick={streaming ? stop : () => submit()}
+            disabled={Boolean(contextError) || (!streaming && !question.trim())}
+            aria-label={streaming ? "Stop answering" : "Send question"}
+            title={streaming ? "Stop" : "Send · Enter"}
+          >
+            {streaming ? <Square size={12} fill="currentColor" aria-hidden="true"/> : <ArrowUp size={17} aria-hidden="true"/>}
+          </button>
+        </div>
+        <div className="ask-composer-hint"><span>Enter to send</span><span>Shift + Enter for a new line</span></div>
       </div>
     </section>
   );

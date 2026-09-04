@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #f0f0e9; }
+body { font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #20251d; }
+.stage { position: relative; width: 1200px; height: 760px; overflow: hidden; background: radial-gradient(ellipse at 100% 50%, #e3edcd, transparent 62%), #f3f3ed; }
+.masthead { margin: 36px 52px 0; display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 11px; font-size: 21px; font-weight: 680; letter-spacing: -.8px; }
+.brand img { width: 34px; height: 34px; }
+.masthead > span { color: #78816d; font-size: 11px; font-weight: 640; letter-spacing: 1.2px; }
+h1 { margin: 28px 52px 10px; font-size: 43px; line-height: 1.2; letter-spacing: -1.8px; font-weight: 640; }
+.subtitle { margin: 0 52px; font-size: 16px; line-height: 1.6; color: #68705e; }
+.chat-window { position: absolute; left: 52px; top: 228px; width: 740px; height: 426px; border: 1px solid #d5d8ce; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 15px 40px #2830190c; }
+.window-chrome { height: 38px; display: flex; align-items: center; gap: 17px; padding: 0 14px; background: #f8f9f5; border-bottom: 1px solid #e9ebe4; font-size: 10px; color: #8b9183; }
+.traffic { display: flex; gap: 5px; }
+.traffic i { width: 8px; height: 8px; border-radius: 50%; background: #dbddd4; }
+.chat-layout { display: grid; grid-template-columns: 158px 1fr; height: calc(100% - 38px); }
+aside { background: #f5f6f1; padding: 24px 12px; border-right: 1px solid #e8ebe0; }
+aside > strong { display: block; margin: 0 0 29px 6px; font-size: 13px; font-weight: 650; }
+aside > small { display: block; margin: 0 0 10px 7px; font-size: 9px; color: #999f8e; letter-spacing: 1px; }
+.channel { display: flex; align-items: center; gap: 8px; padding: 11px 7px; font-size: 11px; color: #8e9683; border-radius: 5px; }
+.channel > span { color: #a0a88e; }
+.channel.selected { color: #526235; background: #e5edda; font-weight: 600; }
+.chat-main { position: relative; }
+.chat-main > header { height: 59px; border-bottom: 1px solid #f0f1ec; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 25px; }
+.chat-main > header strong { font-size: 13px; font-weight: 630; }
+.chat-main > header span { font-size: 9px; color: #a2a997; }
+.messages { padding: 14px 23px; }
+.date { margin-bottom: 18px; color: #a0a791; font-size: 9px; }
+.message { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 22px; width: 362px; }
+.avatar { flex: 0 0 29px; height: 29px; border-radius: 8px; background: #ece4d9; color: #8e6f4d; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+.avatar--me { color: #687d3f; background: #e6edd9; }
+.message strong { display: block; margin: 0 0 5px; font-size: 11px; font-weight: 640; }
+.message p { margin: 0; color: #59614e; font-size: 13px; line-height: 1.65; }
+.message-input { position: absolute; bottom: 19px; left: 23px; width: 354px; height: 40px; border: 1px solid #e8ebdf; border-radius: 7px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 11px; color: #a5ab9a; }
+.message-input > span { color: #c0c7b5; }
+.panel-position { position: absolute; left: 658px; top: 388px; width: 440px; transform: scale(1.1); transform-origin: top left; }
+.panel-label { display: flex; align-items: center; gap: 7px; margin: 0 0 12px 10px; color: #69794c; font-size: 11px; font-weight: 600; }
+.panel-label > i { width: 6px; height: 6px; background: #96b357; border-radius: 50%; }
+iframe { display: block; width: 440px; height: 190px; border: 0; border-radius: 20px; box-shadow: 0 22px 60px #35452224, 0 4px 12px #3545220a; background: transparent; }
+.stage--revise .panel-position { top: 274px; }
+.stage--ask .panel-position { top: 227px; }
+.stage--ask iframe { height: 390px; }
+.tip { position: absolute; left: 52px; bottom: 54px; display: flex; align-items: center; gap: 13px; color: #62704f; font-size: 12px; }
+kbd { display: inline-block; padding: 7px 11px; border: 1px solid #ced7bd; border-bottom-width: 2px; border-radius: 6px; font: 11px "Inter Variable", sans-serif; color: #4c5d35; background: #f8faf2; }
+footer { position: absolute; left: 52px; right: 52px; bottom: 20px; display: flex; justify-content: space-between; color: #99a38b; font-size: 9px; }
+footer > span:last-child { font-weight: 650; letter-spacing: 1px; }

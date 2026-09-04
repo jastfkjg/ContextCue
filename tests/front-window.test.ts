@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeFrontmostWindow, sameFrontmostWindow } from "../electron/services/front-window";
+import { normalizeFrontmostWindow, sameFrontmostWindow, sameNativeWindow } from "../electron/services/front-window";
 import { sourceForWindow } from "../electron/services/quick-context";
 
 describe("native foreground window identity", () => {
@@ -21,6 +21,9 @@ describe("native foreground window identity", () => {
     expect(sameFrontmostWindow(front, { ...front, windowId: "5678" })).toBe(false);
     expect(sameFrontmostWindow(front, { ...front, processId: 42 })).toBe(false);
     expect(sameFrontmostWindow(front, { ...front, windowTitle: "Another tab" })).toBe(false);
+    expect(sameNativeWindow(front, { ...front, windowTitle: "Another tab" })).toBe(true);
+    expect(sameNativeWindow(front, { ...front, windowId: "5678" })).toBe(false);
+    expect(sameNativeWindow(front, { ...front, processId: 42 })).toBe(false);
     expect(sameFrontmostWindow(front, { applicationName: "", windowTitle: "" })).toBe(false);
     expect(sameFrontmostWindow({ ...front, windowTitle: "" }, { ...front, windowTitle: "" })).toBe(true);
   });

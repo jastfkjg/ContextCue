@@ -44,7 +44,7 @@ export function OverlayWindowControls() {
           contextCueApi.resizeOverlayBy("bottom-right", delta[0], delta[1]);
         }
       }}>
-      {edge === "bottom-right" && <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M9 12 12 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+      {edge === "bottom-right" && <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 13h3a6 6 0 0 0 6-6V4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
     </div>)}
   </>;
 }

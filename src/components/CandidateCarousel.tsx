@@ -13,7 +13,7 @@ interface Props {
   scenario?: AssistScenario;
   target?: InputTarget;
   compact?: boolean;
-  onAsk?: () => void;
+  onAsk?: () => void | Promise<void>;
   onHeightChange?: (height: number, newCandidate: boolean, expanded?: boolean) => void;
   sessionId?: string;
   contextError?: string;
@@ -59,11 +59,6 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
       activeRequest.current = null;
     };
   }, [sessionId]);
-  useEffect(() => {
-    if (!compact || !sessionId) return;
-    contextCueApi.setRevisionComposerOpen(sessionId, active && composerOpen);
-    return () => contextCueApi.setRevisionComposerOpen(sessionId, false);
-  }, [compact, sessionId, composerOpen, active]);
   useEffect(() => {
     if (!contextError || !activeRequest.current) return;
     const id = activeRequest.current;
@@ -348,7 +343,12 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
             </button>
             <button ref={reviseButton} className={`compact-text-action ${composerOpen ? "is-active" : ""}`} disabled={applying || !sessionId} aria-expanded={composerOpen} aria-label="Revise suggestion" onClick={() => { if (composerOpen) closeComposer(); else { setFeedback(""); setComposerOpen(true); } }}><PencilLine size={15} aria-hidden="true"/><span>Revise</span></button>
             {onAsk && (
-              <button className="compact-text-action" onClick={() => { stopRevision(); onAsk(); }} aria-label="Ask AI about this page">
+              <button className="compact-text-action" onClick={async () => {
+                stopRevision();
+                setFeedback("");
+                try { await onAsk(); }
+                catch (error) { setFeedback(error instanceof Error ? error.message : String(error)); }
+              }} aria-label="Ask AI about this page">
                 <Sparkles size={15} aria-hidden="true"/>
                 <span>Ask AI</span>
               </button>

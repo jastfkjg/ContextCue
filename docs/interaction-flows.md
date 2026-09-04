@@ -16,10 +16,19 @@
 - Suggestion / revision requests use `contextPolicy: page-only`. Stored documents, profiles, facts, contacts and accepted examples are excluded. Existing local data is not deleted.
 - Ask AI history is owned by the main process, never accepted from the renderer; only the latest three completed turns in that session are included.
 - The React question panel is keyed by session ID. Reset notifications clear candidates and question state. Late async opens, model results and stream deltas are guarded against replaced sessions.
-- A detected external window / page-title mismatch clears the session and aborts its requests. With the revision composer open, preserve local candidates and instructions, show an expiry notice, and allow copying only. Otherwise hide the panel. Returning to the old window does not revive the snapshot. Moving focus to another field in the same page can hide and restore the panel only when the composer is closed.
+- Switching to another native window / application (including ContextCue settings), or temporarily losing foreground-window identity, hides the panel without resetting its renderer or cancelling generation. Returning to the originating native window restores the same panel without stealing focus, reanchoring or resending initialization events. Candidate selection, instructions, unsent questions and the visible conversation remain. Moving between fields in the same window does not hide the panel; insertion still validates its original target immediately before writing.
+- A detected title change in the originating native window or the five-minute snapshot limit expires AI / insertion authority and cancels requests, while preserving local content for reading and copying. Ask AI shows an expiry notice and disables submission / retry. Expiry while hidden must not prevent the panel from returning with its saved content. Expired snapshots cannot be revived by returning to the old title; use a new invocation.
 - Closing the panel cancels its requests. Each suggestion or revision request has a 45-second total budget, including one existing format-repair retry. Ask AI also has a 45-second limit.
-- The snapshot is fixed at invocation. Without DOM integration, content changes and same-title tabs cannot always be detected; reinvoke after navigating. The existing five-minute session lifetime remains.
+- The snapshot is fixed at invocation. Without DOM integration, content changes and same-title tabs cannot always be detected; reinvoke after navigating. The five-minute context lifetime is not extended by hiding and restoring the panel; local content remains until closing or starting a new invocation.
 - Disabling page context omits the screenshot and page metadata for that question, but not already completed turns in the same session. Start a fresh invocation for a fully empty conversation.
+
+## Ask AI presentation
+
+- Use a single-row header with a quiet back button, Ask AI title and a truncated page-source toggle. Its tooltip retains the full captured page title. The toggle has a stable accessible name and pressed state; Page off explicitly means the screenshot is excluded from the next request. No page is disabled when no snapshot is available.
+- The empty state offers Summarize, Explain and Draft a reply only when page context is enabled. These actions prefill the question and focus the input; they do not send a model request until the user submits.
+- Use an opaque reading surface, distinct question bubbles, a small ContextCue answer label and readable Markdown typography. Long answers scroll independently of the header and composer.
+- Keep a single input border and a subdued send button until text is entered. Enter submits, Shift + Enter inserts a newline, and the input grows up to 96px. Recalculate its height when the user changes window width so wrapped text remains visible.
+- All floating panels retain edge and corner resizing. Replace the permanent diagonal grip with a curved corner hint visible only on hover, drag or keyboard focus. Keep its 24px hit area, focus outline and arrow-key resizing; reserve space below the Ask AI input so the corner does not overlap text entry or keyboard hints.
 
 ## Inline revision and candidate groups
 
@@ -32,7 +41,7 @@
 - Keep the current group visible until the first revised candidate is ready, then select that first result. Later arrivals append to the revised group without changing the selected index. Display the actual available count plus generation progress; a provider may return fewer usable alternatives than requested.
 - Retain only the original group and the latest revised group. Back to original suggestions / Show revised suggestions switch between them. Revising again replaces the previous revised group, with rollback on failure. Returning from Ask AI preserves the group and selection; the hidden carousel suspends sizing and keyboard handling.
 - Success collapses the composer without a save step. Stop keeps completed candidates and the instruction. Failure restores the pre-request group and selection, keeping the instruction for retry. No result arriving after stop, close, expiry or a new request may overwrite current state. `assist:cancel-revision` is scoped to its request ID, including while foreground validation is pending.
-- `overlay:revision-composer` reports whether the current session's composer is open, preserving the panel through context invalidation. Copy / Insert is a separate explicit action and never submits a form or message. Page-only copying/insertion does not append accepted history or persistent preferences.
+- Local work survives temporary window switches and context expiry regardless of whether the composer is open; the former `overlay:revision-composer` IPC is removed. Copy / Insert is a separate explicit action and never submits a form or message. Page-only copying/insertion does not append accepted history or persistent preferences.
 
 ## Regression coverage and manual acceptance
 
@@ -52,6 +61,8 @@ Browser preview checks (no live model, OS permissions or app insertion):
 Packaged-app acceptance still required on each supported OS:
 
 - Generate / ask in WeChat, then invoke in a browser while the first model request is still pending. Only browser content may appear; inspect outbound test-provider payloads for isolation.
+- Without invoking again, switch to another window while reading, revising or streaming an answer, then return to the source window. Check that the panel restores its position, size, selection, draft and conversation without stealing focus; background completions must not show over the other window. Repeat via Settings and by selecting another input field on return.
+- Stay away beyond five minutes, then return: saved content remains readable / copyable, with AI and insertion disabled. Close the panel and switch away / back again: it must not reappear.
 - Repeat across two windows of the same app, browser tabs with different titles, and closing/reopening the same page.
 - Confirm revised candidates insert only into the original validated control, never auto-send, and do not restore old results after closing.
 - Verify permission denial/regrant and a real image-capable provider, without using sensitive conversations as test data.

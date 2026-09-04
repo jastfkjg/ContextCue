@@ -105,10 +105,14 @@ export async function getFrontmostWindow(excludedPid = process.pid): Promise<Fro
   return { applicationName: "", windowTitle: "" };
 }
 
-export function sameFrontmostWindow(expected: FrontmostWindow, current: FrontmostWindow): boolean {
+export function sameNativeWindow(expected: FrontmostWindow, current: FrontmostWindow): boolean {
   if (!expected.windowId || expected.windowId !== current.windowId) return false;
   if (expected.processId && expected.processId !== current.processId) return false;
   if (expected.appId && current.appId && expected.appId !== current.appId) return false;
+  return true;
+}
+
+export function sameFrontmostWindow(expected: FrontmostWindow, current: FrontmostWindow): boolean {
   // Window identity survives a tab change; invalidate cached context when its title changes.
-  return expected.windowTitle === current.windowTitle;
+  return sameNativeWindow(expected, current) && expected.windowTitle === current.windowTitle;
 }

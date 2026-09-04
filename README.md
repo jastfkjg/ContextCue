@@ -1,91 +1,42 @@
 <div align="center">
-  <img src="./build/icon.png" width="96" height="96" alt="ContextCue app icon" />
+  <img src="./build/icon.png" width="80" height="80" alt="ContextCue app icon" />
   <h1>ContextCue</h1>
-  <p><strong>Ask, write, and reply from any window.</strong></p>
-  <p>A local-first desktop AI assistant that uses on-screen context to answer questions and help you write, rewrite, and reply.</p>
-
+  <p><strong>Ask, write, and reply from the window you’re in.</strong></p>
+  <p>A desktop AI assistant that turns on-screen context into useful answers and words that fit.</p>
   <p>
-    <img alt="Electron" src="https://img.shields.io/badge/Electron-41-47848F?logo=electron&logoColor=white" />
-    <img alt="React" src="https://img.shields.io/badge/React-18-20232A?logo=react&logoColor=61DAFB" />
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
-    <img alt="Local first" src="https://img.shields.io/badge/local--first-by%20default-C8FF3D?labelColor=24251F&color=C8FF3D" />
-  </p>
-
-  <p>
-    <a href="./README.zh-CN.md">简体中文</a>
+    <a href="https://github.com/jastfkjg/ContextCue/releases">Download for macOS</a>
     · <a href="#quick-start">Quick start</a>
-    · <a href="#privacy-boundaries">Privacy</a>
-    · <a href="./TODO.md">Roadmap</a>
+    · <a href="./README.zh-CN.md">简体中文</a>
   </p>
+  <p><strong>One shortcut</strong> · Your model provider · You decide what to send</p>
 </div>
 
----
+![ContextCue reads an English team conversation and offers three reply candidates in a floating panel.](./docs/images/readme/reply-en.png)
 
-Invoke ContextCue from the current app or browser window to generate writing suggestions or open a lightweight AI conversation. Every invocation starts a fresh page-only session using its screenshot, explicit input and in-session content—not previous windows, saved memory or accepted replies. Ask AI can also exclude page context. An editable field is not required: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied. You review the text and decide what to use—ContextCue never submits or sends it automatically.
+You’re reading a message, working on a draft, or looking at a page. Press a shortcut and ContextCue uses that window to suggest what to write—or answer a question about what you see. Stay in your workflow, choose a suggestion, and make it your own.
 
-Local-first means memory and settings are stored on your device, not that model inference necessarily runs locally. Screenshots and relevant context are sent to your configured model provider when used in a request.
+*Illustrated demos use the actual ContextCue panels over a fictional chat, with prepared example responses. No personal conversations or live model requests are used. [How these images are made](./scripts/readme/README.md).*
 
-> [!IMPORTANT]
-> Screenshot-based suggestions and Ask AI with page context require a model that supports **image input**. Ask AI without page context also works with text-only models. Some compatible providers silently ignore unsupported image input; ContextCue flags known text-only models and blocks screenshot-based requests for models marked as text-only.
+## What you can do
 
-## At a glance
+| When you need to… | ContextCue helps you… |
+|---|---|
+| **Reply to a conversation** | Generate up to five alternatives from the visible context. Switch with arrow keys, dots, or a horizontal swipe. |
+| **Find the right tone** | Ask for a shorter, warmer, or more direct version. Compare revised suggestions with the originals. |
+| **Understand a page** | Ask for a summary, explanation, or next steps in a compact AI conversation, with optional page context. |
+| **Write beyond chat** | Draft text, rewrite a passage, complete a field, or compose a search query. |
+| **Use your own model** | Connect an image-capable model through a Responses or Chat Completions endpoint; keep multiple configurations. |
+| **Stay in control** | Review before copying or inserting. See provider-reported token usage locally. Nothing is sent or submitted automatically. |
 
-| | Capability | What it does |
-|---|---|---|
-| ⚡ | **Any-window invocation** | Press one global shortcut from an app or browser page, with or without an input field. |
-| ✦ | **Streaming Ask AI** | Open a compact question panel with a second shortcut or from the suggestion panel, with optional page context. |
-| ✦ | **Task-aware drafts** | Generate replies, form-field text, new drafts, rewrites, search queries, and text completions. |
-| ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
-| ↵ | **Apply without submitting** | On macOS, validate the original control before inserting or replacing text. |
-| ✦ | **Revise into multiple alternatives** | Describe a change below the current suggestion. Revised candidates appear in place, with the original group one click away. |
-| 🧠 | **Preserved local memory** | Existing Markdown notes, facts and history remain manageable on-device, but are excluded from page-only sessions. |
-| ✓ | **First-run guide** | Connect a provider, verify image input and permissions, then practice with a fictional conversation. |
-| ◉ | **Multiple model providers** | Configure several Responses or Chat Completions endpoints and choose the default model. |
-| ◷ | **Local usage tracking** | Review provider-reported token counts, model breakdowns, and request history by date range. |
-| 🔒 | **OS-protected keys** | Encrypt each API key with Electron `safeStorage` and the operating-system keychain. |
-
-Window selection uses the operating system's foreground window ID, without an application-name allowlist. Channel labels such as WeChat, Slack, and Gmail provide optional model context and never determine which window is captured.
-
-Search assistance drafts search queries; it does not execute a web search.
-
-## How it works
-
-Quick suggestions use the following flow:
-
-```text
-Current app or browser window
-  └─ global shortcut
-      └─ capture that exact window once; optionally read focused-control metadata
-          └─ create an isolated page session (no stored memory)
-              └─ classify the writing task and call the vision model
-                  └─ validate 1–5 suggestions
-                      └─ swipe · copy · apply
-```
-
-The floating panel tracks the originating application, native window ID and visible window title, plus the recognized focused control on macOS. A detected app, window or page-title change clears the old session and cancels its requests. While the revision composer is open, the panel keeps your suggestions and instructions visible with a notice: you can still copy suggestions, but must reopen ContextCue for AI revisions or insertion. Otherwise the panel hides. Every new invocation captures a fresh page, even in the same window. With the composer closed, changing only the focused field on the same page can temporarily hide the panel and restore it when returning to that field. Insertion validates the original target again before writing.
-
-Suggestions initially fit their content. Drag any edge or the bottom-right grip to resize. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
-
-Ask AI uses `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` by default. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A.
-
-Candidate dots share a compact header with the count and are keyboard accessible with Tab then Enter / Space. Choose **Revise** in the home toolbar to open **How should this change?** below the visible candidate. The panel keeps its position and width, expands downwards up to 540px, and scrolls internally when the screen leaves less room. **Shorter**, **Warmer** and **More direct** append to your instructions without replacing background you have entered. Enter adds a line; arrows inside the field move the caret; `Cmd / Ctrl + Enter` starts revision. Escape closes the composer first.
-
-Revision uses the candidate selected when you submit, your instruction and the session's original screenshot. It requests the configured candidate count (1–5, normally 3) in one streaming request. Each complete, validated candidate appears as soon as it is ready; subsequent arrivals do not change your selection. **Revised · 1/3** identifies the new group. A provider that returns ordinary JSON instead of a stream shows its validated group once the response completes. Initial suggestion generation still waits for its complete response.
-
-Success closes the composer automatically; there is no separate Edit page or Save draft step. **Back to original suggestions** and **Show revised suggestions** switch between the original group and the latest revision, without accumulating every past variant. **Stop** keeps completed candidates and your instructions. Failure restores the group shown before that request and keeps the instructions for retry. Copy / Insert remains a separate explicit action; neither generation nor revision sends a message. Returning from Ask AI preserves the candidate group and selection.
-
-The main process owns each session's Q&A history and includes at most three completed turns. Suggestion and revision requests each have a 45-second total timeout, including a possible format-repair retry. Closing or replacing a session cancels requests and discards late results.
+Works from app and browser windows without a per-app integration. On macOS, recognized text fields support insertion; copying is available when insertion is not supported. Search assistance drafts queries; it does not browse the web.
 
 ## Quick start
 
-### Requirements
+### 1. Install or run locally
 
-- Node.js 22.12+
-- npm 10+
-- macOS, Windows, or Linux
-- An API key for a configured model; image input is required for screenshot-based features, but not for Ask AI with page context turned off
+**macOS:** Open [Releases](https://github.com/jastfkjg/ContextCue/releases), download the DMG for **Apple Silicon (`arm64`)** or **Intel (`x64`)**, and move ContextCue to Applications. Check the release notes for signing and first-launch instructions; early-access builds may not be notarized.
 
-### Run locally
+**From source:** Requires **Node.js 22.12+** and **npm 10+**.
 
 ```bash
 git clone https://github.com/jastfkjg/ContextCue.git
@@ -94,134 +45,69 @@ npm install
 npm run dev
 ```
 
-### First suggestion
+macOS is the primary verified platform. Windows and Linux can run from source; Linux capture requires X11 and `xdotool`. Cross-app insertion is currently macOS-only.
 
-1. First launch opens **Setup guide**. Choose a provider, enter an image-capable model ID and API key, and expand **Connection details** if needed. Advanced model management remains in **Settings**.
-2. Choose **Verify model** to check connection and image understanding using a synthetic color image, not your windows. Check screen access, grant permissions in system settings if needed, then **Check again**. macOS insertion permission is optional; copying works without it.
-3. Generate a reply to the fictional example, select a dot or copy a candidate, then **Start using ContextCue** to enter the daily home. Verification and example requests may incur provider charges. Setup can be deferred or reopened from the sidebar. Completion persists; existing configured installs are not forced through setup again.
-4. Open an app or page. Optionally focus a text field for direct insertion.
-5. Press `⌘ ⇧ Space` on macOS or `Ctrl ⇧ Space` on Windows / Linux.
-6. Swipe between candidates and copy one, or insert it into a recognized field. ContextCue never submits automatically.
+### 2. Connect a model
 
-To ask a quick question instead, press `⌘ ⇧ Enter` / `Ctrl ⇧ Enter`, or choose **Ask AI** from the suggestion panel. Both shortcuts can be changed in Settings. If either registration fails, ContextCue keeps both previous shortcuts.
+The **Setup guide** walks you through adding a model and API key, verifying image input, checking screen access, and trying a fictional conversation. macOS Accessibility permission is optional and enables insertion into supported fields.
 
-### Environment variables
+Use a model that supports **image input** for suggestions and page-aware questions. Text-only models work with **Ask AI** when page context is off. Model requests, including setup verification, may incur provider charges. [Provider and environment configuration →](./docs/guide.md#model-providers)
 
-You can provide the default model connection through the environment instead of entering it in the interface:
+### 3. Open a window and call ContextCue
+
+| Action | macOS | Windows / Linux |
+|---|---|---|
+| Generate writing suggestions | `⌘ ⇧ Space` | `Ctrl ⇧ Space` |
+| Open Ask AI | `⌘ ⇧ Enter` | `Ctrl ⇧ Enter` |
+| Switch suggestions | `←` / `→` | `←` / `→` |
+| Apply the selected suggestion¹ | `Enter` | `Enter` |
+| Submit revision instructions | `⌘ Enter` | `Ctrl Enter` |
+| Close the composer or panel | `Esc` | `Esc` |
+
+¹ Outside text inputs, with the revision composer closed. Inserts into a recognized macOS field, otherwise copies. It never sends the message. Both global shortcuts are configurable in **Settings**.
+
+## See it in action
+
+### Make a draft sound like you
+
+Choose **Revise**, describe the change, and get fresh alternatives in the same panel. Start with **Shorter**, **Warmer**, or **More direct**, or write your own instruction. You can return to the original suggestions at any time.
+
+![The real ContextCue revision composer with an English draft and the instruction: Make it shorter and friendlier. Keep the meeting time.](./docs/images/readme/revise-en.png)
+
+### Ask the page, skip the context copying
+
+Open **Ask AI** to ask “What do I need to do before the review?” or “Explain this page.” Answers stream into the panel, and you can ask follow-up questions. Toggle the page chip to include or exclude the captured page for your next question.
+
+![ContextCue answers an English question about the meeting, identifying the updated deck as the remaining task.](./docs/images/readme/ask-en.png)
+
+Each invocation starts a fresh session. The snapshot stays fixed during that session—invoke again after the page changes. Turning page context off excludes the screenshot and page metadata from the next request; earlier answers in that session can still provide context.
+
+## Your context, your choice
+
+- **Capture on invocation.** ContextCue does not record your screen in the background. A new invocation takes a new snapshot.
+- **Your chosen provider.** Screenshots and relevant text are sent to the model endpoint you configure when used in a request. “Local-first” describes storage; inference may run remotely.
+- **Local settings and history.** Settings, memory documents, and usage records stay on your device. Saved memory and past accepted replies are excluded from page-only suggestions and Q&A. API keys are encrypted with OS-backed storage; the entire data file is not encrypted.
+- **You approve the words.** Copy or insert explicitly. ContextCue never submits a form or sends a message for you. Screenshots are not automatically redacted.
+
+[Privacy details](./docs/guide.md#privacy-boundaries) · [Platform and capture limitations](./docs/guide.md#current-limitations)
+
+## Development and documentation
+
+Built with **Electron, React, and TypeScript**. The browser preview uses demo data; real capture, global shortcuts, secure key storage, and insertion require Electron.
 
 ```bash
-cp .env.example .env
-export CONTEXTCUE_API_KEY="your-key"
-export CONTEXTCUE_API_BASE_URL="https://api.openai.com/v1"
-export CONTEXTCUE_MODEL="your-vision-model"
-npm run dev
+npm run lint     # TypeScript validation
+npm test         # Unit tests
+npm run build    # Build the desktop app
+npm run package  # Create an unpacked application
 ```
 
-Do not commit `.env` files.
-
-## Model providers
-
-Each saved model has its own endpoint, protocol, image-input capability, and securely stored API key.
-
-| API format | Use it when |
+| Explore | Details |
 |---|---|
-| **Responses API** | The provider explicitly supports an OpenAI-style `/responses` endpoint. |
-| **Chat Completions** | The provider exposes a compatible `/chat/completions` endpoint, including many hosted and local services. |
+| [User guide](./docs/guide.md) | Setup, model providers, local memory, token usage, architecture, and all development commands |
+| [Interaction flows](./docs/interaction-flows.md) | Session boundaries, revisions, and acceptance checks |
+| [Updates and releases](./docs/updates.md) | Packaging, signing, and in-app updates |
+| [Screenshot sources](./scripts/readme/README.md) | Reproduce the English and Chinese demo images |
+| [Roadmap](./TODO.md) | Current priorities and planned features |
 
-**Test connection** in Settings verifies endpoint access and credentials. **Verify model** in the setup guide additionally checks the answer to a randomized synthetic color image; a text-only OK is not treated as image verification. This probe does not guarantee accurate understanding of every screenshot. Known DeepSeek text models are marked text-only during settings migration; unknown providers can be corrected in Settings.
-
-## Local memory
-
-Use **Memory** to keep and preview existing Markdown notes. Global / Channel / Person scopes and enabled state remain as compatibility metadata, but are not used by page-only sessions. Previously saved facts can still be inspected and removed.
-
-The document names end in `.md`, but their contents are stored inside Electron's platform-specific `userData/contextcue-data.json`, alongside the other local data:
-
-| Data | Purpose |
-|---|---|
-| `documents` | Editable Markdown context, scope, and enabled state |
-| `profile` | Legacy personal context retained for compatibility and fallback |
-| `contacts` | Relationship-specific tone, notes, and channel |
-| `facts` | Explicitly saved preferences, durable facts, and follow-ups |
-| `acceptedReplies` | Backward-compatible storage for up to 100 accepted suggestions, including task and target metadata |
-| `tokenUsage` | Up to 5,000 local request records, including provider-reported token counts and model metadata |
-| `settings` | Model, candidate, language, shortcut, and overlay preferences |
-
-Page-only suggestions, revisions and Ask AI never load these documents, contacts, facts or accepted examples. Copying, inserting or revising in the floating panel no longer appends long-term accepted history. Existing data is preserved; provide any additional background explicitly in the current session. Legacy APIs and storage structures remain for compatibility.
-
-## Token usage
-
-Open **Usage** to filter usage by model and the last 7 days, last 30 days, or all retained records. The page shows input/output totals, daily trends, model breakdowns, and recent request history. Counts come from provider responses; missing counts are shown as **Not reported**, not estimated. Usage records stay on your device and are not a provider billing statement.
-
-## Privacy boundaries
-
-- Page snapshots are captured on explicit invocation. Window lists and permission checks also read local thumbnails without uploading them. Setup verification and examples upload only synthetic images.
-- Screenshots are sent to the configured model provider when used for suggestions or page-aware Q&A, but are not written to the long-term memory file. Turning off Ask AI page context excludes the snapshot and page metadata from the question request; it does not undo the snapshot already captured when opening the panel.
-- Text inside screenshots and page metadata is treated as untrusted data, not as instructions.
-- Long-term memory remains local and is excluded from page-only suggestion, revision and question requests.
-- Saved API keys are not exposed back to the renderer process.
-- Quick invocation is blocked when the macOS accessibility adapter recognizes a sensitive focused field, such as a password or verification-code input. This is not a guarantee that all sensitive content is detected: screenshots are not automatically redacted, and unrecognized controls or other platforms do not have the same field-level check.
-- Applying begins by copying the suggestion; if exact write-back fails, nothing is pasted into a changed field.
-- ContextCue does not record the screen in the background and does not submit forms or send messages automatically.
-
-> [!NOTE]
-> These are ContextCue's application boundaries, not a guarantee about a third-party provider. Review that provider's retention policy before processing sensitive conversations.
-
-## Architecture
-
-```text
-Electron main process
-  ├─ desktopCapturer / screencapture   visible-window capture
-  ├─ globalShortcut                    system-wide invocation
-  ├─ safeStorage                       per-model API-key encryption
-  ├─ accessibility target adapter      focused-control metadata and validation
-  ├─ clipboard + OS automation         exact write-back with safe fallback
-  ├─ MemoryStore                       local JSON memory and migration
-  └─ Model adapter                     Responses + Chat Completions
-
-Typed preload bridge
-  └─ narrow IPC surface
-
-React renderer
-  ├─ writing and capture workspace
-  ├─ clickable / swipeable candidates with in-place revision
-  ├─ Markdown memory documents and saved facts
-  ├─ token usage and request history
-  ├─ channel discovery
-  ├─ multi-model settings
-  └─ context-bound suggestions and streaming Ask AI panel
-```
-
-The browser build uses a non-networked preview dataset for UI review. Real screenshots, global shortcuts, secure key storage, and cross-application insertion require Electron.
-
-## Development
-
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start Electron in development mode |
-| `npm run lint` | Run TypeScript validation |
-| `npm test` | Run unit tests |
-| `npm run test:window` | macOS: verify two same-title native windows and capture locally without model calls |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run build` | Build main, preload, and renderer bundles |
-| `npm run package` | Create an unpacked desktop application |
-| `npm run dist` | Create platform installers |
-| `npm run dist:mac:beta -- --arm64` | Build an ad-hoc signed macOS beta; use `--x64` for Intel |
-
-ContextCue checks for updates 15 seconds after launch and every 6 hours while running. New releases appear in a system notification and the sidebar. You can also use **Settings → App updates** or **Check for Updates…** in the tray context menu.
-
-Downloads start when you choose them and display progress. Developer ID signed and notarized macOS builds offer **Restart and update**. The default ad-hoc signed, unnotarized macOS beta builds download and verify a DMG inside the app; choose **Open installer**, quit ContextCue, and replace the app in Applications. Memory and settings live outside the app bundle.
-
-The release workflow supports optional signing/notarization and generates a combined update feed for Intel and Apple Silicon. See the [update release guide](./docs/updates.md) for setup and verification. Users of older builds without an updater must install an updater-enabled build manually once.
-
-## Current limitations
-
-- Screenshots are resized rather than cropped to a user-selected region.
-- macOS validates the focused control and attempts direct Accessibility write-back; known controls without AX write support fall back to validated paste. Without a recognized target, including on Windows/Linux, suggestions offer copying.
-- Native foreground capture is verified on macOS. Windows uses its foreground-window API; Linux requires X11 and `xdotool`. Protected windows and unsupported capture environments can use Ask AI without page context.
-- There is no browser DOM extension yet, so complex iframes, canvas editors, and some rich-text controls depend on the OS accessibility tree and screenshots.
-- Channel support is based on visible windows, not historical OAuth message sync.
-- Field-neighborhood cropping, richer nearby accessibility text, local OCR/redaction, voice input, and calendar actions are planned.
-- The memory file is permission-restricted but not fully encrypted at rest; API keys are encrypted separately.
-- Sessions use a static invocation-time snapshot, not a live page feed. Changes without a window-title change, including same-title tabs, cannot be reliably distinguished; invoke again after navigating. Sessions currently expire five minutes after creation. See [interaction flows and acceptance checks](./docs/interaction-flows.md).
-
-ContextCue is an early desktop MVP, inspired by OKEight's in-conversation reply workflow. See the [roadmap](./TODO.md) for production work and planned features.
+ContextCue is an early desktop MVP. Try it with a conversation or page you’re comfortable sharing with your model provider. Found something that could work better? [Open an issue](https://github.com/jastfkjg/ContextCue/issues).

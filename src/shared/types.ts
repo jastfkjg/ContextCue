@@ -343,7 +343,6 @@ export interface ContextCueApi {
   onOverlayResult: (callback: (result: OverlayResult) => void) => () => void;
   onOverlayReset: (callback: () => void) => () => void;
   onOverlayExpired: (callback: (event: { sessionId: string; message: string }) => void) => () => void;
-  setRevisionComposerOpen: (sessionId: string, open: boolean) => void;
   onOverlayStatus: (callback: (status: OverlayStatus) => void) => () => void;
   openAsk: () => Promise<AskOverlayContext>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;

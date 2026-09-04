@@ -70,7 +70,6 @@ const api: ContextCueApi = {
     ipcRenderer.on("overlay:expired", listener);
     return () => ipcRenderer.removeListener("overlay:expired", listener);
   },
-  setRevisionComposerOpen: (sessionId, open) => ipcRenderer.send("overlay:revision-composer", sessionId, open),
   onOverlayReset: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("overlay:reset", listener);

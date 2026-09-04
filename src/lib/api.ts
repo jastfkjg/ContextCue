@@ -283,7 +283,6 @@ const browserDemoApi: ContextCueApi = {
   },
   onOverlayReset: () => () => undefined,
   onOverlayExpired: () => () => undefined,
-  setRevisionComposerOpen: () => undefined,
   onOverlayStatus: (callback) => {
     if (new URLSearchParams(window.location.search).get("preview") !== "loading") return () => undefined;
     const timeout = window.setTimeout(() => callback({

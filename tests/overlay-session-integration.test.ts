@@ -18,6 +18,7 @@ vi.mock("electron", () => {
   class Window {
     webContents = { send: (channel: string, payload: unknown) => harness.events.push({ channel, payload }), isLoadingMainFrame: () => false };
     focused = false;
+    visible = false;
     listeners = new Map<string, () => void>();
     bounds: { x: number; y: number; width: number; height: number };
     constructor(options: { width: number; height: number }) {
@@ -31,10 +32,10 @@ vi.mock("electron", () => {
     getPosition = () => [this.bounds.x, this.bounds.y];
     getBounds = () => ({ ...this.bounds });
     setBounds = (bounds: typeof this.bounds) => { this.bounds = { ...bounds }; };
-    getSize = () => [this.bounds.width, this.bounds.height]; isDestroyed = () => false; isVisible = () => true;
+    getSize = () => [this.bounds.width, this.bounds.height]; isDestroyed = () => false; isVisible = () => this.visible;
     isFocused = () => this.focused;
-    hide = vi.fn(() => { this.focused = false; });
-    show() {} showInactive = vi.fn();
+    hide = vi.fn(() => { this.visible = false; this.focused = false; });
+    show() { this.visible = true; } showInactive = vi.fn(() => { this.visible = true; });
     focus() { this.focused = true; this.listeners.get("focus")?.(); }
     blur() { this.focused = false; this.listeners.get("blur")?.(); }
   }
@@ -147,14 +148,14 @@ describe("overlay clicks during asynchronous context checks", () => {
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(892);
   });
 
-  it.each(["window", "input"])("keeps the clicked overlay open when a pending %s lookup reports a mismatch", async (lookup) => {
+  it("keeps the clicked overlay open when a pending window lookup reports a mismatch", async () => {
     const overlay = await openSuggestions();
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
     let finish!: (value: any) => void;
-    (lookup === "window" ? harness.getWindow : harness.getTarget).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    harness.getWindow.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const pending = harness.poll!();
     overlay.focus();
-    finish(lookup === "window" ? { ...harness.window, windowId: "202" } : null);
+    finish({ ...harness.window, windowId: "202" });
     await pending;
     expect(overlay.hide).not.toHaveBeenCalled();
     expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
@@ -177,15 +178,15 @@ describe("overlay clicks during asynchronous context checks", () => {
     expect(overlay.hide).toHaveBeenCalledOnce();
   });
 
-  it("still hides when the user actually selects a different field outside the overlay", async () => {
+  it("keeps suggestions visible when focus moves to another field in the source window", async () => {
     const overlay = await openSuggestions();
     harness.getTarget.mockResolvedValue({ ...target, controlId: "another-field" });
     await harness.poll!();
-    expect(overlay.hide).toHaveBeenCalledOnce();
+    expect(overlay.hide).not.toHaveBeenCalled();
     harness.getTarget.mockResolvedValue(target);
     overlay.showInactive.mockClear();
     await harness.poll!();
-    expect(overlay.showInactive).toHaveBeenCalledOnce();
+    expect(overlay.showInactive).not.toHaveBeenCalled();
   });
 
   const reviseCurrent = () => invoke("assist:revise", {
@@ -193,14 +194,103 @@ describe("overlay clicks during asynchronous context checks", () => {
     requestId: crypto.randomUUID(), text: "Edited draft", instruction: "Shorter"
   });
 
-  const markComposerOpen = (revising = true) => harness.handlers.get("overlay:revision-composer")!(
-    event(), latest<OverlayResult>("overlay:result").sessionId, revising
-  );
+  it.each(["other window", "unknown window", "settings"])("restores the same panel and geometry after visiting %s without resetting the renderer", async (destination) => {
+    const overlay = await openSuggestions();
+    const original = harness.window;
+    overlay.setPosition(260, 190);
+    harness.handlers.get("overlay:resize-by")!(event(), "bottom-right", 120, 80);
+    const bounds = overlay.getBounds();
+    const eventCount = harness.events.length;
+    overlay.showInactive.mockClear();
+    if (destination === "settings") harness.windows[0].focus();
+    else harness.window = destination === "unknown window"
+      ? { applicationName: "", windowTitle: "" }
+      : { ...original, windowId: "202" };
+    await harness.poll!();
+    await harness.poll!();
+    expect(overlay.hide).toHaveBeenCalledOnce();
+    expect(overlay.isVisible()).toBe(false);
+    expect(harness.events).toHaveLength(eventCount);
+    harness.windows[0].blur();
+    harness.window = original;
+    harness.getTarget.mockResolvedValue(null);
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(true);
+    expect(overlay.isFocused()).toBe(false);
+    expect(overlay.showInactive).toHaveBeenCalledOnce();
+    expect(overlay.getBounds()).toEqual(bounds);
+    expect(harness.events).toHaveLength(eventCount);
+    await expect(reviseCurrent()).resolves.toEqual(result.candidates);
+  });
+
+  it("does not expire a session when an action races with switching away", async () => {
+    const overlay = await openSuggestions();
+    const original = harness.window;
+    const eventCount = harness.events.length;
+    harness.window = { ...original, windowId: "202" };
+    await expect(reviseCurrent()).rejects.toThrow("Return to the original window");
+    expect(overlay.isVisible()).toBe(false);
+    expect(harness.events).toHaveLength(eventCount);
+    harness.window = original;
+    await harness.poll!();
+    await expect(reviseCurrent()).resolves.toEqual(result.candidates);
+  });
+
+  it("finishes revisions in the background without showing over another window", async () => {
+    const overlay = await openSuggestions();
+    const original = harness.window;
+    let finish!: (value: GenerationResult) => void;
+    harness.generate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = reviseCurrent();
+    await vi.waitFor(() => expect(harness.generate).toHaveBeenCalledTimes(2));
+    harness.window = { ...original, windowId: "202" };
+    await harness.poll!();
+    const call = harness.generate.mock.calls[1];
+    expect(call[5].aborted).toBe(false);
+    call[6](result.candidates[0]);
+    finish(result);
+    await expect(pending).resolves.toEqual(result.candidates);
+    expect(overlay.isVisible()).toBe(false);
+    harness.window = original;
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(true);
+  });
+
+  it("restores local work after the snapshot expires while away, without reviving AI authority", async () => {
+    const overlay = await openSuggestions();
+    const original = harness.window;
+    const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
+    harness.window = { ...original, windowId: "202" };
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
+    try { await harness.poll!(); } finally { now.mockRestore(); }
+    expect(overlay.isVisible()).toBe(false);
+    harness.window = original;
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(true);
+    expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
+    await expect(reviseCurrent()).rejects.toThrow("expired");
+    await expect(invoke("ask:open")).rejects.toThrow("expired");
+  });
+
+  it("does not resurrect a manually closed panel when returning to its source window", async () => {
+    const overlay = await openSuggestions();
+    // An empty application name avoids native activation in this mocked IPC test.
+    await openAsk("", "909");
+    overlay.blur();
+    const original = harness.window;
+    await invoke("overlay:hide");
+    overlay.showInactive.mockClear();
+    harness.window = { ...original, windowId: "202" };
+    await harness.poll!();
+    harness.window = original;
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(false);
+    expect(overlay.showInactive).not.toHaveBeenCalled();
+  });
 
   it("streams revision candidates without reanchoring and ignores cancelled or superseded requests", async () => {
     const overlay = await openSuggestions();
     overlay.focus();
-    markComposerOpen();
     const position = overlay.getPosition();
     const bounds = overlay.getBounds();
     const finishes: Array<(value: GenerationResult) => void> = [];
@@ -245,9 +335,8 @@ describe("overlay clicks during asynchronous context checks", () => {
 
   it("keeps the revision composer and invalidates only its page context when revision validation detects a page change", async () => {
     const overlay = await openSuggestions();
-    markComposerOpen();
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
-    harness.window = { ...harness.window, windowId: "202" };
+    harness.window = { ...harness.window, windowTitle: "Another page" };
     await expect(reviseCurrent()).rejects.toThrow("window or page changed");
     expect(overlay.hide).not.toHaveBeenCalled();
     expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
@@ -258,18 +347,15 @@ describe("overlay clicks during asynchronous context checks", () => {
 
   it("does not hide an open revision composer because the source input loses focus", async () => {
     const overlay = await openSuggestions();
-    markComposerOpen();
     harness.getTarget.mockResolvedValue(null);
     await harness.poll!();
     expect(overlay.hide).not.toHaveBeenCalled();
-    markComposerOpen(false);
     await harness.poll!();
-    expect(overlay.hide).toHaveBeenCalledOnce();
+    expect(overlay.hide).not.toHaveBeenCalled();
   });
 
   it("expires an old page snapshot without clearing an unsaved revision composer", async () => {
     const overlay = await openSuggestions();
-    markComposerOpen();
     const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
     const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
     try { await harness.poll!(); } finally { now.mockRestore(); }
@@ -281,14 +367,13 @@ describe("overlay clicks during asynchronous context checks", () => {
 
   it("cancels an in-flight revision on a page change and retains the revision composer for recovery", async () => {
     const overlay = await openSuggestions();
-    markComposerOpen();
     overlay.focus();
     let finish!: (value: GenerationResult) => void;
     harness.generate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const pending = reviseCurrent();
     await vi.waitFor(() => expect(harness.generate).toHaveBeenCalledTimes(2));
     overlay.blur();
-    harness.window = { ...harness.window, windowId: "202" };
+    harness.window = { ...harness.window, windowTitle: "Another page" };
     await harness.poll!();
     expect(overlay.hide).not.toHaveBeenCalled();
     expect((harness.generate.mock.calls[1][5] as AbortSignal).aborted).toBe(true);
@@ -326,7 +411,7 @@ describe("overlay clicks during asynchronous context checks", () => {
     const pending = reviseCurrent();
     overlay.focus();
     overlay.blur();
-    if (changed) harness.window = { ...harness.window, windowId: "303" };
+    if (changed) harness.window = { ...harness.window, windowTitle: "Another page" };
     finish({ ...harness.window, windowId: "202" });
     if (changed) {
       await expect(pending).rejects.toThrow("window or page changed");
@@ -340,7 +425,7 @@ describe("overlay clicks during asynchronous context checks", () => {
   it.each(["window", "page"])("rejects revision when the external %s actually changes", async (change) => {
     await openSuggestions();
     harness.window = { ...harness.window, ...(change === "window" ? { windowId: "202" } : { windowTitle: "Another page" }) };
-    await expect(reviseCurrent()).rejects.toThrow("window or page changed");
+    await expect(reviseCurrent()).rejects.toThrow(change === "window" ? "Return to the original window" : "window or page changed");
     expect(harness.generate).toHaveBeenCalledTimes(1);
   });
 
@@ -366,7 +451,7 @@ describe("overlay clicks during asynchronous context checks", () => {
     const pending = reviseCurrent();
     await vi.waitFor(() => expect(harness.generate).toHaveBeenCalledTimes(2));
     overlay.blur();
-    harness.window = { ...harness.window, windowId: "202" };
+    harness.window = { ...harness.window, windowTitle: "Another page" };
     finish(result);
     await expect(pending).rejects.toThrow("window or page changed");
     expect((harness.generate.mock.calls[1][5] as AbortSignal).aborted).toBe(true);
@@ -375,6 +460,76 @@ describe("overlay clicks during asynchronous context checks", () => {
 afterAll(() => { harness.appEvents.get("will-quit")?.(); vi.restoreAllMocks(); });
 
 describe("Electron overlay session boundaries", () => {
+  it.each([false, true])("finishes initial suggestions while away, including before the watcher runs (polled: %s)", async (polled) => {
+    let finish!: (value: GenerationResult) => void;
+    harness.generate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    harness.window = { applicationName: "Browser", windowTitle: "Page", windowId: "101", processId: 101 };
+    const original = harness.window;
+    harness.windows.forEach((window) => { window.focused = false; });
+    const resultCount = harness.events.filter((item) => item.channel === "overlay:result").length;
+    shortcut(false);
+    await vi.waitFor(() => expect(harness.generate).toHaveBeenCalledTimes(1));
+    const overlay = harness.windows[1];
+    overlay.setPosition(240, 190);
+    const position = overlay.getPosition();
+    harness.window = { ...original, windowId: "202" };
+    if (polled) await harness.poll!();
+    finish(result);
+    await vi.waitFor(() => expect(harness.events.filter((item) => item.channel === "overlay:result")).toHaveLength(resultCount + 1));
+    expect(harness.generate.mock.calls[0][5].aborted).toBe(false);
+    expect(overlay.isVisible()).toBe(false);
+    expect(overlay.getPosition()).toEqual(position);
+    harness.window = original;
+    const eventCount = harness.events.length;
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(true);
+    expect(harness.events).toHaveLength(eventCount);
+  });
+
+  it("keeps streaming Ask AI while hidden and resumes the same conversation on return", async () => {
+    const context = await openAsk("Browser", "101");
+    const original = harness.window;
+    const overlay = harness.windows[1];
+    const bounds = overlay.getBounds();
+    const openCount = askOpen().length;
+    let finish!: (value: { answer: string; tokenUsage: { reported: boolean } }) => void;
+    harness.answer.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "background-ask", question: "First question", includeContext: true });
+    await vi.waitFor(() => expect(harness.answer).toHaveBeenCalledTimes(1));
+    overlay.blur();
+    harness.window = { ...original, windowId: "202" };
+    await harness.poll!();
+    const call = harness.answer.mock.calls[0];
+    expect(call[7].aborted).toBe(false);
+    call[6]("Saved answer");
+    finish({ answer: "Saved answer", tokenUsage: { reported: false } });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event")).toMatchObject({ requestId: "background-ask", type: "complete" }));
+    expect(overlay.isVisible()).toBe(false);
+    harness.window = original;
+    await harness.poll!();
+    expect(overlay.isVisible()).toBe(true);
+    expect(overlay.isFocused()).toBe(false);
+    expect(overlay.getBounds()).toEqual(bounds);
+    expect(askOpen()).toHaveLength(openCount);
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "followup-ask", question: "Follow up", includeContext: true });
+    await vi.waitFor(() => expect(harness.answer).toHaveBeenCalledTimes(2));
+    expect(harness.answer.mock.calls[1][4]).toEqual([{ role: "user", content: "First question" }, { role: "assistant", content: "Saved answer" }]);
+  });
+
+  it("expires an Ask snapshot in place and rejects further AI requests without clearing the transcript", async () => {
+    const context = await openAsk("Browser", "101");
+    const overlay = harness.windows[1];
+    const resetCount = harness.events.filter((item) => item.channel === "overlay:reset").length;
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60_000);
+    try { await harness.poll!(); } finally { now.mockRestore(); }
+    expect(overlay.isVisible()).toBe(true);
+    expect(latest<any>("overlay:expired").sessionId).toBe(context.sessionId);
+    expect(harness.events.filter((item) => item.channel === "overlay:reset")).toHaveLength(resetCount);
+    invoke("ask:start", { sessionId: context.sessionId, requestId: "expired-ask", question: "Question", includeContext: true });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event")).toMatchObject({ requestId: "expired-ask", type: "error" }));
+    expect(harness.answer).not.toHaveBeenCalled();
+  });
+
   it("ignores renderer-supplied old history and starts browser Q&A without WeChat context", async () => {
     const wechat = await openAsk("WeChat", "101");
     invoke("ask:start", { sessionId: wechat.sessionId, requestId: "wechat-question", question: "Private WeChat question", includeContext: true, history: [{ role: "user", content: "INJECTED_OLD_HISTORY" }] });
