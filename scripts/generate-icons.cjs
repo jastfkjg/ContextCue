@@ -55,7 +55,20 @@ if (!process.versions.electron) {
       const svg = readFileSync(join(build, 'icon.svg'), 'utf8');
       const paths = svg.match(/<g id="monogram-shape"[^>]*>([\s\S]*?)<\/g>/)?.[1];
       if (!paths || (paths.match(/<path /g) || []).length !== 2) throw new Error('Expected the approved two-path CC monogram.');
-      const traySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><title>ContextCue menu-bar icon</title><g fill="#000" transform="translate(3.23 1) scale(.052) translate(-325 -303)">${paths}</g></svg>\n`;
+      // Fit the actual monogram bounds, independently of the app tile's padding
+      // and transforms, so a new master cannot clip the menu-bar exports.
+      const bounds = await window.webContents.executeJavaScript(`(() => {
+        const svg = new DOMParser().parseFromString(${JSON.stringify(svg)}, 'image/svg+xml').documentElement;
+        document.body.appendChild(svg);
+        const { x, y, width, height } = svg.querySelector('#monogram-shape').getBBox();
+        svg.remove();
+        return { x, y, width, height };
+      })()`);
+      if (!(bounds.width > 0 && bounds.height > 0)) throw new Error('Invalid monogram bounds.');
+      const trayScale = 34 / Math.max(bounds.width, bounds.height);
+      const trayX = (36 - bounds.width * trayScale) / 2;
+      const trayY = (36 - bounds.height * trayScale) / 2;
+      const traySvg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><title>ContextCue menu-bar icon</title><g fill="#000" transform="translate(${trayX} ${trayY}) scale(${trayScale}) translate(${-bounds.x} ${-bounds.y})">${paths}</g></svg>\n`;
       const render = async (source, size) => {
         const data = await window.webContents.executeJavaScript(`(async () => {
           const image = new Image();

@@ -1,23 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
   <title id="title">ContextCue app icon</title>
-  <desc id="description">A compact double-C monogram with softly finished diagonal tips on a lime rounded square.</desc>
-  <defs>
-    <linearGradient id="surface" x1="173" y1="153" x2="1078" y2="1105" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D5F84D"/>
-      <stop offset="0.52" stop-color="#D5F74B"/>
-      <stop offset="1" stop-color="#D1F348"/>
-    </linearGradient>
-    <linearGradient id="monogram" x1="325" y1="303" x2="893" y2="957" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#242520"/>
-      <stop offset="1" stop-color="#282923"/>
-    </linearGradient>
-  </defs>
-  <!-- Traced from icon-reference.png. Keep both Cs and the small tip radii together. -->
-  <g transform="translate(-66 -85) scale(.923)">
-    <rect x="173" y="153" width="905" height="952" rx="185" fill="url(#surface)"/>
-    <g id="monogram-shape" fill="url(#monogram)">
-      <path d="M449 303H749Q778 303 799 324L891 416Q894 422 888 422H526C482 422 451 453 451 501V784C451 829 478 860 524 860H882Q886 860 886 864C882 916 838 957 783 957H448C375 957 325 907 325 833V429C325 356 375 303 449 303Z"/>
-      <path d="M605 501H773Q801 501 819 519L883 585Q888 592 881 592H659C634 592 619 607 619 633V678C619 704 631 718 657 718H830C861 718 882 731 885 751C888 774 862 798 830 798H606C560 798 530 768 530 721V580C530 533 558 501 605 501Z"/>
+  <desc id="description">Two nested charcoal Cs with softly rounded chamfers on a flat lime rounded square.</desc>
+  <rect x="92" y="92" width="840" height="840" rx="128" fill="#D5F74B"/>
+  <!-- A2 soft-chamfer master, traced from icon-reference.png. The presentation
+       background and texture are removed; native exports retain transparent padding. -->
+  <g transform="translate(-64 -70) scale(.918)">
+    <g id="monogram-shape" fill="#242520">
+      <path d="M543 326H811C837 326 852 344 868 365C879 381 886 403 860 403H545C479 403 433 449 433 516V772C433 837 479 881 544 881H856C881 881 884 901 872 921C857 947 840 962 813 962H541C432 962 351 881 351 772V516C351 408 432 326 543 326Z"/>
+      <path d="M620 478H774C795 478 805 491 819 508C833 524 835 542 812 542H622C594 542 577 560 577 589V698C577 727 594 745 622 745H811C834 745 833 764 821 782C807 802 798 810 778 810H620C557 810 512 765 512 702V587C512 524 557 478 620 478Z"/>
     </g>
   </g>
 </svg>

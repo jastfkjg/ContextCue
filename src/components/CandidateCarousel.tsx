@@ -290,7 +290,7 @@ export function CandidateCarousel({ candidates: originalCandidates, memoryUsage,
               <p>{candidateText}</p>
               {!compact && <span className="tone-label">{candidate.tone}</span>}
             </motion.div>
-            <MemoryDetails usage={candidate.memoryUsage ?? memoryUsage} disabled={revising || applying || Boolean(contextError)} onRegenerate={onRegenerated ? () => void regenerate() : undefined}/>
+            {!compact && <MemoryDetails usage={candidate.memoryUsage ?? memoryUsage} disabled={revising || applying || Boolean(contextError)} onRegenerate={onRegenerated ? () => void regenerate() : undefined}/>}
             {selection.revised && <div className="revision-group-switch">
               <button type="button" disabled={revising || applying} onClick={() => {
                 dispatch({ type: "group", group: selection.group === "revised" ? "original" : "revised" });

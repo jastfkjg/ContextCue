@@ -10,11 +10,12 @@ export function MemoryDetails({ usage, onRegenerate, disabled }: {
   const sources = usage.sources;
   const inherited = usage.inheritedSources ?? [];
   const count = new Set([...sources, ...inherited].map((source) => source.id)).size;
+  if (!count) return null;
   return <details className="session-memory">
-    <summary><Brain size={13} aria-hidden="true"/><span>{count ? `Memory · ${count} ${count === 1 ? "note" : "notes"}` : usage.enabled ? "Memory · no notes shared" : "Memory off"}</span></summary>
+    <summary><Brain size={13} aria-hidden="true"/><span>{`Memory · ${count}`}</span></summary>
     <div className="session-memory-body">
-      <p>{count ? "Notes shared with your model for this result." : usage.enabled ? "No relevant notes were selected for this request." : "No saved notes were added to this request."}</p>
-      {count > 0 && onRegenerate && <>
+      <p>Notes shared with your model for this result.</p>
+      {onRegenerate && <>
         <button type="button" disabled={disabled} onClick={onRegenerate}>Regenerate original request without Memory</button>
         <p>Uses the original page or question. Earlier answers, drafts and revisions are left out.</p>
       </>}

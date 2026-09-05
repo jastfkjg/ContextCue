@@ -5,6 +5,7 @@ These eight images render the **actual React suggestion, Ask AI, and Settings in
 - `fixtures.mjs`: parallel English / Simplified Chinese conversations, candidates, instructions, questions, and answers.
 - `preview.mjs`: injects fixture responses into the existing browser demo API before mounting `src/main.tsx`. It does not change application source or local user data.
 - `stage.css`: illustration framing only. The embedded panels use `src/styles.css` unchanged.
+- Mastheads and the embedded app both load `build/icon.svg`, the approved A2 soft-chamfer master. Regenerate all eight images after changing the icon so neither README retains an older brand mark.
 - `capture-playwright.js`: captures conversation scenes at 1200 × 760 CSS pixels and Settings at 1200 × 1000, all at 2× resolution. Checks cover clipping, localized content, Ask → draft → revision → Ask → Open draft, page context toggling, and refresh.
 - `capture.mjs`: runs the capture through Playwright CLI, then copies the results from `output/playwright/` to `docs/images/readme/`.
 

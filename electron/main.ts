@@ -59,6 +59,7 @@ import type { AppUpdateState } from "../src/shared/types";
 import { getCapturedWindow, getFrontmostWindow, sameFrontmostWindow, sameNativeWindow, type FrontmostWindow } from "./services/front-window";
 import { prepareQuickContext } from "./services/quick-context";
 import { testWindowCapture } from "./services/capture-diagnostics";
+import { activateApplication, type ApplicationIdentity } from "./services/activate-application";
 import { prepareQuickWindows } from "./services/quick-windows";
 import { OverlaySizer } from "./services/overlay-size";
 import { createPageSession, pageRequest, rememberPageTurn, type PageSession } from "./services/page-session";
@@ -75,7 +76,7 @@ let openUpdatesRequested = false;
 const installerAbort = new AbortController();
 let quickReplyInFlight = false;
 let quickReplyAnchor: { x: number; y: number } | null = null;
-let quickReplyTargetApplication = "";
+let quickReplyTargetApplication: ApplicationIdentity = { applicationName: "" };
 let quickInputTarget: InputTarget | null = null;
 let quickOverlayActive = false;
 let quickReplyContext: FrontmostWindow | null = null;
@@ -325,7 +326,7 @@ async function prepareCurrentWindow(allowWithoutScreenshot: boolean) {
     overlay: overlayWindow,
     activateExternal: async () => {
       const target = await getFrontmostWindow();
-      if (target.windowId && target.applicationName) await activateApplication(target.applicationName);
+      if (target.windowId) await activateApplication(target);
     }
   });
   return prepareQuickContext({
@@ -369,7 +370,7 @@ function clearQuickReplySession(): void {
   quickReplyInFlight = false;
   cancelAskInFlight();
   quickOverlayActive = false;
-  quickReplyTargetApplication = "";
+  quickReplyTargetApplication = { applicationName: "" };
   quickInputTarget = null;
   quickReplyContext = null;
   quickOverlaySession = null;
@@ -623,7 +624,7 @@ async function showQuickAsk(): Promise<AskOverlayContext> {
     if (invocation !== quickInvocation) throw new Error("This invocation was replaced. Open Ask AI again.");
     const { target: focusedTarget, frontmost } = context;
     quickInputTarget = focusedTarget;
-    quickReplyTargetApplication = frontmost.applicationName;
+    quickReplyTargetApplication = frontmost;
     if (focusedTarget?.bounds) {
       quickReplyAnchor = {
         x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
@@ -663,7 +664,7 @@ async function refreshAsk(sessionId: string): Promise<AskOverlayContext> {
     quickOverlayPositioned = true;
     quickOverlaySession = session;
     quickInputTarget = context.target;
-    quickReplyTargetApplication = context.frontmost.applicationName;
+    quickReplyTargetApplication = context.frontmost;
     bindQuickOverlayContext(context.frontmost);
     if (reveal) return showAskOverlay(session);
     const next = askContextForSession(session);
@@ -707,7 +708,7 @@ async function showQuickReply(): Promise<void> {
   let captureFinishedAt = startedAt;
   try {
     quickOverlayActive = true;
-    quickReplyTargetApplication = "";
+    quickReplyTargetApplication = { applicationName: "" };
     quickInputTarget = null;
     quickReplyContext = null;
     quickOverlayHiddenForContext = false;
@@ -717,7 +718,7 @@ async function showQuickReply(): Promise<void> {
     const { target: focusedTarget, frontmost, source, screenshot } = context;
     if (!source || !screenshot) throw new Error("The current window could not be captured. Try opening Ask AI without page context.");
     quickInputTarget = focusedTarget;
-    quickReplyTargetApplication = frontmost.applicationName;
+    quickReplyTargetApplication = frontmost;
     if (focusedTarget?.bounds) {
       quickReplyAnchor = {
         x: focusedTarget.bounds.x + Math.min(24, focusedTarget.bounds.width / 2),
@@ -829,26 +830,9 @@ function appleScriptString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-async function activateApplication(applicationName: string): Promise<void> {
-  if (!applicationName) return;
-  if (process.platform === "darwin") {
-    await execFileAsync("/usr/bin/open", ["-a", applicationName]);
-    return;
-  }
-  if (process.platform === "win32") {
-    const escapedName = applicationName.replace(/'/g, "''");
-    await execFileAsync("powershell.exe", [
-      "-NoProfile",
-      "-Command",
-      `(New-Object -ComObject WScript.Shell).AppActivate('${escapedName}') | Out-Null`
-    ]);
-    return;
-  }
-  await execFileAsync("xdotool", ["search", "--name", applicationName, "windowactivate"]);
-}
 
 function hideQuickOverlay(): void {
-  const target = quickOverlayActive ? quickReplyTargetApplication : "";
+  const target = quickOverlayActive ? quickReplyTargetApplication : { applicationName: "" };
   // Revoke pending capture / show work before changing native focus. Closing is
   // immediate and must not wait for an external application's activation.
   clearQuickReplySession();
@@ -870,8 +854,14 @@ async function bestEffortPaste(request: UseReplyRequest): Promise<{ pasted: bool
         };
       }
       overlayWindow?.hide();
-      const targetApplication = request.target?.applicationName || quickReplyTargetApplication || targetApplicationName(request.channel);
-      await activateApplication(targetApplication || "");
+      const targetApplication = request.target?.applicationName || quickReplyTargetApplication.applicationName || targetApplicationName(request.channel);
+      const matchesOrigin = request.target?.appId
+        ? request.target.appId === quickReplyTargetApplication.appId
+        : request.target?.applicationName === quickReplyTargetApplication.applicationName;
+      await activateApplication(matchesOrigin ? quickReplyTargetApplication : {
+        appId: request.target?.appId,
+        applicationName: targetApplication || ""
+      });
       await new Promise((resolve) => setTimeout(resolve, 150));
       if (request.target) {
         const currentTarget = await getFocusedInputTarget();

@@ -43,7 +43,7 @@ if (params.get("mode") === "app") {
     },
     openAsk: async () => {
       window.frameElement.parentElement.style.top = "227px";
-      window.frameElement.style.height = "390px";
+      window.frameElement.style.height = "416px";
       return { ...activeContext, canReturnToSuggestions: true };
     },
     refreshAsk: async () => {

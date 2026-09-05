@@ -38,7 +38,7 @@ aside > small { display: block; margin: 0 0 10px 7px; font-size: 9px; color: #99
 iframe { display: block; width: 440px; height: 190px; border: 0; border-radius: 20px; box-shadow: 0 22px 60px #35452224, 0 4px 12px #3545220a; background: transparent; }
 .stage--revise .panel-position { top: 274px; }
 .stage--ask .panel-position { top: 227px; }
-.stage--ask iframe { height: 390px; }
+.stage--ask iframe { height: 416px; }
 .stage--settings { height: 1000px; }
 .app-position { position: absolute; left: 52px; top: 204px; }
 .app-position iframe { width: 1096px; height: 710px; border: 1px solid #d5d8ce; border-radius: 12px; }

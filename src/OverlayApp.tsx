@@ -143,7 +143,7 @@ export function OverlayApp() {
         ) : (
           <div className="overlay-empty overlay-empty--error">
             <span className="overlay-state-icon"><CircleAlert size={24}/></span>
-            <strong>Couldn’t open ContextCue</strong>
+            <strong>Couldn’t complete this action</strong>
             <p>{status.message}</p>
             <button onClick={() => void contextCueApi.hideOverlay()}>Close</button>
           </div>

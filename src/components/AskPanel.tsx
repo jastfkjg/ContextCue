@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUp, Brain, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
 import type { AskOverlayContext, OverlayResult, MemoryUsage } from "../shared/types";
 import { contextCueApi } from "../lib/api";
@@ -36,6 +36,16 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
   const [includeContext, setIncludeContext] = useState(context.hasPageContext);
   const [includeMemory, setIncludeMemory] = useState(context.includeMemory !== false);
   const [memoryNotice, setMemoryNotice] = useState("");
+  const memoryNoticeTimer = useRef<number>();
+  const [memoryHelpVisible, setMemoryHelpVisible] = useState(false);
+  const memoryHelpId = useId();
+  useEffect(() => () => window.clearTimeout(memoryNoticeTimer.current), []);
+  const showMemoryResetNotice = () => {
+    window.clearTimeout(memoryNoticeTimer.current);
+    if (!turns.some((turn) => turn.status === "complete")) return;
+    setMemoryNotice("New questions will start with fresh context.");
+    memoryNoticeTimer.current = window.setTimeout(() => setMemoryNotice(""), 3_000);
+  };
   const [changingMemory, setChangingMemory] = useState(false);
   useEffect(() => {
     setIncludeMemory(context.includeMemory !== false);
@@ -128,7 +138,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     setTurns((current) => [...current, { id: requestId, question: nextQuestion, answer: "", status: "streaming", includeContext: originalContext }]);
     setQuestion("");
     setLocalError("");
-    if (withoutMemory) { setIncludeMemory(false); setMemoryNotice("Memory off. This retry starts without earlier answers."); }
+    if (withoutMemory) { setIncludeMemory(false); showMemoryResetNotice(); }
     contextCueApi.startAsk({
       sessionId: context.sessionId,
       requestId,
@@ -237,36 +247,22 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
                   <button disabled={streaming || Boolean(contextError)} onClick={() => submit(turn.question)}><RefreshCw size={12}/> Retry</button>
                 </div>
               )}
-              {turn.status === "complete" && <MemoryDetails usage={turn.memoryUsage} disabled={streaming || Boolean(contextError)} onRegenerate={() => submit(turn.question, true, turn.includeContext)}/>}
-              {turn.draft && onDraft && <button className="ask-copy" onClick={() => void onDraft(turn.draft!).catch((error) => setLocalError(String(error)))}>Open draft →</button>}
-              {turn.answer && !turn.draft && turn.status !== "streaming" && (
-                <button className="ask-copy" onClick={() => void copyAnswer(turn)}>
-                  {copiedTurn === turn.id ? <Check size={13}/> : <Copy size={13}/>}
-                  {copiedTurn === turn.id ? "Copied" : "Copy"}
-                </button>
-              )}
+              <div className="ask-answer-actions">
+                {turn.draft && onDraft && <button className="ask-copy" onClick={() => void onDraft(turn.draft!).catch((error) => setLocalError(String(error)))}>Open draft →</button>}
+                {turn.answer && !turn.draft && turn.status !== "streaming" && (
+                  <button className="ask-copy" onClick={() => void copyAnswer(turn)}>
+                    {copiedTurn === turn.id ? <Check size={13}/> : <Copy size={13}/>}
+                    {copiedTurn === turn.id ? "Copied" : "Copy"}
+                  </button>
+                )}
+                {turn.status === "complete" && <MemoryDetails usage={turn.memoryUsage} disabled={streaming || Boolean(contextError)} onRegenerate={() => submit(turn.question, true, turn.includeContext)}/>}
+              </div>
             </div>
           </article>
         ))}
       </div>
 
       <div className="ask-composer">
-        <div className="ask-memory-control">
-          <button type="button" aria-pressed={includeMemory} disabled={streaming || refreshing || changingMemory || Boolean(contextError)} onClick={async () => {
-            const nextEnabled = !includeMemory;
-            setChangingMemory(true);
-            try {
-              await contextCueApi.setSessionMemory(context.sessionId, nextEnabled);
-              setIncludeMemory(nextEnabled);
-              setMemoryNotice("Memory changed. Your next question starts fresh context. Earlier answers stay visible here.");
-            } catch (error) { setLocalError(errorMessage(error)); }
-            finally { setChangingMemory(false); }
-          }} title="Use relevant enabled notes independently of the page screenshot">
-            <Brain size={14} aria-hidden="true"/>Memory {includeMemory ? "on" : "off"}
-          </button>
-          <span>{includeMemory ? "Relevant notes are shared with your model." : "Saved notes won’t be added."}</span>
-        </div>
-        {memoryNotice && <p className="ask-context-notice" role="status">{memoryNotice}</p>}
         {contextError && <p className="ask-context-notice" role="status">Screenshot expired. Refresh above to continue. Your text is still available.</p>}
         {localError && <p className="ask-context-notice" role="alert">{localError}</p>}
         {refreshing && <p className="ask-context-notice" role="status">Refreshing screenshot…</p>}
@@ -286,16 +282,49 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
               submit();
             }}
           />
-          <button
-            className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
-            onClick={streaming ? stop : () => submit()}
-            disabled={refreshing || changingMemory || Boolean(contextError) || (!streaming && !question.trim())}
-            aria-label={streaming ? "Stop answering" : "Send question"}
-            title={streaming ? "Stop" : "Send · Enter"}
-          >
-            {streaming ? <Square size={12} fill="currentColor" aria-hidden="true"/> : <ArrowUp size={17} aria-hidden="true"/>}
-          </button>
+          <div className="ask-input-toolbar">
+            <div className="ask-memory-control"
+              onPointerEnter={() => setMemoryHelpVisible(true)}
+              onPointerLeave={() => setMemoryHelpVisible(false)}
+              onFocus={() => setMemoryHelpVisible(true)}
+              onBlur={() => setMemoryHelpVisible(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && memoryHelpVisible) {
+                  event.preventDefault(); event.stopPropagation(); setMemoryHelpVisible(false);
+                }
+              }}>
+              <button type="button" aria-label={`Memory ${includeMemory ? "on" : "off"}`} aria-pressed={includeMemory}
+                aria-describedby={memoryHelpId}
+                disabled={streaming || refreshing || changingMemory || Boolean(contextError)}
+                onClick={async () => {
+                  const nextEnabled = !includeMemory;
+                  setMemoryHelpVisible(false);
+                  setChangingMemory(true);
+                  try {
+                    await contextCueApi.setSessionMemory(context.sessionId, nextEnabled);
+                    setIncludeMemory(nextEnabled);
+                    showMemoryResetNotice();
+                  } catch (error) { setLocalError(errorMessage(error)); }
+                  finally { setChangingMemory(false); }
+                }}>
+                <Brain size={14} aria-hidden="true"/><span>Memory</span><i aria-hidden="true"/>
+              </button>
+              <span id={memoryHelpId} role="tooltip" className="ask-memory-help" hidden={!memoryHelpVisible}>
+                Memory is {includeMemory ? "on" : "off"}. Relevant enabled notes are shared with your model when used.
+              </span>
+            </div>
+            <button
+              className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
+              onClick={streaming ? stop : () => submit()}
+              disabled={refreshing || changingMemory || Boolean(contextError) || (!streaming && !question.trim())}
+              aria-label={streaming ? "Stop answering" : "Send question"}
+              title={streaming ? "Stop" : "Send · Enter"}
+            >
+              {streaming ? <Square size={12} fill="currentColor" aria-hidden="true"/> : <ArrowUp size={17} aria-hidden="true"/>}
+            </button>
+          </div>
         </div>
+        <div className="ask-memory-notice" role="status">{memoryNotice && <span>{memoryNotice}</span>}</div>
       </div>
     </section>
   );
