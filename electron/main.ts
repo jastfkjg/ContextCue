@@ -1,3 +1,4 @@
+import { mergeMemorySources } from "../src/shared/memory-selection";
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
@@ -31,6 +32,7 @@ import type {
   MemoryDocument,
   MemoryFact,
   OverlayStatus,
+  OverlayResult,
   ReviseSuggestionRequest,
   CandidateReply,
   SaveSettingsRequest,
@@ -456,6 +458,7 @@ function askContextForSession(session: QuickOverlaySession): AskOverlayContext {
     windowTitle: session.frontmost.windowTitle,
     channel: session.source?.channel ?? "other",
     hasPageContext: Boolean(session.screenshot),
+    includeMemory: session.memoryEnabled !== false,
     contextUnavailableReason: session.contextUnavailableReason,
     canReturnToSuggestions: session.hasSuggestions,
     capturedAt: session.screenshot ? session.createdAt : undefined
@@ -532,17 +535,67 @@ async function reviseSuggestion(request: ReviseSuggestionRequest): Promise<Candi
     if (!current()) throw new Error("Revision cancelled.");
     const snapshot = store.getData();
     const generation: GenerateRequest = session.draftUsesPage === false
-      ? { channel: "other", locale: snapshot.settings.locale, quick: true, scenario: session.result.scenario, contextPolicy: "page-only", withoutPageContext: true }
+      ? { channel: "other", locale: snapshot.settings.locale, quick: true, scenario: session.result.scenario, contextPolicy: "page-only", withoutPageContext: true, includeMemory: session.memoryEnabled !== false }
       : pageRequest(session, snapshot.settings.locale);
+    generation.intent = session.originalAsk?.question;
     generation.revision = { text: request.text, instruction: request.instruction };
     const result = await generateWithModel(snapshot, readApiKey(), generation, session.draftUsesPage === false ? "" : session.screenshot!, fetch, controller.signal, (candidate) => {
-      if (current()) sendToOverlay("overlay:revision-candidate", { sessionId: session.id, requestId: request.requestId, candidate });
-    });
+      if (current()) {
+        session.draftSources = mergeMemorySources(session.draftSources ?? [], candidate.memoryUsage?.sources ?? []);
+        sendToOverlay("overlay:revision-candidate", { sessionId: session.id, requestId: request.requestId, candidate });
+      }
+    }, session.draftSources);
     if (!current()) throw new Error("Revision cancelled.");
     await assertSessionCurrent(session, true);
     await rememberTokenUsage(generation, result, snapshot);
     if (!current()) throw new Error("Revision cancelled.");
+    session.draftSources = mergeMemorySources(session.draftSources ?? [], result.memoryUsage?.sources ?? []);
     return result.candidates;
+  } finally {
+    if (revisionInFlight === pending) revisionInFlight = null;
+  }
+}
+
+async function regenerateWithoutMemory(sessionId: string, requestId: string): Promise<OverlayResult> {
+  const session = usableQuickOverlaySession();
+  if (!session || session.id !== sessionId || !session.result) throw new Error("This suggestion has expired. Open ContextCue again.");
+  if (typeof requestId !== "string" || !requestId || requestId.length > 128) throw new Error("Invalid request.");
+  cancelAskInFlight();
+  cancelRevisionInFlight();
+  const controller = new AbortController();
+  const pending = { requestId, controller };
+  revisionInFlight = pending;
+  const current = () => revisionInFlight === pending && !controller.signal.aborted && quickOverlaySession === session;
+  try {
+    await assertSessionCurrent(session);
+    if (!current()) throw new Error("Regeneration cancelled.");
+    const snapshot = store.getData();
+    let result;
+    if (session.originalAsk) {
+      const original = session.originalAsk;
+      const answer = await streamAnswerWithModel(snapshot, readApiKey(), original.question,
+        original.includeContext ? await screenshotForAsk(session) : "", original.userHistory,
+        original.includeContext ? { applicationName: session.frontmost.applicationName, windowTitle: session.frontmost.windowTitle } : undefined,
+        () => {}, controller.signal, fetch, { enabled: false });
+      if (!current()) throw new Error("Regeneration cancelled.");
+      await rememberAskTokenUsage(answer.tokenUsage, session.source?.channel ?? "other", snapshot);
+      if (!answer.draft) throw new Error("The model needs more detail. Turn Memory off in Ask AI and describe the draft again.");
+      result = answer.draft;
+    } else {
+      const request = { ...pageRequest(session, snapshot.settings.locale), includeMemory: false };
+      result = await generateWithModel(snapshot, readApiKey(), request, session.screenshot!, fetch, controller.signal);
+      if (!current()) throw new Error("Regeneration cancelled.");
+      await rememberTokenUsage(request, result, snapshot);
+    }
+    await assertSessionCurrent(session, true);
+    if (!current()) throw new Error("Regeneration cancelled.");
+    session.memoryEnabled = false;
+    session.history = [];
+    session.historySources = [];
+    session.result = result;
+    session.draftSources = [];
+    return { ...result, generatedAt: new Date().toISOString(), sessionId: session.id,
+      channel: session.source?.channel ?? "other", contact: "", target: session.target ?? undefined };
   } finally {
     if (revisionInFlight === pending) revisionInFlight = null;
   }
@@ -692,6 +745,7 @@ async function showQuickReply(): Promise<void> {
     if (controller.signal.aborted || quickOverlaySession !== session) return;
     const contact = result.detectedContact;
     session.result = result;
+    session.draftSources = result.memoryUsage?.sources ?? [];
     session.hasSuggestions = true;
     sendToOverlay("overlay:result", { ...result, sessionId: session.id, channel: source.channel, contact, target: focusedTarget ?? undefined });
     if (!quickOverlayHiddenForContext) overlayWindow?.showInactive();
@@ -916,6 +970,15 @@ async function startAsk(request: AskRequest): Promise<void> {
   }
 
   cancelAskInFlight();
+  cancelRevisionInFlight();
+  const includeMemory = request.includeMemory ?? (session.memoryEnabled !== false);
+  if (typeof includeMemory !== "boolean" || (request.resetConversation !== undefined && typeof request.resetConversation !== "boolean")) return;
+  if (request.resetConversation || includeMemory !== (session.memoryEnabled !== false)) {
+    session.history = [];
+    session.historySources = [];
+  }
+  session.memoryEnabled = includeMemory;
+  const userHistory = session.history.filter((message) => message.role === "user");
   const controller = new AbortController();
   askInFlight = { requestId: request.requestId, controller };
   const snapshot = store.getData();
@@ -936,7 +999,9 @@ async function startAsk(request: AskRequest): Promise<void> {
         if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
         sendAskEvent({ type: "delta", sessionId: session.id, requestId: request.requestId, delta });
       },
-      controller.signal
+      controller.signal,
+      fetch,
+      { enabled: includeMemory, channel: request.includeContext ? session.source?.channel : undefined, inheritedSources: session.historySources }
     );
     if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
     await assertSessionCurrent(session, true);
@@ -944,12 +1009,15 @@ async function startAsk(request: AskRequest): Promise<void> {
     await rememberAskTokenUsage(result.tokenUsage, session.source?.channel ?? "other", snapshot);
     if (askInFlight?.requestId !== request.requestId || quickOverlaySession !== session) return;
     rememberPageTurn(session, question, result.answer);
+    session.historySources = mergeMemorySources(session.historySources ?? [], result.memoryUsage?.sources ?? []);
     if (result.draft) {
       session.result = result.draft;
+      session.draftSources = mergeMemorySources(result.memoryUsage?.sources ?? [], result.memoryUsage?.inheritedSources ?? []);
       session.hasSuggestions = true;
       session.draftUsesPage = request.includeContext;
+      session.originalAsk = { question, includeContext: request.includeContext, userHistory };
     }
-    sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer,
+    sendAskEvent({ type: "complete", sessionId: session.id, requestId: request.requestId, answer: result.answer, memoryUsage: result.memoryUsage,
       draft: result.draft ? { ...result.draft, sessionId: session.id, channel: session.source?.channel ?? "other", contact: "", target: session.target ?? undefined } : undefined });
   } catch (error) {
     if (quickOverlaySession !== session) return;
@@ -1023,7 +1091,7 @@ function registerIpc(): void {
 
   const generateAssistance = async (request: GenerateRequest) => {
     const invocation = quickInvocation;
-    request = { ...request, contextPolicy: "page-only" };
+    request = { ...request, contextPolicy: "page-only", includeMemory: request.includeMemory !== false };
     const screenshot = request.imageDataUrl || (request.sourceId ? await captureSource(request.sourceId) : "");
     const snapshot = store.getData();
     const result = await generateWithModel(snapshot, readApiKey(), request, screenshot);
@@ -1078,6 +1146,10 @@ function registerIpc(): void {
     if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating suggestions to revise a draft.");
     return reviseSuggestion(request);
   });
+  ipcMain.handle("assist:regenerate-without-memory", (event, sessionId: string, requestId: string) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating suggestions to regenerate.");
+    return regenerateWithoutMemory(sessionId, requestId);
+  });
   ipcMain.on("assist:cancel-revision", (event, requestId: string) => {
     if (event.sender === overlayWindow?.webContents && typeof requestId === "string" && requestId) cancelRevisionInFlight(requestId);
   });
@@ -1116,6 +1188,17 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("memory:get", () => store.snapshot());
+  ipcMain.handle("memory:session", (event, sessionId: string, enabled: boolean) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) throw new Error("Open the floating panel to change Memory.");
+    const session = usableQuickOverlaySession();
+    if (!session || session.id !== sessionId || typeof enabled !== "boolean") throw new Error("This session has expired. Open ContextCue again.");
+    if (enabled === (session.memoryEnabled !== false)) return;
+    cancelAskInFlight();
+    cancelRevisionInFlight();
+    session.memoryEnabled = enabled;
+    session.history = [];
+    session.historySources = [];
+  });
   ipcMain.handle("memory:document-save", (_event, document: MemoryDocument) => store.saveMemoryDocument(document));
   ipcMain.handle("memory:document-delete", (_event, id: string) => store.deleteMemoryDocument(id));
   ipcMain.handle("memory:profile", (_event, profile: UserProfile) => store.saveProfile(profile));

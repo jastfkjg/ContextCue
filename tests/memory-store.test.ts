@@ -120,6 +120,8 @@ describe("MemoryStore", () => {
     const now = new Date().toISOString();
     await store.saveMemoryDocument({
       id: "project-context",
+      purpose: "background",
+      matchTerms: "ContextCue, 产品发布",
       filename: "project-context",
       content: "# Project\r\n\r\nBuild ContextCue",
       scope: "person",
@@ -132,7 +134,7 @@ describe("MemoryStore", () => {
     const reloaded = new MemoryStore(path);
     await reloaded.load();
     const document = reloaded.snapshot().documents.find((item) => item.id === "project-context");
-    expect(document).toMatchObject({ filename: "project-context.md", scopeValue: "Lin Yue" });
+    expect(document).toMatchObject({ filename: "project-context.md", scopeValue: "Lin Yue", purpose: "background", matchTerms: "ContextCue, 产品发布" });
     expect(document?.content).toBe("# Project\n\nBuild ContextCue");
 
     await reloaded.deleteMemoryDocument("project-context");
@@ -171,6 +173,8 @@ describe("MemoryStore", () => {
     const loaded = await new MemoryStore(path).load();
     expect(loaded.documents.find((item) => item.filename === "profile.md")?.content).toContain("Alex");
     expect(loaded.documents.find((item) => item.filename === "preferences.md")?.content).toContain("Brief and calm");
+    expect(loaded.documents.find((item) => item.filename === "preferences.md")?.purpose).toBe("preference");
+    expect(loaded.documents.find((item) => item.filename === "profile.md")?.purpose).toBe("background");
     expect(loaded.documents.find((item) => item.filename === "lin-yue.md")).toMatchObject({ scope: "person", scopeValue: "Lin Yue" });
   });
 

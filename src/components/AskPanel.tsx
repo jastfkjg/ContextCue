@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUp, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
-import type { AskOverlayContext, OverlayResult } from "../shared/types";
+import { ArrowLeft, ArrowUp, Brain, Check, Copy, Eye, EyeOff, RefreshCw, Sparkles, Square } from "lucide-react";
+import type { AskOverlayContext, OverlayResult, MemoryUsage } from "../shared/types";
 import { contextCueApi } from "../lib/api";
 import { errorMessage } from "../lib/error-message";
+import { MemoryDetails } from "./MemoryDetails";
 import { MarkdownContent } from "./MarkdownContent";
 
 const ASK_INPUT_MIN_HEIGHT = 44;
@@ -17,6 +18,8 @@ interface AskTurn {
   status: TurnStatus;
   error?: string;
   draft?: OverlayResult;
+  memoryUsage?: MemoryUsage;
+  includeContext: boolean;
 }
 
 interface Props {
@@ -31,6 +34,12 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<AskTurn[]>([]);
   const [includeContext, setIncludeContext] = useState(context.hasPageContext);
+  const [includeMemory, setIncludeMemory] = useState(context.includeMemory !== false);
+  const [memoryNotice, setMemoryNotice] = useState("");
+  const [changingMemory, setChangingMemory] = useState(false);
+  useEffect(() => {
+    setIncludeMemory(context.includeMemory !== false);
+  }, [context.includeMemory]);
   const [refreshing, setRefreshing] = useState(false);
   const [localError, setLocalError] = useState("");
   const onDraftRef = useRef(onDraft);
@@ -89,7 +98,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     activeRequest.current = null;
     if (event.type === "complete") {
       setTurns((current) => current.map((turn) => turn.id === event.requestId
-        ? { ...turn, answer: event.answer || turn.answer, draft: event.draft, status: "complete" }
+        ? { ...turn, answer: event.answer || turn.answer, draft: event.draft, memoryUsage: event.memoryUsage, status: "complete" }
         : event.draft ? { ...turn, draft: undefined } : turn));
       if (event.draft) void onDraftRef.current?.(event.draft).catch((error) => setLocalError(String(error)));
     } else if (event.type === "cancelled") {
@@ -110,20 +119,23 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
     transcript.scrollTop = transcript.scrollHeight;
   }, [turns]);
 
-  const submit = (override?: string) => {
+  const submit = (override?: string, withoutMemory = false, originalContext = includeContext) => {
     const nextQuestion = (override ?? question).trim();
-    if (!active || refreshing || !nextQuestion || activeRequest.current || contextError) return;
+    if (!active || refreshing || changingMemory || !nextQuestion || activeRequest.current || contextError) return;
     const requestId = crypto.randomUUID();
     activeRequest.current = requestId;
     followOutput.current = true;
-    setTurns((current) => [...current, { id: requestId, question: nextQuestion, answer: "", status: "streaming" }]);
+    setTurns((current) => [...current, { id: requestId, question: nextQuestion, answer: "", status: "streaming", includeContext: originalContext }]);
     setQuestion("");
     setLocalError("");
+    if (withoutMemory) { setIncludeMemory(false); setMemoryNotice("Memory off. This retry starts without earlier answers."); }
     contextCueApi.startAsk({
       sessionId: context.sessionId,
       requestId,
       question: nextQuestion,
-      includeContext
+      includeContext: originalContext,
+      includeMemory: withoutMemory ? false : includeMemory,
+      resetConversation: withoutMemory
     });
   };
 
@@ -225,6 +237,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
                   <button disabled={streaming || Boolean(contextError)} onClick={() => submit(turn.question)}><RefreshCw size={12}/> Retry</button>
                 </div>
               )}
+              {turn.status === "complete" && <MemoryDetails usage={turn.memoryUsage} disabled={streaming || Boolean(contextError)} onRegenerate={() => submit(turn.question, true, turn.includeContext)}/>}
               {turn.draft && onDraft && <button className="ask-copy" onClick={() => void onDraft(turn.draft!).catch((error) => setLocalError(String(error)))}>Open draft →</button>}
               {turn.answer && !turn.draft && turn.status !== "streaming" && (
                 <button className="ask-copy" onClick={() => void copyAnswer(turn)}>
@@ -238,6 +251,22 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
       </div>
 
       <div className="ask-composer">
+        <div className="ask-memory-control">
+          <button type="button" aria-pressed={includeMemory} disabled={streaming || refreshing || changingMemory || Boolean(contextError)} onClick={async () => {
+            const nextEnabled = !includeMemory;
+            setChangingMemory(true);
+            try {
+              await contextCueApi.setSessionMemory(context.sessionId, nextEnabled);
+              setIncludeMemory(nextEnabled);
+              setMemoryNotice("Memory changed. Your next question starts fresh context. Earlier answers stay visible here.");
+            } catch (error) { setLocalError(errorMessage(error)); }
+            finally { setChangingMemory(false); }
+          }} title="Use relevant enabled notes independently of the page screenshot">
+            <Brain size={14} aria-hidden="true"/>Memory {includeMemory ? "on" : "off"}
+          </button>
+          <span>{includeMemory ? "Relevant notes are shared with your model." : "Saved notes won’t be added."}</span>
+        </div>
+        {memoryNotice && <p className="ask-context-notice" role="status">{memoryNotice}</p>}
         {contextError && <p className="ask-context-notice" role="status">Screenshot expired. Refresh above to continue. Your text is still available.</p>}
         {localError && <p className="ask-context-notice" role="alert">{localError}</p>}
         {refreshing && <p className="ask-context-notice" role="status">Refreshing screenshot…</p>}
@@ -260,7 +289,7 @@ export function AskPanel({ context, contextError, onExit, active = true, onDraft
           <button
             className={`ask-submit ${streaming ? "ask-submit--stop" : ""}`}
             onClick={streaming ? stop : () => submit()}
-            disabled={refreshing || Boolean(contextError) || (!streaming && !question.trim())}
+            disabled={refreshing || changingMemory || Boolean(contextError) || (!streaming && !question.trim())}
             aria-label={streaming ? "Stop answering" : "Send question"}
             title={streaming ? "Stop" : "Send · Enter"}
           >

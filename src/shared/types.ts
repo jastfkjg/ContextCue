@@ -42,6 +42,23 @@ export interface CandidateReply {
   strategy: string;
   label?: string;
   action?: AssistAction;
+  memoryUsage?: MemoryUsage;
+}
+
+export interface MemorySource {
+  id: string;
+  filename: string;
+  content: string;
+  updatedAt: string;
+  purpose?: "preference" | "background";
+}
+
+/** Reports what was shared, not a model-generated claim of citation. */
+export interface MemoryUsage {
+  enabled: boolean;
+  reason: "off" | "not-needed" | "no-match" | "matched";
+  sources: MemorySource[];
+  inheritedSources?: MemorySource[];
 }
 
 export interface MemorySuggestion {
@@ -59,6 +76,7 @@ export interface GenerationResult {
   memorySuggestions: MemorySuggestion[];
   generatedAt: string;
   tokenUsage?: GenerationTokenUsage;
+  memoryUsage?: MemoryUsage;
 }
 
 export interface GenerationTokenUsage {
@@ -97,8 +115,10 @@ export interface GenerateRequest {
   scenario?: AssistScenario | "auto";
   target?: InputTarget;
   pageContext?: PageContext;
-  /** Page-scoped flows never include stored memory or accepted replies. */
+  /** Isolate page sessions from stored conversations and accepted replies. */
   contextPolicy?: "page-only";
+  /** Only explicitly enabled, relevant documents may be shared. */
+  includeMemory?: boolean;
   revision?: { text: string; instruction: string };
   /** Explicitly omit the captured page for text-only draft revisions. */
   withoutPageContext?: boolean;
@@ -129,6 +149,9 @@ export interface AskRequest {
   requestId: string;
   question: string;
   includeContext: boolean;
+  includeMemory?: boolean;
+  /** Retry from explicit input without carrying earlier model answers. */
+  resetConversation?: boolean;
   history?: AskHistoryMessage[];
 }
 
@@ -143,11 +166,12 @@ export interface AskOverlayContext {
   contextUnavailableReason?: string;
   canReturnToSuggestions: boolean;
   capturedAt?: number;
+  includeMemory?: boolean;
 }
 
 export type AskStreamEvent =
   | { type: "delta"; sessionId: string; requestId: string; delta: string }
-  | { type: "complete"; sessionId: string; requestId: string; answer: string; draft?: OverlayResult }
+  | { type: "complete"; sessionId: string; requestId: string; answer: string; draft?: OverlayResult; memoryUsage?: MemoryUsage }
   | { type: "cancelled"; sessionId: string; requestId: string }
   | { type: "error"; sessionId: string; requestId: string; message: string };
 
@@ -172,6 +196,9 @@ export interface MemoryDocument {
   scope: MemoryDocumentScope;
   scopeValue?: string;
   enabled: boolean;
+  purpose?: "preference" | "background";
+  /** Comma-separated explicit project/topic phrases for background matching. */
+  matchTerms?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -360,6 +387,7 @@ export interface ContextCueApi {
   showDraft: (sessionId: string) => Promise<void>;
   exitAsk: (returnToSuggestions: boolean) => Promise<void>;
   startAsk: (request: AskRequest) => void;
+  setSessionMemory: (sessionId: string, enabled: boolean) => Promise<void>;
   cancelAsk: (requestId: string) => void;
   copyText: (text: string) => Promise<void>;
   onAskOpen: (callback: (context: AskOverlayContext) => void) => () => void;
@@ -368,6 +396,7 @@ export interface ContextCueApi {
   resizeOverlayBy: (edge: OverlayResizeEdge, deltaX: number, deltaY: number) => void;
   hideOverlay: () => Promise<void>;
   reviseSuggestion: (request: ReviseSuggestionRequest) => Promise<CandidateReply[]>;
+  regenerateWithoutMemory: (sessionId: string, requestId: string) => Promise<OverlayResult>;
   onRevisionCandidate: (callback: (event: RevisionCandidateEvent) => void) => () => void;
   cancelRevision: (requestId: string) => void;
 }

@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowLeftRight, ArrowRight, Check, ChevronUp, Copy, CornerDownLeft, PencilLine, RotateCcw, Sparkles, Square } from "lucide-react";
-import type { AssistScenario, CandidateReply, ChannelId, InputTarget } from "../shared/types";
+import type { AssistScenario, CandidateReply, ChannelId, InputTarget, MemoryUsage, OverlayResult } from "../shared/types";
+import { MemoryDetails } from "./MemoryDetails";
 import { contextCueApi } from "../lib/api";
 import { candidateRevisionReducer, createCandidateRevisionState, visibleCandidates } from "../lib/candidate-revision";
 import { consumeHorizontalSwipe, createHorizontalSwipeTracker } from "../lib/horizontal-swipe";
 
 interface Props {
   candidates: CandidateReply[];
+  memoryUsage?: MemoryUsage;
+  onRegenerated?: (result: OverlayResult) => void;
   channel: ChannelId;
   contact: string;
   scenario?: AssistScenario;
@@ -21,7 +24,7 @@ interface Props {
   active?: boolean;
 }
 
-export function CandidateCarousel({ candidates: originalCandidates, channel, contact, scenario = "reply", target, compact = false, onAsk, onHeightChange, sessionId, contextError, practice = false, active = true }: Props) {
+export function CandidateCarousel({ candidates: originalCandidates, memoryUsage, onRegenerated, channel, contact, scenario = "reply", target, compact = false, onAsk, onHeightChange, sessionId, contextError, practice = false, active = true }: Props) {
   const reduceMotion = useReducedMotion();
   const [selection, dispatch] = useReducer(candidateRevisionReducer, originalCandidates, createCandidateRevisionState);
   const candidates = visibleCandidates(selection);
@@ -175,13 +178,30 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
     }
   };
 
+  const regenerate = async () => {
+    if (!sessionId || !onRegenerated || contextError || activeRequest.current || applying) return;
+    const requestId = crypto.randomUUID();
+    activeRequest.current = requestId;
+    setApplying(true);
+    setFeedback("Regenerating the original request without Memory…");
+    try {
+      const result = await contextCueApi.regenerateWithoutMemory(sessionId, requestId);
+      if (activeRequest.current === requestId) onRegenerated(result);
+    } catch (error) {
+      if (activeRequest.current === requestId) setFeedback(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (activeRequest.current === requestId) activeRequest.current = null;
+      setApplying(false);
+    }
+  };
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || !active || applying
         || (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, [contenteditable=true]"))) return;
       if (event.key === "ArrowLeft") { event.preventDefault(); move(index - 1); }
       if (event.key === "ArrowRight") { event.preventDefault(); move(index + 1); }
-      if (event.key === "Enter" && !composerOpen && !(event.target instanceof HTMLButtonElement)) {
+      if (event.key === "Enter" && !composerOpen && !(event.target instanceof HTMLElement && event.target.closest("button, summary, a"))) {
         event.preventDefault();
         void useCandidate(true);
       }
@@ -270,6 +290,7 @@ export function CandidateCarousel({ candidates: originalCandidates, channel, con
               <p>{candidateText}</p>
               {!compact && <span className="tone-label">{candidate.tone}</span>}
             </motion.div>
+            <MemoryDetails usage={candidate.memoryUsage ?? memoryUsage} disabled={revising || applying || Boolean(contextError)} onRegenerate={onRegenerated ? () => void regenerate() : undefined}/>
             {selection.revised && <div className="revision-group-switch">
               <button type="button" disabled={revising || applying} onClick={() => {
                 dispatch({ type: "group", group: selection.group === "revised" ? "original" : "revised" });

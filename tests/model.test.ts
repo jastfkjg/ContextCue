@@ -30,21 +30,22 @@ function data(): AppData {
   };
 }
 
-const request: GenerateRequest = { channel: "lark", contact: "Lin Yue", intent: "Agree", locale: "auto" };
+const request: GenerateRequest = { includeMemory: true, channel: "lark", contact: "Lin Yue", intent: "Agree", locale: "auto" };
 
 describe("model memory and parsing", () => {
-  it("selects relevant relationship memory and accepted replies", () => {
+  it("uses saved preference documents without legacy relationships, facts or accepted replies", () => {
     const context = buildMemoryContext(data(), request);
-    expect(context).toContain("Lead with the conclusion");
-    expect(context).toContain("Avoid exclamation marks");
-    expect(context).toContain("Thursday works");
+    expect(context).toContain("Warm, concise, natural, and direct");
+    expect(context).not.toContain("Lead with the conclusion");
+    expect(context).not.toContain("Avoid exclamation marks");
+    expect(context).not.toContain("Thursday works");
   });
 
   it("includes only enabled Markdown files whose scope matches the reply", () => {
     const configured = data();
     const timestamp = "2026-01-01T00:00:00.000Z";
     configured.documents = [
-      { id: "global", filename: "global.md", content: "Global context", scope: "global", enabled: true, createdAt: timestamp, updatedAt: timestamp },
+      { id: "global", filename: "global.md", content: "Global context", purpose: "preference", scope: "global", enabled: true, createdAt: timestamp, updatedAt: timestamp },
       { id: "lark", filename: "lark.md", content: "Lark context", scope: "channel", scopeValue: "lark", enabled: true, createdAt: timestamp, updatedAt: timestamp },
       { id: "slack", filename: "slack.md", content: "Slack context", scope: "channel", scopeValue: "slack", enabled: true, createdAt: timestamp, updatedAt: timestamp },
       { id: "lin", filename: "lin.md", content: "Lin context", scope: "person", scopeValue: "Lin Yue", enabled: true, createdAt: timestamp, updatedAt: timestamp },
@@ -61,13 +62,14 @@ describe("model memory and parsing", () => {
     expect(context).not.toContain("Paused context");
   });
 
-  it("keeps accepted examples scoped to the current writing scenario", () => {
+  it("never reuses accepted examples, even when the scenario matches", () => {
     const configured = data();
     configured.acceptedReplies = [
       { id: "reply", text: "Chat-style answer", channel: "other", contact: "", scenario: "reply", createdAt: "2026-01-01T00:00:00.000Z" },
       { id: "form", text: "Product designer", channel: "other", contact: "", scenario: "form", applicationName: "Safari", createdAt: "2026-01-01T00:00:00.000Z" }
     ];
     const context = buildMemoryContext(configured, {
+      includeMemory: true,
       channel: "other",
       locale: "auto",
       scenario: "auto",
@@ -84,7 +86,7 @@ describe("model memory and parsing", () => {
       }
     });
 
-    expect(context).toContain("Product designer");
+    expect(context).not.toContain("Product designer");
     expect(context).not.toContain("Chat-style answer");
   });
 
@@ -387,7 +389,7 @@ describe("model memory and parsing", () => {
     expect((options?.headers as Record<string, string>).Authorization).toBe("Bearer secret");
     const body = JSON.parse(String(options?.body));
     expect(JSON.stringify(body)).toContain("data:image/png;base64,abc");
-    expect(JSON.stringify(body)).toContain("Lead with the conclusion");
+    expect(JSON.stringify(body)).toContain("Warm, concise, natural, and direct");
   });
 
   it("uses the selected model configuration", async () => {

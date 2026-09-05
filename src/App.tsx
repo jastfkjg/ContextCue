@@ -38,6 +38,7 @@ import {
   Wifi,
   X
 } from "lucide-react";
+import { memoryPurpose } from "./shared/memory-selection";
 import { CandidateCarousel } from "./components/CandidateCarousel";
 import { MarkdownContent } from "./components/MarkdownContent";
 import { SelectMenu } from "./components/SelectMenu";
@@ -273,7 +274,7 @@ function ReplyWorkspace({
         <section className="draft-pane">
           <div className="section-bar">
             <div><span className="step-number">02</span><h2>Candidates</h2></div>
-            <span className="local-label"><ShieldCheck size={14} /> memory stays local</span>
+            <span className="local-label"><ShieldCheck size={14} /> notes saved locally</span>
           </div>
           <AnimatePresence mode="wait">
             {generating ? (
@@ -289,7 +290,7 @@ function ReplyWorkspace({
                   <span>UNDERSTOOD</span>
                   <p>{result.conversationSummary}</p>
                 </div>
-                <CandidateCarousel key={result.generatedAt} candidates={result.candidates} channel={channel} contact={contact || result.detectedContact} />
+                <CandidateCarousel key={result.generatedAt} candidates={result.candidates} memoryUsage={result.memoryUsage} channel={channel} contact={contact || result.detectedContact} />
                 {result.memorySuggestions.length > 0 && (
                   <div className="memory-suggestions">
                     <div className="suggestion-title"><Brain size={15} /><span>Worth remembering?</span><small>Nothing is saved automatically.</small></div>
@@ -431,6 +432,8 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
       filename,
       content: "# Untitled memory\n\n",
       scope: "global",
+      purpose: "background",
+      matchTerms: "",
       enabled: true,
       createdAt: now,
       updatedAt: now
@@ -461,7 +464,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
     <div className="workspace memory-workspace">
       {deletion && <ConfirmDialog title={deletion.kind === "document" ? `Delete ${deletion.label}?` : "Delete this memory?"} description={deletion.kind === "document" ? "This file will be permanently removed from this device." : `“${deletion.label}” will be permanently removed.`} onCancel={() => setDeletion(null)} onConfirm={async () => { if (deletion.kind === "document") await deleteDocument(); else onChange(await contextCueApi.deleteFact(deletion.id)); }}/>}
       <header className="workspace-header memory-header">
-        <div><h1>Memory</h1><p>Your local notes. Excluded from Ask AI and writing sessions.</p></div>
+        <div><h1>Memory</h1><p>Your writing preferences and relevant background. Enabled notes may be shared with your model.</p></div>
 
       </header>
 
@@ -490,7 +493,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
           {learnedSelected ? (
             <div className="learned-memory-pane">
               <header>
-                <div><h2>Learned facts</h2><p>Facts you chose to keep from suggestions.</p></div>
+                <div><h2>Learned facts</h2><p>Previously saved facts. Copy a fact into an enabled note to use it in a session.</p></div>
                 <span className="learned-total"><strong>{memory.facts.length}</strong> saved</span>
               </header>
               <div className="learned-memory-list">
@@ -503,7 +506,7 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                 ))}
                 {memory.facts.length === 0 && <div className="learned-memory-empty"><Brain size={26}/><strong>No learned facts yet</strong><span>Facts you choose to save will appear here.</span></div>}
               </div>
-              <footer><span>{memory.acceptedReplies.length} previously accepted suggestions are retained locally, but excluded from page-only sessions.</span></footer>
+              <footer><span>{memory.acceptedReplies.length} previously accepted suggestions are retained locally, but never used as automatic writing examples.</span></footer>
             </div>
           ) : activeDocument ? (
             <>
@@ -518,11 +521,13 @@ function MemoryView({ memory, onChange }: { memory: MemorySnapshot | null; onCha
                     <summary aria-label="File options" title="File options"><Ellipsis size={18}/></summary>
                     <div className="memory-file-options">
                       <h3>File options</h3>
+                      <label><span>Use as</span><SelectMenu label="Memory purpose" value={memoryPurpose(activeDocument)} options={[{ value: "preference", label: "Writing preference" }, { value: "background", label: "Background reference" }]} onChange={(value) => updateDocument({ purpose: value as "preference" | "background" })}/></label>
                       <label><span>Scope</span><SelectMenu label="Memory scope" value={activeDocument.scope} options={[{ value: "global", label: "All contexts" }, { value: "channel", label: "Channel" }, { value: "person", label: "Person" }]} onChange={(value) => { if (value !== activeDocument.scope) updateDocument({ scope: value as MemoryDocumentScope, scopeValue: value === "global" ? undefined : value === "channel" ? "other" : "" }); }}/></label>
                       {activeDocument.scope === "channel" && <label><span>Channel</span><SelectMenu label="Channel" value={activeDocument.scopeValue ?? "other"} onChange={(value) => updateDocument({ scopeValue: value })} options={Object.entries(CHANNEL_LABELS).map(([value, label]) => ({ value, label }))}/></label>}
                       {activeDocument.scope === "person" && <label><span>Person</span><input value={activeDocument.scopeValue ?? ""} onChange={(event) => updateDocument({ scopeValue: event.target.value })} placeholder="Contact name"/></label>}
                       <label className="memory-enabled-option"><span>Enabled</span><input type="checkbox" checked={activeDocument.enabled} onChange={(event) => updateDocument({ enabled: event.target.checked })}/></label>
-                      <p>Saved metadata only. Not used in current sessions.</p>
+                      {memoryPurpose(activeDocument) === "background" && activeDocument.scope === "global" && <label><span>Match project or topic</span><input value={activeDocument.matchTerms ?? ""} maxLength={500} onChange={(event) => updateDocument({ matchTerms: event.target.value })} placeholder="e.g. ContextCue, product launch"/><small>Comma-separated phrases. Without a match, name this file in your question to use it.</small></label>}
+                      <p>{memoryPurpose(activeDocument) === "preference" ? "Used for writing when its scope matches. Your current instructions take priority." : "Used only when relevant. Dates and status in notes may need confirmation."} Enabled matching notes are sent to your selected model. Old conversations and accepted replies are excluded.</p>
                       <button className="memory-delete-option" onClick={() => { moreDetails.current?.removeAttribute("open"); setDeletion({ kind: "document", id: activeDocument.id, label: activeDocument.filename }); }}><Trash2 size={14}/>Delete file</button>
                     </div>
                   </details>

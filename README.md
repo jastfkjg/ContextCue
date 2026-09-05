@@ -102,7 +102,7 @@ Settings save automatically. **Writing language** controls generated text; **Mat
 
 - **Capture on invocation.** ContextCue does not record your screen in the background. A new invocation or explicit refresh takes a new snapshot.
 - **Your chosen provider.** Screenshots and relevant text are sent to the model endpoint you configure when used in a request. “Local-first” describes storage; inference may run remotely.
-- **Local settings and history.** Settings, memory documents, and usage records stay on your device. Saved memory and past accepted replies are excluded from page-only suggestions and Q&A. API keys are encrypted with OS-backed storage; the entire data file is not encrypted.
+- **Local settings and history.** Settings, memory documents, and usage records are stored on your device. Relevant enabled notes can be shared with your model for writing and personalized questions; past accepted replies are never automatically reused. Ask AI has an independent Memory switch, and results show the notes shared. API keys are encrypted with OS-backed storage; the entire data file is not encrypted.
 - **You approve the words.** Copy or insert explicitly. ContextCue never submits a form or sends a message for you. Screenshots are not automatically redacted.
 
 [Privacy details](./docs/guide.md#privacy-boundaries) · [Platform and capture limitations](./docs/guide.md#current-limitations)

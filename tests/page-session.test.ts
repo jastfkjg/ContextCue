@@ -23,7 +23,7 @@ describe("page-only sessions", () => {
     expect(session("Browser", "200").screenshot).not.toContain("WeChat");
   });
 
-  it("never loads stored conversation data, including global memories", () => {
+  it("isolates conversations and unscoped background while allowing enabled writing preferences", () => {
     const data = structuredClone(DEFAULT_DATA);
     data.profile.about = "Private WeChat topic";
     data.documents[0].content = "Private WeChat topic";
@@ -31,6 +31,8 @@ describe("page-only sessions", () => {
     data.acceptedReplies = [{ id: "old", text: "Private WeChat topic", channel: "other", contact: "", createdAt: "" }];
     const request = pageRequest(session("Browser", "200", "Browser page"), "auto");
     expect(request.contextPolicy).toBe("page-only");
+    expect(request.includeMemory).toBe(true);
+    expect(buildMemoryContext(data, request)).toContain("Communication preferences");
     expect(buildMemoryContext(data, request)).not.toContain("Private WeChat");
     expect(request.pageContext?.windowTitle).toBe("Browser page");
   });

@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · [简体中文](./guide.zh-CN.md)
 
-Invoke ContextCue from the current app or browser window to open Ask AI: ask for understanding or describe what to write. A separate Quick writing shortcut generates suggestions directly. Every invocation starts a fresh page-only session using its screenshot, explicit input and in-session content—not previous windows, saved memory or accepted replies. Ask AI can also exclude page context. An editable field is not required: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied. You review the text and decide what to use—ContextCue never submits or sends it automatically.
+Invoke ContextCue from the current app or browser window to open Ask AI: ask for understanding or describe what to write. A separate Quick writing shortcut generates suggestions directly. Every invocation starts a fresh session using its screenshot, explicit input and in-session content. Relevant enabled Memory notes may also be selected; previous windows and accepted replies are excluded. Ask AI can also exclude page context. An editable field is not required: on macOS a recognized field supports direct insertion; otherwise suggestions can be copied. You review the text and decide what to use—ContextCue never submits or sends it automatically.
 
 Local-first means memory and settings are stored on your device, not that model inference necessarily runs locally. Screenshots and relevant context are sent to your configured model provider when used in a request.
 
@@ -19,7 +19,7 @@ Local-first means memory and settings are stored on your device, not that model 
 | ↔️ | **Lightweight candidate panel** | Switch with a two-finger swipe, horizontal gesture, dots, or arrow keys. |
 | ↵ | **Apply without submitting** | On macOS, validate the original control before inserting or replacing text. |
 | ✦ | **Revise into multiple alternatives** | Describe a change below the current suggestion. Revised candidates appear in place, with the original group one click away. |
-| 🧠 | **Preserved local memory** | Existing Markdown notes, facts and history remain manageable on-device, but are excluded from page-only sessions. |
+| 🧠 | **Controlled memory** | Enabled writing preferences and relevant background notes can be shared with your model. Inspect sources or regenerate without Memory; legacy facts and accepted replies remain excluded. |
 | ✓ | **First-run guide** | Connect a provider, verify image input and permissions, then practice with a fictional conversation. |
 | ◉ | **Multiple model providers** | Configure several Responses or Chat Completions endpoints and choose the default model. |
 | ◷ | **Local usage tracking** | Review provider-reported token counts, model breakdowns, and request history by date range. |
@@ -49,7 +49,7 @@ Drag the Ask AI header or the suggestion panel’s top bar to move the window. M
 
 Suggestions initially fit their content. Drag any edge or the bottom-right corner to resize. A subtle curved hint appears when that corner is hovered or keyboard-focused. Your reading width persists for the current app run; switching candidates or reopening the panel fits the height to the new content. A manually adjusted height lasts for the current candidate. Ask AI keeps its own size. Focus the resize grip and use arrow keys for precise adjustment, or Shift + arrows for larger steps.
 
-New installs use `⌘ ⇧ Space` / `Ctrl ⇧ Space` for Ask AI and `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` for Quick writing. Upgrades preserve existing shortcuts. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, and the optional snapshot—not your long-term memory documents. Closing the panel clears the screenshot and in-memory Q&A. The header shows the captured page source; toggling it off displays **Page off**. **Summarize**, **Explain**, **Draft a reply**, and **Rewrite** fill the question field for review before sending. Enter sends and Shift + Enter adds a line.
+New installs use `⌘ ⇧ Space` / `Ctrl ⇧ Space` for Ask AI and `⌘ ⇧ Enter` / `Ctrl ⇧ Enter` for Quick writing. Upgrades preserve existing shortcuts. It saves the page snapshot before opening the panel, so submitting a question never recaptures a different tab. You can turn off page context before sending a question; if capture is unavailable, the panel explains why and allows questions without it. Ask AI uses your question, recent in-panel Q&A, the optional snapshot, and relevant enabled notes when Memory is on. Page context and Memory have independent switches. Closing the panel clears the screenshot and in-memory Q&A. The header shows the captured page source; toggling it off displays **Page off**. **Summarize**, **Explain**, **Draft a reply**, and **Rewrite** fill the question field for review before sending. Enter sends and Shift + Enter adds a line.
 
 The refresh button beside the page source captures the original window again and starts a new session, clearing old answers, candidates, and unsent input. Hover the source for the capture time. Failed refreshes preserve existing content; a refresh cannot capture another native window. Invoke with the shortcut in another window to use it instead.
 
@@ -125,7 +125,16 @@ Each saved model has its own endpoint, protocol, image-input capability, and sec
 
 ## Local memory
 
-Use **Memory** to keep and preview existing Markdown notes. Select a file from the left rail, switch between **Write** and **Preview**, and check the local save status below the editor. **File options** holds scope, enabled metadata, and deletion. **File options** contains All contexts / Channel / Person scopes, enabled state, and deletion. Scope and enabled state remain as compatibility metadata, but are not used by page-only sessions. Previously saved facts can still be inspected and removed.
+Use **Memory** to edit and preview Markdown notes. **File options** controls **Use as**, **Scope**, **Enabled**, topic matching, and deletion.
+
+- **Writing preference**: eligible for writing tasks, including Ask AI drafts and revisions, when the scope matches. The existing `preferences.md` note is classified this way; other existing notes become background references.
+- **Background reference**: channel notes require an exact known channel; person notes require an explicit recipient or an exact title in a known communication channel. Uncertain or substring matches do not select a person. Global background requires a configured project/topic phrase in the current input or page title, or an explicit filename in the question. Add comma-separated phrases under **Match project or topic**.
+- **Ask AI**: writing and explicit personalized questions can use notes. Ordinary explanations, page summaries and translations do not automatically select notes. Routing uses conservative local English/Chinese patterns, not semantic search; name a file explicitly if it was missed. File references still respect Enabled and scope.
+- **Memory on/off** is independent of the screenshot switch. Changing it starts fresh model conversation context on the next question; earlier answers remain visible. A new invocation starts with Memory on. Disable individual notes in Memory to keep them out of future selection.
+- The **Memory** disclosure on a result lists exact note excerpts shared, and any notes that may have influenced earlier answers or drafts. It reports supplied context, not verified model citations. At most 6 notes / 8,000 content characters are selected, with up to 2,000 characters per note; HTML comments are omitted.
+- **Regenerate original request without Memory** starts from the original page or question, excluding earlier model answers, generated drafts and later revisions. The draft replay may retain earlier explicit user questions. Successful draft regeneration also clears model conversation context and leaves Memory off for the session. Ordinary revision edits the chosen draft, which can still contain information from Memory.
+
+The current user instruction takes priority over saved preferences. Background notes are dated reference, not confirmation of current deadlines, availability or progress. Previously saved facts can be viewed and removed; copy a useful fact into an enabled note to use it. Legacy profiles, contacts and accepted replies are not automatically injected, and sessions do not automatically save new facts or learn accepted replies.
 
 The document names end in `.md`, but their contents are stored inside Electron's platform-specific `userData/contextcue-data.json`, alongside the other local data:
 
@@ -158,7 +167,7 @@ Open **Token usage** to filter usage by model and the last 7 days, last 30 days,
 - Page snapshots are captured on explicit invocation or refresh. Window lists and permission checks also read local thumbnails without uploading them. Setup verification and examples upload only synthetic images.
 - Screenshots are sent to the configured model provider when used for suggestions or page-aware Q&A, but are not written to the long-term memory file. Turning off Ask AI page context excludes the snapshot and page metadata from the question request; it does not undo the snapshot already captured when opening the panel.
 - Text inside screenshots and page metadata is treated as untrusted data, not as instructions.
-- Long-term memory remains local and is excluded from page-only suggestion, revision and question requests.
+- Memory is stored locally; selected enabled note excerpts are sent to your configured model when used. Stored conversations, legacy facts and accepted replies are excluded from automatic retrieval.
 - Saved API keys are not exposed back to the renderer process.
 - Quick invocation is blocked when the macOS accessibility adapter recognizes a sensitive focused field, such as a password or verification-code input. This is not a guarantee that all sensitive content is detected: screenshots are not automatically redacted, and unrecognized controls or other platforms do not have the same field-level check.
 - Applying begins by copying the suggestion; if exact write-back fails, nothing is pasted into a changed field.

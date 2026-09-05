@@ -1,3 +1,4 @@
+import { selectMemory } from "../shared/memory-selection";
 import type {
   AppSettings,
   AppUpdateState,
@@ -200,6 +201,8 @@ const previewUpdateState = (): AppUpdateState => ({
   message: "Updates are available in installed desktop builds."
 });
 
+const demoMemoryUsage = (enabled = true, task: "writing" | "ask" = "writing", input = "") => selectMemory(demoMemory.documents, { enabled, task, input, channel: "wechat" });
+
 const browserDemoApi: ContextCueApi = {
   getUpdateState: async () => previewUpdateState(),
   checkForUpdates: async () => previewUpdateState(),
@@ -210,13 +213,13 @@ const browserDemoApi: ContextCueApi = {
   getCaptureSources: async () => demoSources,
   testWindowCapture: async () => ({ name: demoSources[0].name, imageDataUrl: demoSources[0].thumbnail, capturedAt: new Date().toISOString() }),
   captureSource: async (id) => demoSources.find((source) => source.id === id)?.thumbnail ?? demoSources[0].thumbnail,
-  generateReplies: async () => {
+  generateReplies: async (request) => {
     await new Promise((resolve) => setTimeout(resolve, 900));
-    return demoResult;
+    return { ...demoResult, memoryUsage: demoMemoryUsage(request.includeMemory !== false) };
   },
-  generateAssistance: async () => {
+  generateAssistance: async (request) => {
     await new Promise((resolve) => setTimeout(resolve, 900));
-    return demoResult;
+    return { ...demoResult, memoryUsage: demoMemoryUsage(request.includeMemory !== false) };
   },
   getMemory: async () => demoMemory,
   saveMemoryDocument: async (document: MemoryDocument) => {
@@ -286,7 +289,7 @@ const browserDemoApi: ContextCueApi = {
   onOverlayResult: (callback) => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") !== "overlay" || ["loading", "ask"].includes(params.get("preview") ?? "")) return () => undefined;
-    const timeout = window.setTimeout(() => callback({ ...demoResult, sessionId: "demo-ask-session", channel: "wechat", contact: demoResult.detectedContact }), 650);
+    const timeout = window.setTimeout(() => callback({ ...demoResult, memoryUsage: demoMemoryUsage(), sessionId: "demo-ask-session", channel: "wechat", contact: demoResult.detectedContact }), 650);
     return () => window.clearTimeout(timeout);
   },
   onOverlayReset: (callback) => { demoResetListener = callback; return () => { demoResetListener = null; }; },
@@ -312,10 +315,12 @@ const browserDemoApi: ContextCueApi = {
   exitAsk: async () => undefined,
   startAsk: (request) => {
     clearDemoAskTimers();
+    demoAskContext.includeMemory = request.includeMemory !== false;
+    const memoryUsage = demoMemoryUsage(request.includeMemory !== false, "ask", request.question);
     if (/draft|reply|rewrite|写|回复|改写/i.test(request.question)) {
       demoAskTimers.push(window.setTimeout(() => demoAskListener?.({ type: "complete", sessionId: request.sessionId, requestId: request.requestId,
-        answer: demoResult.candidates[0].text,
-        draft: { ...demoResult, generatedAt: request.requestId, sessionId: request.sessionId, channel: "wechat", contact: "" }
+        answer: demoResult.candidates[0].text, memoryUsage,
+        draft: { ...demoResult, memoryUsage, generatedAt: request.requestId, sessionId: request.sessionId, channel: "wechat", contact: "" }
       }), 600));
       return;
     }
@@ -332,9 +337,10 @@ const browserDemoApi: ContextCueApi = {
       }, 180 + index * 70));
     });
     demoAskTimers.push(window.setTimeout(() => {
-      demoAskListener?.({ type: "complete", sessionId: request.sessionId, requestId: request.requestId, answer });
+      demoAskListener?.({ type: "complete", sessionId: request.sessionId, requestId: request.requestId, answer, memoryUsage });
     }, 220 + chunks.length * 70));
   },
+  setSessionMemory: async (_sessionId, enabled) => { demoAskContext.includeMemory = enabled; },
   cancelAsk: (requestId) => {
     clearDemoAskTimers();
     demoAskListener?.({ type: "cancelled", sessionId: demoAskContext.sessionId, requestId });
@@ -356,6 +362,10 @@ const browserDemoApi: ContextCueApi = {
   resizeOverlay: () => undefined,
   resizeOverlayBy: () => undefined,
   hideOverlay: async () => undefined,
+  regenerateWithoutMemory: async (sessionId) => {
+    demoAskContext.includeMemory = false;
+    return { ...demoResult, generatedAt: new Date().toISOString(), memoryUsage: demoMemoryUsage(false), sessionId, channel: "wechat", contact: "" };
+  },
   reviseSuggestion: async ({ sessionId, requestId, text, instruction }) => {
     const controller = new AbortController();
     demoRevisions.set(requestId, controller);
@@ -364,7 +374,7 @@ const browserDemoApi: ContextCueApi = {
       { text: short ? "Thursday works. I'll send the deck before we meet." : `${text} Thanks for being flexible!`, tone: "Warm", strategy: "Friendly confirmation" },
       { text: short ? "Thursday confirmed. Deck coming before the meeting." : "Thursday works for me. I'll make sure you have the updated deck beforehand.", tone: "Direct", strategy: "Clear next step" },
       { text: short ? "Sounds good — Thursday it is. I'll send the deck ahead.": "Happy to move our sync to Thursday at the same time. I'll send you the updated deck before then.", tone: "Natural", strategy: "Acknowledge and confirm" }
-    ].slice(0, demoSettings.candidateCount);
+    ].slice(0, demoSettings.candidateCount).map((candidate) => ({ ...candidate, memoryUsage: demoMemoryUsage(demoAskContext.includeMemory !== false) }));
     try {
       for (const candidate of candidates) {
         await new Promise<void>((resolve, reject) => {

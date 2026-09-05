@@ -743,3 +743,88 @@ describe("Ask AI entry and draft workflow", () => {
     expect(harness.windows[1].isVisible()).toBe(true);
   });
 });
+
+describe("Memory controls at Electron session boundaries", () => {
+  const usage = { enabled: true, reason: "matched" as const, sources: [{ id: "preferences", filename: "preferences.md", content: "PRIVATE_NOTE", updatedAt: "2026-01-01" }] };
+  const ask = async (sessionId: string, requestId: string, extra = {}) => {
+    invoke("ask:start", { sessionId, requestId, question: "Draft a reply", includeContext: false, includeMemory: true, ...extra });
+    await vi.waitFor(() => expect(latest<any>("overlay:ask-event")).toMatchObject({ requestId, type: "complete" }));
+  };
+  it("keeps page and Memory independent, reports sources and clears inherited answers when Memory changes", async () => {
+    const context = await openAsk("Source", "101");
+    harness.answer.mockResolvedValueOnce({ answer: "PRIVATE_NOTE answer", memoryUsage: usage, tokenUsage: { reported: false } });
+    await ask(context.sessionId, "memory-on");
+    expect(harness.answer.mock.calls[0][3]).toBe("");
+    expect(harness.answer.mock.calls[0][9]).toMatchObject({ enabled: true });
+    expect(latest<any>("overlay:ask-event").memoryUsage).toEqual(usage);
+    await ask(context.sessionId, "memory-followup", { question: "Explain that" });
+    expect(harness.answer.mock.calls[1][9].inheritedSources).toEqual(usage.sources);
+    await ask(context.sessionId, "memory-off", { includeMemory: false, includeContext: true });
+    const call = harness.answer.mock.calls[2];
+    expect(call[3]).toContain("data:image/");
+    expect(call[4]).toEqual([]);
+    expect(call[9]).toMatchObject({ enabled: false, inheritedSources: [] });
+    expect((await invoke("ask:open")).includeMemory).toBe(false);
+  });
+  it("applies the Memory switch to revisions even before another question is sent", async () => {
+    const context = await openAsk("Source", "101");
+    harness.answer.mockResolvedValueOnce({ answer: "PRIVATE_DRAFT", draft: { ...result, memoryUsage: usage }, memoryUsage: usage, tokenUsage: { reported: false } });
+    await ask(context.sessionId, "before-toggle");
+    await harness.handlers.get("memory:session")!(event(), context.sessionId, false);
+    expect((await invoke("ask:open")).includeMemory).toBe(false);
+    harness.generate.mockResolvedValue(result);
+    await invoke("assist:revise", { sessionId: context.sessionId, requestId: "after-toggle", text: "PRIVATE_DRAFT", instruction: "Shorter" });
+    expect(harness.generate.mock.calls[0][2].includeMemory).toBe(false);
+    expect(harness.generate.mock.calls[0][7]).toEqual(usage.sources);
+    await ask(context.sessionId, "after-toggle-question", { includeMemory: false });
+    expect(harness.answer.mock.calls[1][4]).toEqual([]);
+  });
+  it("retries a question without earlier answers even if the Memory switch is already off", async () => {
+    const context = await openAsk("Source", "101");
+    await ask(context.sessionId, "first-off", { includeMemory: false });
+    await ask(context.sessionId, "retry-off", { includeMemory: false, resetConversation: true });
+    expect(harness.answer.mock.calls[1][4]).toEqual([]);
+  });
+  it("regenerates an Ask draft from its original question, excluding model answers and revised text", async () => {
+    const context = await openAsk("Source", "101");
+    harness.answer.mockResolvedValueOnce({ answer: "PRIVATE_NOTE answer", memoryUsage: usage, tokenUsage: { reported: false } });
+    await ask(context.sessionId, "context-turn", { question: "Use my project notes" });
+    harness.answer.mockResolvedValueOnce({ answer: "PRIVATE_DRAFT", draft: { ...result, memoryUsage: usage }, memoryUsage: usage, tokenUsage: { reported: false } });
+    await ask(context.sessionId, "draft-turn");
+    harness.generate.mockResolvedValue(result);
+    await invoke("assist:revise", { sessionId: context.sessionId, requestId: "revision", text: "PRIVATE_DRAFT", instruction: "Warmer" });
+    harness.answer.mockResolvedValueOnce({ answer: "Clean", draft: { ...result, memoryUsage: { enabled: false, reason: "off", sources: [] } }, tokenUsage: { reported: false } });
+    const clean = await harness.handlers.get("assist:regenerate-without-memory")!(event(), context.sessionId, "clean-retry");
+    const call = harness.answer.mock.calls[2];
+    expect(call[2]).toBe("Draft a reply");
+    expect(call[3]).toBe("");
+    expect(call[4]).toEqual([{ role: "user", content: "Use my project notes" }]);
+    expect(call[9]).toEqual({ enabled: false });
+    expect(JSON.stringify(call.slice(2, 6))).not.toContain("PRIVATE_");
+    expect(clean.memoryUsage.enabled).toBe(false);
+    await ask(context.sessionId, "after-clean", { includeMemory: false });
+    expect(harness.answer.mock.calls[3][4]).toEqual([]);
+  });
+  it("regenerates Quick writing without old draft text and discards a late result after close", async () => {
+    harness.window = { applicationName: "WeChat", windowTitle: "Alice", windowId: "101", processId: 99 };
+    harness.windows.forEach((window) => { window.focused = false; });
+    harness.generate.mockResolvedValue({ ...result, memoryUsage: usage });
+    const count = harness.events.filter((item) => item.channel === "overlay:result").length;
+    shortcut(false);
+    await vi.waitFor(() => expect(harness.events.filter((item) => item.channel === "overlay:result")).toHaveLength(count + 1));
+    const original = latest<OverlayResult>("overlay:result");
+    expect(harness.generate.mock.calls[0][2].includeMemory).toBe(true);
+    await harness.handlers.get("assist:regenerate-without-memory")!(event(), original.sessionId, "clean-quick");
+    expect(harness.generate.mock.calls[1][2]).toMatchObject({ includeMemory: false, contextPolicy: "page-only" });
+    expect(harness.generate.mock.calls[1][2].revision).toBeUndefined();
+    let finish!: (value: unknown) => void;
+    harness.generate.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = harness.handlers.get("assist:regenerate-without-memory")!(event(), original.sessionId, "late-clean");
+    const rejected = expect(pending).rejects.toThrow();
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await invoke("overlay:hide");
+    finish(result);
+    await rejected;
+    expect(harness.windows[1].isVisible()).toBe(false);
+  });
+});

@@ -1107,3 +1107,23 @@ input::placeholder, textarea::placeholder { color: #aaaDA2; }
 }
 
 .settings-workspace .model-url-field { grid-column: 1 / -1; }
+
+/* Inspect the exact saved context without crowding the writing controls. */
+.session-memory { margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--ink); -webkit-app-region: no-drag; }
+.session-memory > summary { display: flex; align-items: center; gap: 6px; min-height: 32px; width: fit-content; padding: 4px 8px; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; background: var(--paper); }
+.session-memory summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.session-memory[open] > summary { background: var(--surface); }
+.session-memory-body { margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.session-memory-body p { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--ink); }
+.session-memory-source { margin: 5px 0; }
+.session-memory-source summary { min-height: 32px; padding: 6px 0; cursor: pointer; overflow-wrap: anywhere; }
+.session-memory-source pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; padding: 8px; background: var(--surface); font: inherit; }
+.session-memory-body > button { margin: 8px 0; min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: left; }
+.session-memory-body > button:hover { background: var(--accent); }
+.ask-memory-control { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 8px; font-size: 12px; color: var(--ink); }
+.ask-memory-control button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); }
+.ask-memory-control button[aria-pressed="true"] { background: var(--surface); border-color: var(--ink); }
+.ask-memory-control > span { flex: 1 1 160px; line-height: 1.5; }
+.memory-more-menu > .memory-file-options { max-height: min(640px, calc(100vh - 230px)); overflow-y: auto; }
+.memory-file-options small { font-size: 12px; line-height: 1.5; color: var(--ink); }
+.candidate-shell--compact .session-memory { margin-inline: 22px; margin-bottom: 12px; }

@@ -20,7 +20,7 @@
 
 - A session ID belongs to one invocation, not a channel or application. Reopening in the same window also starts fresh.
 - Snapshot, input target, candidates, Q&A history and in-flight requests are owned by that session.
-- Suggestion / revision requests use `contextPolicy: page-only`. Stored documents, profiles, facts, contacts and accepted examples are excluded. Existing local data is not deleted.
+- Suggestion / revision requests use `contextPolicy: page-only`. Stored conversations, legacy profiles, facts, contacts and accepted examples are excluded. `includeMemory` separately permits only selected enabled documents. Existing local data is not deleted.
 - Ask AI history is owned by the main process, never accepted from the renderer; only the latest three completed turns in that session are included.
 - The React question panel is keyed by session ID and stays mounted but hidden while its drafts are shown, preserving its transcript and unsent input. Reset notifications clear candidates and question state. Late async opens, model results and stream deltas are guarded against replaced sessions.
 - Switching to another native window / application (including ContextCue settings), or temporarily losing foreground-window identity, hides the panel without resetting its renderer or cancelling generation. Returning to the originating native window restores the same panel without stealing focus, reanchoring or resending initialization events. Candidate selection, instructions, unsent questions and the visible conversation remain. Moving between fields in the same window does not hide the panel; insertion still validates its original target immediately before writing.
@@ -29,6 +29,13 @@
 - The snapshot is fixed at invocation. Without DOM integration, content changes and same-title tabs cannot always be detected; refresh or reinvoke after navigating. The five-minute context lifetime is not extended by hiding and restoring the panel; local content remains until closing or starting a new invocation.
 - Disabling page context omits the screenshot and page metadata for that question, but not already completed turns in the same session. Start a fresh invocation for a fully empty conversation.
 
+## Controlled Memory
+
+- The shared local selector uses explicit task patterns, document purpose and exact scope/topic matches. It never selects from a model-inferred contact, full screenshot OCR or accepted replies. No additional model call is made for retrieval.
+- Quick writing and Ask start with Memory enabled; Ask has an independent switch. Setup examples keep Memory off. Switching Memory clears main-process Q&A history and its source provenance before the next request.
+- Model responses and candidate events carry application-generated `memoryUsage` containing the exact selected excerpts, plus inherited source metadata for previous answers/drafts. Model output cannot forge this provenance.
+- `assist:regenerate-without-memory` takes session ID and request ID. It replays the server-owned original page/question, without prior model answers, generated drafts or subsequent revisions. Explicit prior user questions can be retained for Ask drafts. The call shares revision cancellation, validates session identity before and after generation, returns an OverlayResult and only replaces the result on success.
+
 ## Ask-first entry and writing output
 
 - New installs bind Ask AI to Cmd/Ctrl + Shift + Space and Quick writing to Cmd/Ctrl + Shift + Enter. Existing stored shortcuts retain their meaning, including older installs with no saved Ask shortcut.
@@ -36,7 +43,7 @@
 - The model streams Markdown for understanding and clarifications. For explicit writing requests, it emits the `CONTEXTCUE_DRAFT` envelope followed by candidate JSON. The model decides in the same request; no extra classifier or keyword router is used in production.
 - The output decoder withholds the envelope and draft JSON. Only validated complete writing results open the candidate panel. Malformed drafts surface a retryable error in the conversation. The browser preview uses deterministic fixtures, not model routing.
 - The main process stores the latest draft, context policy and the completed turn. Opening drafts or returning to Ask AI keeps the same session. Old writing turns retain readable text; only the latest draft has an Open draft action.
-- Ask-generated drafts cannot authorize replacement actions from model output. Copy / Insert remains explicit and validates the original target. Page-off draft revisions omit screenshots, page metadata and saved memory, including with text-only models.
+- Ask-generated drafts cannot authorize replacement actions from model output. Copy / Insert remains explicit and validates the original target. Page-off draft revisions omit screenshots and page metadata, including with text-only models. Memory follows its independent session setting.
 - Refresh is an explicit header action whose tooltip states that it starts a new conversation. It hides the overlay before capture, checks the original native window, cancels pending requests and commits a fresh session only after successful capture. Success clears the old transcript, candidates and unsent input; failure keeps local work. Refresh after expiry is allowed, but switching native windows requires a new invocation. Late results cannot reach the new session.
 
 ## Ask AI presentation
@@ -54,7 +61,7 @@
 - The home toolbar exposes Next, Copy / Insert, Revise and Ask AI. Revise opens an inline instruction composer below the current candidate. The former standalone Edit page, local edit map, Save draft action and `overlay:editing` IPC are removed.
 - Dots remain real buttons with descriptive labels, pressed state and visible focus. Next, dots and horizontal swipes select candidates; arrows navigate outside text inputs. While composing, Enter does not insert a candidate. Enter in the field adds a line, Cmd / Ctrl + Enter submits, and Escape closes the composer before closing the overlay.
 - Auto-fit preserves top-left position and width. Opening the composer releases a manually chosen height and grows downwards up to 540px, capped at the space available below the current position (8px display margin). The candidate preview and instruction composer have separate scroll regions; reserve at least 68px for the preview while the composer is open. Focusing or scrolling the instruction field must not scroll the candidate away. The main toolbar remains outside both regions. A labeled Collapse button closes only the composer; the single top-right X closes the window. Success closes the composer and returns to candidate-fit height (normally capped at 360px). Drag resize remains available.
-- Only the candidate selected at submission, explicit instructions and the invocation's saved screenshot are sent, with `contextPolicy: page-only`. Request the configured 1–5 candidate count in one model call, not one call per original candidate. The selected candidate's insertion action is preserved for every revised alternative.
+- The candidate selected at submission, explicit instructions, the invocation's saved screenshot and selected enabled notes (when Memory is on) are sent, with `contextPolicy: page-only`. Source metadata also records potential Memory influence in the selected draft. Request the configured 1–5 candidate count in one model call, not one call per original candidate. The selected candidate's insertion action is preserved for every revised alternative.
 - `assist:revise` takes `{sessionId, requestId, text, instruction}` and resolves to `CandidateReply[]`. `overlay:revision-candidate` emits `{sessionId, requestId, candidate}` for each validated complete candidate. Both Responses and Chat Completions SSE are supported; non-streaming JSON responses fall back to complete-group display. Initial generation keeps its existing non-streaming path.
 - Parse only complete candidate objects or complete string entries from the candidates array, with JSON string/escape handling and deduplication. Never expose raw JSON, reasoning or an unfinished text field. Reuse the existing one-time format-repair retry for malformed candidate data, within the same 45-second budget; HTTP failures, refusals and stream errors are not retried automatically.
 - Keep the current group visible until the first revised candidate is ready, then select that first result. Later arrivals append to the revised group without changing the selected index. Display the actual available count plus generation progress; a provider may return fewer usable alternatives than requested.
@@ -67,7 +74,7 @@
 Ask-first checks additionally cover default/preserved shortcuts, normal Markdown and writing envelopes over both provider protocols, text-only draft revision, original-window refresh, changed titles, cleared history, and late-draft rejection. Browser acceptance covers Ask → draft → Revise → Ask → Open draft, same-session state, page off, refresh, keyboard focus, and 340px/420px layouts.
 
 
-Automated suites cover split SSE events and Unicode, completed-candidate parsing, JSON fallback, provider failures, request cancellation, candidate-group rollback and selection stability, fixed-position expansion near display edges, and mocked Electron IPC/session boundaries. Existing suites cover page-only memory exclusion, PNG image verification and expired-session rejection.
+Automated suites cover split SSE events and Unicode, completed-candidate parsing, JSON fallback, provider failures, request cancellation, candidate-group rollback and selection stability, fixed-position expansion near display edges, and mocked Electron IPC/session boundaries. Memory suites cover exact scope/topic selection, task routing, both provider protocols, disabled notes, history reset, clean regeneration, cancellation and late-result rejection. Existing suites cover PNG image verification and expired-session rejection.
 
 Browser preview checks (no live model, OS permissions or app insertion):
 
@@ -99,6 +106,6 @@ Packaged-app acceptance still required on each supported OS:
 - Memory deletion uses an app-styled modal with initial Cancel focus, focus containment and focus restoration on close. No browser alert, confirm or native select menus in the renderer.
 
 - Permissions groups access rows separately from capture troubleshooting. Granted states keep a short purpose label, and the Settings saved indicator is hidden on read-only tabs when there are no pending edits.
-- Memory uses a compact file rail, filename plus Write/Preview controls, and a persistent local save status below the editor. Scope, enabled metadata and deletion live in File options; these settings do not imply inclusion in current AI sessions. At narrow widths, the file rail becomes a horizontal list above the editor.
+- Memory uses a compact file rail, filename plus Write/Preview controls, and a persistent local save status below the editor. Purpose, scope, Enabled, global background match terms and deletion live in File options. Enabled notes are eligible only when the task and scope match. At narrow widths, the file rail becomes a horizontal list above the editor.
 
 - Models uses a compact model list and grouped identity/connection fields. Keep the API URL full width, expose image input as an explicit switch, and keep removal separate from the default-model action. Switching models replaces the editor immediately; reveal the selected model when the list scrolls or changes orientation.

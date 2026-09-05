@@ -87,6 +87,7 @@ const api: ContextCueApi = {
   showDraft: (sessionId) => ipcRenderer.invoke("ask:show-draft", sessionId),
   exitAsk: (returnToSuggestions: boolean) => ipcRenderer.invoke("ask:exit", returnToSuggestions),
   startAsk: (request: AskRequest) => ipcRenderer.send("ask:start", request),
+  setSessionMemory: (sessionId, enabled) => ipcRenderer.invoke("memory:session", sessionId, enabled),
   cancelAsk: (requestId: string) => ipcRenderer.send("ask:cancel", requestId),
   copyText: (text: string) => ipcRenderer.invoke("ask:copy", text),
   onAskOpen: (callback: (context: AskOverlayContext) => void) => {
@@ -102,6 +103,7 @@ const api: ContextCueApi = {
   resizeOverlay: (height, newCandidate, expanded) => ipcRenderer.send("overlay:resize", height, newCandidate, expanded),
   resizeOverlayBy: (edge, deltaX, deltaY) => ipcRenderer.send("overlay:resize-by", edge, deltaX, deltaY),
   hideOverlay: () => ipcRenderer.invoke("overlay:hide"),
+  regenerateWithoutMemory: (sessionId, requestId) => ipcRenderer.invoke("assist:regenerate-without-memory", sessionId, requestId),
   reviseSuggestion: (request) => ipcRenderer.invoke("assist:revise", request),
   onRevisionCandidate: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, value: RevisionCandidateEvent) => callback(value);

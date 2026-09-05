@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AskHistoryMessage, GenerateRequest, GenerationResult } from "../../src/shared/types";
+import type { AskHistoryMessage, GenerateRequest, GenerationResult, MemorySource } from "../../src/shared/types";
 import type { QuickContext } from "./quick-context";
 
 /** All transient content belongs to one invocation, never to an app or channel. */
@@ -8,13 +8,17 @@ export interface PageSession extends QuickContext {
   hasSuggestions: boolean;
   createdAt: number;
   history: AskHistoryMessage[];
+  memoryEnabled?: boolean;
+  historySources?: MemorySource[];
+  draftSources?: MemorySource[];
+  originalAsk?: { question: string; includeContext: boolean; userHistory: AskHistoryMessage[] };
   result?: GenerationResult;
   draftUsesPage?: boolean;
   contextExpiredReason?: string;
 }
 
 export function createPageSession(context: QuickContext): PageSession {
-  return { ...context, id: randomUUID(), hasSuggestions: false, createdAt: Date.now(), history: [] };
+  return { ...context, id: randomUUID(), hasSuggestions: false, createdAt: Date.now(), history: [], memoryEnabled: true, historySources: [] };
 }
 
 export function rememberPageTurn(session: PageSession, question: string, answer: string): void {
@@ -32,6 +36,7 @@ export function pageRequest(session: PageSession, locale: GenerateRequest["local
     quick: true,
     scenario: "auto",
     contextPolicy: "page-only",
+    includeMemory: session.memoryEnabled !== false,
     target: session.target ?? undefined,
     pageContext: {
       applicationName: session.frontmost.applicationName,

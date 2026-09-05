@@ -13,6 +13,7 @@ import type {
   TokenUsageSnapshot,
   UserProfile
 } from "../../src/shared/types";
+import { memoryPurpose } from "../../src/shared/memory-selection";
 import { inferImageInputSupport } from "../../src/shared/model-capabilities";
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -69,7 +70,7 @@ function legacyDocuments(profile: UserProfile, contacts: ContactMemory[] = [], c
   }));
   return [
     { id: "profile", filename: "profile.md", content: profileContent, scope: "global", enabled: true, createdAt: now, updatedAt: now },
-    { id: "preferences", filename: "preferences.md", content: preferenceContent, scope: "global", enabled: true, createdAt: now, updatedAt: now },
+    { id: "preferences", filename: "preferences.md", content: preferenceContent, scope: "global", purpose: "preference", enabled: true, createdAt: now, updatedAt: now },
     ...people
   ];
 }
@@ -77,7 +78,7 @@ function legacyDocuments(profile: UserProfile, contacts: ContactMemory[] = [], c
 export const DEFAULT_DATA: AppData = {
   version: 2,
   profile: DEFAULT_PROFILE,
-  documents: legacyDocuments(DEFAULT_PROFILE),
+  documents: legacyDocuments(DEFAULT_PROFILE).map((document) => ({ ...document, purpose: memoryPurpose(document), matchTerms: "" })),
   contacts: [],
   facts: [],
   acceptedReplies: [],
@@ -151,10 +152,12 @@ function migrate(input: LegacyAppData): AppData {
             : "",
           scope: ["global", "channel", "person"].includes(document.scope) ? document.scope : "global",
           enabled: document.enabled !== false,
+          purpose: memoryPurpose(document),
+          matchTerms: typeof document.matchTerms === "string" ? document.matchTerms.slice(0, 500) : "",
           createdAt: document.createdAt || new Date().toISOString(),
           updatedAt: document.updatedAt || document.createdAt || new Date().toISOString()
         }))
-      : legacyDocuments(profile, contacts),
+      : legacyDocuments(profile, contacts).map((document) => ({ ...document, purpose: memoryPurpose(document), matchTerms: "" })),
     settings: {
       ...defaults.settings,
       ...(legacySettings ?? {}),
@@ -322,6 +325,8 @@ export class MemoryStore {
       ...structuredClone(document),
       id: document.id || randomUUID(),
       filename,
+      purpose: memoryPurpose(document),
+      matchTerms: typeof document.matchTerms === "string" ? document.matchTerms.slice(0, 500) : "",
       content: document.content.replace(/\r\n/g, "\n"),
       scopeValue: document.scope === "global" ? undefined : document.scopeValue?.trim(),
       createdAt: document.createdAt || now,

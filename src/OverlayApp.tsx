@@ -113,6 +113,12 @@ export function OverlayApp() {
           contextError={expired?.sessionId === payload.sessionId ? expired?.message : undefined}
           active={!askVisible}
           candidates={payload.candidates}
+          memoryUsage={payload.memoryUsage}
+          onRegenerated={(result) => {
+            setPayload(result);
+            setAskContext(null);
+            setAskVisible(false);
+          }}
           channel={payload.channel}
           contact={payload.contact}
           scenario={payload.scenario}
